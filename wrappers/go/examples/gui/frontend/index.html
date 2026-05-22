@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ITSCAM Viewer</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app">
+        <!-- Header -->
+        <header class="header">
+            <h1>ITSCAM Viewer</h1>
+            <div id="connectionIndicator" class="connection-indicator disconnected">
+                <span class="dot"></span>
+                <span class="status-text">Disconnected</span>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main">
+            <!-- Left Panel: Connection & Controls -->
+            <aside class="panel left-panel">
+                <section class="section connection-section">
+                    <h2>Connection</h2>
+                    <div class="form-group">
+                        <label for="cameraIP">Camera IP</label>
+                        <input type="text" id="cameraIP" value="192.168.1.100" placeholder="192.168.1.100">
+                    </div>
+                    <div class="form-group">
+                        <label for="cameraPort">Port</label>
+                        <input type="number" id="cameraPort" value="50000" min="1" max="65535">
+                    </div>
+                    <div class="form-group">
+                        <label for="password">Password (optional)</label>
+                        <input type="password" id="password" value="" placeholder="Leave empty for no auth">
+                    </div>
+                    <div class="button-group">
+                        <button id="connectBtn" class="btn btn-primary">Connect</button>
+                        <button id="disconnectBtn" class="btn btn-secondary" disabled>Disconnect</button>
+                    </div>
+                </section>
+
+                <section class="section device-section" id="deviceSection" style="display: none;">
+                    <h2>Device Info</h2>
+                    <div class="info-grid">
+                        <div class="info-item">
+                            <span class="label">Address:</span>
+                            <span id="deviceVersion" class="value">-</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="label">Port:</span>
+                            <span id="deviceSerial" class="value">-</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="label">Profiles:</span>
+                            <span id="deviceProfiles" class="value">-</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="label">Active:</span>
+                            <span id="deviceActive" class="value">-</span>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="section capture-section" id="captureSection" style="display: none;">
+                    <h2>Frame Source</h2>
+                    <div class="checkbox-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="subscribeTrigger" checked>
+                            <span>Trigger Events</span>
+                        </label>
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="subscribeSnapshot">
+                            <span>Snapshot Events</span>
+                        </label>
+                    </div>
+                    <div class="button-group">
+                        <button id="subscribeBtn" class="btn btn-success">Subscribe</button>
+                        <button id="unsubscribeBtn" class="btn btn-warning" disabled>Unsubscribe</button>
+                    </div>
+                    
+                    <h2 style="margin-top: 16px;">Actions</h2>
+                    <button id="snapshotBtn" class="btn btn-accent" style="width: 100%;">Request Snapshot</button>
+                    
+                    <div class="capture-stats">
+                        <span>Captures: <strong id="captureCount">0</strong></span>
+                    </div>
+                </section>
+
+                <section class="section save-section" id="saveSection" style="display: none;">
+                    <h2>Save Settings</h2>
+                    <div class="form-group">
+                        <label for="saveDirectory">Save Directory</label>
+                        <div class="input-with-button">
+                            <input type="text" id="saveDirectory" placeholder="Select directory..." readonly>
+                            <button id="browseDirBtn" class="btn btn-small">Browse</button>
+                        </div>
+                    </div>
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="autoSave">
+                        <span>Auto-save frames</span>
+                    </label>
+                    <button id="saveCurrentBtn" class="btn btn-secondary" style="width: 100%; margin-top: 8px;">Save Current Frame</button>
+                </section>
+            </aside>
+
+            <!-- Center: Image Display -->
+            <div class="center-panel">
+                <section class="section image-section">
+                    <div class="image-header">
+                        <h2>Last Capture</h2>
+                        <div class="image-controls">
+                            <label class="checkbox-label small">
+                                <input type="checkbox" id="showOverlay">
+                                <span>Show Metadata Overlay</span>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="image-container">
+                        <img id="captureImage" src="" alt="No capture yet" style="display: none;">
+                        <div id="metadataOverlay" class="metadata-overlay" style="display: none;">
+                            <div class="overlay-item"><span class="overlay-label">Source:</span> <span id="overlaySource">-</span></div>
+                            <div class="overlay-item"><span class="overlay-label">Frame:</span> <span id="overlayFrame">-</span></div>
+                            <div class="overlay-item"><span class="overlay-label">Time:</span> <span id="overlayTime">-</span></div>
+                            <div class="overlay-item"><span class="overlay-label">Size:</span> <span id="overlaySize">-</span></div>
+                            <div class="overlay-item"><span class="overlay-label">Exposure:</span> <span id="overlayExposure">-</span></div>
+                        </div>
+                        <div id="noImage" class="no-image">
+                            <p>No capture received</p>
+                            <p class="hint">Connect to a camera and subscribe to receive captures</p>
+                        </div>
+                    </div>
+                    <div class="image-info" id="imageInfo" style="display: none;">
+                        <span id="imageSource">Source: -</span>
+                        <span id="imageFrame">Frame: -</span>
+                        <span id="imageSize">-</span>
+                        <span id="imageTimestamp">-</span>
+                    </div>
+                </section>
+
+                <!-- Metadata Panel -->
+                <section class="section metadata-section" id="metadataSection">
+                    <h2>Frame Metadata</h2>
+                    <div class="metadata-grid">
+                        <div class="metadata-item">
+                            <span class="label">Source</span>
+                            <span id="metaSource" class="value">-</span>
+                        </div>
+                        <div class="metadata-item">
+                            <span class="label">Request ID</span>
+                            <span id="metaRequestId" class="value">-</span>
+                        </div>
+                        <div class="metadata-item">
+                            <span class="label">Frame Count</span>
+                            <span id="metaFrameCount" class="value">-</span>
+                        </div>
+                        <div class="metadata-item">
+                            <span class="label">Resolution</span>
+                            <span id="metaResolution" class="value">-</span>
+                        </div>
+                        <div class="metadata-item">
+                            <span class="label">Timestamp</span>
+                            <span id="metaTimestamp" class="value">-</span>
+                        </div>
+                        <div class="metadata-item">
+                            <span class="label">Image Size</span>
+                            <span id="metaImageSize" class="value">-</span>
+                        </div>
+                        <div class="metadata-item">
+                            <span class="label">Shutter</span>
+                            <span id="metaShutter" class="value">-</span>
+                        </div>
+                        <div class="metadata-item">
+                            <span class="label">Gain</span>
+                            <span id="metaGain" class="value">-</span>
+                        </div>
+                        <div class="metadata-item">
+                            <span class="label">Multi-Exp</span>
+                            <span id="metaMultiExp" class="value">-</span>
+                        </div>
+                        <div class="metadata-item">
+                            <span class="label">Plates</span>
+                            <span id="metaPlates" class="value">-</span>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Capture History -->
+                <section class="section history-section">
+                    <h2>Capture History</h2>
+                    <div id="captureHistory" class="capture-history">
+                        <p class="empty-hint">Captures will appear here</p>
+                    </div>
+                </section>
+            </div>
+
+            <!-- Right Panel: Logs -->
+            <aside class="panel right-panel">
+                <section class="section log-section">
+                    <h2>Logs</h2>
+                    <div class="log-controls">
+                        <button id="clearLogsBtn" class="btn btn-small">Clear</button>
+                    </div>
+                    <div id="logContainer" class="log-container">
+                        <p class="log-entry info">Application started</p>
+                    </div>
+                </section>
+            </aside>
+        </main>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <span>ITSCAM SDK Go GUI Example</span>
+            <span>© 2026 Pumatronix</span>
+        </footer>
+    </div>
+
+    <script src="wails/ipc.js"></script>
+    <script src="wails/runtime.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>

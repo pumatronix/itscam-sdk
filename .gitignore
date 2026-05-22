@@ -1,0 +1,18 @@
+# Core build artifacts
+core/build
+
+# Examples build artifacts
+examples/build
+examples/images
+
+# Python wrapper
+wrappers/python/*.egg-info/
+wrappers/python/dist/
+wrappers/python/build/
+__pycache__/
+*.pyc
+*.pyo
+
+# Go wrapper
+wrappers/go/vendor/
+wrappers/go/examples/gui/build/

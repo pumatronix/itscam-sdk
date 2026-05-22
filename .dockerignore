@@ -1,0 +1,18 @@
+# Build artifacts
+core/build/
+examples/build/
+wrappers/go/examples/capture_example
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*~
+
+# Git
+.git/
+.gitignore
+
+# Docker
+Dockerfile
+.dockerignore

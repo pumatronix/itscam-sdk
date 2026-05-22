@@ -1,0 +1,20 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "itscam-viewer",
+  "outputfilename": "itscam-viewer",
+  "frontend:install": "",
+  "frontend:build": "",
+  "frontend:dev:watcher": "",
+  "frontend:dev:serverUrl": "",
+  "author": {
+    "name": "Pumatronix",
+    "email": "dev@pumatronix.com.br"
+  },
+  "info": {
+    "companyName": "Pumatronix",
+    "productName": "ITSCAM Viewer",
+    "productVersion": "1.0.0",
+    "copyright": "Copyright (c) 2026 Pumatronix",
+    "comments": "ITSCAM SDK Go GUI Example"
+  }
+}
