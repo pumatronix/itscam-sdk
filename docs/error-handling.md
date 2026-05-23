@@ -2,12 +2,7 @@
 
 [Português (Brasil)](error-handling.md) | [English (US)](error-handling.en-US.md)
 
-Todo método do SDK devolve um de dois tipos value-or-error: `Result<T>`
-para chamadas síncronas e `Future<T>` para assíncronas. Os dois estão
-definidos em
-[`src/core/itscam_types.h`](../src/core/itscam_types.h) e são
-compartilhados por `ItscamClient`, `ItscamRestClient` e
-`ItscamCgiClient`.
+Todo método do SDK devolve um de dois tipos value-or-error: `Result<T>` para chamadas síncronas e `Future<T>` para assíncronas. Os dois estão definidos em [`src/core/itscam_types.h`](../src/core/itscam_types.h) e são compartilhados por `ItscamClient`, `ItscamRestClient` e `ItscamCgiClient`.
 
 ## `Result<T>`
 
@@ -40,8 +35,7 @@ Valores de `Error::Code`:
 
 ## `Future<T>`
 
-Chamadas long-running têm variantes `*Async()` que devolvem um
-`Future<T>`:
+Chamadas long-running têm variantes `*Async()` que devolvem um `Future<T>`:
 
 ```cpp
 auto f = camera.captureSnapshotAsync(req);
@@ -63,9 +57,7 @@ if (!waitAll(f1, f2)) {
 
 ## Mapeamento de HTTP status
 
-Os clients REST e CGI traduzem status codes HTTP para a mesma taxonomia
-`Error::Code`, então wrappers e applications podem fazer switch em um
-único enum:
+Os clients REST e CGI traduzem status codes HTTP para a mesma taxonomia `Error::Code`, então wrappers e applications podem fazer switch em um único enum:
 
 | Status HTTP | `Error::Code`        |
 | ----------- | -------------------- |
@@ -79,8 +71,7 @@ Os clients REST e CGI traduzem status codes HTTP para a mesma taxonomia
 
 ## Logging
 
-Cada client suporta um log handler opcional. Defina uma vez no início
-do programa; o SDK nunca toma posse do stdout/stderr.
+Cada client suporta um log handler opcional. Defina uma vez no início do programa; o SDK nunca toma posse do stdout/stderr.
 
 ```cpp
 rest.setLogHandler([](LogLevel lvl, const std::string& msg) {
@@ -97,12 +88,8 @@ Valores de `LogLevel`: `Debug`, `Info`, `Warn`, `Error`.
 
 Cada language wrapper mapeia a tabela acima para constructs idiomáticos:
 
-- **C# / .NET** levanta uma hierarquia `ItscamException`
-  (`ItscamTimeoutException`, `ItscamAuthException`, ...) e `Task<T>`
-  propaga as exceções.
-- **Python** levanta subclasses de `ItscamError` (`ItscamTimeoutError`,
-  `ItscamAuthError`, `ItscamConnectionError`).
-- **Go** devolve um `error` tipado que carrega o valor de `Error::Code`,
-  então o caller pode usar `errors.Is(err, itscam.ErrTimeout)`.
+- **C# / .NET** levanta uma hierarquia `ItscamException` (`ItscamTimeoutException`, `ItscamAuthException`, ...) e `Task<T>` propaga as exceções.
+- **Python** levanta subclasses de `ItscamError` (`ItscamTimeoutError`, `ItscamAuthError`, `ItscamConnectionError`).
+- **Go** devolve um `error` tipado que carrega o valor de `Error::Code`, então o caller pode usar `errors.Is(err, itscam.ErrTimeout)`.
 
 Veja os capítulos de cada wrapper para os detalhes.

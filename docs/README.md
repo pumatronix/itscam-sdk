@@ -2,8 +2,7 @@
 
 [Português (Brasil)](README.md) | [English (US)](README.en-US.md)
 
-Referência organizada por chapters para o ITSCAM Client SDK. Comece pelo
-[Overview](overview.md) ou vá direto ao tema que você precisa.
+Referência organizada por chapters para o ITSCAM Client SDK. Comece pelo [Overview](overview.md) ou vá direto ao tema que você precisa.
 
 ## Fundamentos
 
@@ -27,8 +26,7 @@ Referência organizada por chapters para o ITSCAM Client SDK. Comece pelo
 
 ## Tutoriais
 
-Walkthroughs do zero -- criar um projeto, instalar a dependência do
-SDK e salvar a primeira imagem da câmera em disco:
+Walkthroughs do zero -- criar um projeto, instalar a dependência do SDK e salvar a primeira imagem da câmera em disco:
 
 - [Primeira imagem com C++](tutorials/first-image-cpp.md)
 - [Primeira imagem com C# / .NET](tutorials/first-image-csharp.md)
@@ -39,10 +37,6 @@ SDK e salvar a primeira imagem da câmera em disco:
 
 - [Migration from CougarClient](migration-cougar.md)
 
-Cada chapter PT-BR tem uma versão em inglês com sufixo `*.en-US.md`
-(por exemplo, [`overview.en-US.md`](overview.en-US.md)). O switcher
-no topo de cada arquivo aponta para o par correspondente. O
-[índice em inglês](README.en-US.md) lista o mapping completo.
+Cada chapter PT-BR tem uma versão em inglês com sufixo `*.en-US.md` (por exemplo, [`overview.en-US.md`](overview.en-US.md)). O switcher no topo de cada arquivo aponta para o par correspondente. O [índice em inglês](README.en-US.md) lista o mapping completo.
 
-Para o ponto de entrada do projeto, com quick-link tables, veja
-[../README.md](../README.md).
+Para o ponto de entrada do projeto, com quick-link tables, veja [../README.md](../README.md).

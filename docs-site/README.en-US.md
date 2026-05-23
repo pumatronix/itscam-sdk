@@ -2,9 +2,7 @@
 
 [Português (Brasil)](README.md) | [English (US)](README.en-US.md)
 
-VitePress site published to GitHub Pages, with an optional
-[Cloudflare AI Search](https://developers.cloudflare.com/ai-search/)
-assistant for grounded Q&A and implementation examples.
+VitePress site published to GitHub Pages, with an optional [Cloudflare AI Search](https://developers.cloudflare.com/ai-search/) assistant for grounded Q&A and implementation examples.
 
 ## Local Development
 
@@ -14,28 +12,22 @@ npm install   # generates package-lock.json on first run
 npm run dev
 ```
 
-Open http://localhost:5173/itscam-sdk/ (the base path defaults to
-`/itscam-sdk/`).
+Open http://localhost:5173/itscam-sdk/ (the base path defaults to `/itscam-sdk/`).
 
 Content is synced on every `dev` / `build` via `scripts/sync-content.mjs`:
 
 - `../README.md` -> `content/index.md` (site home, with link rewriting).
 - `../README.en-US.md` -> `content/README.en-US.md`.
-- `../docs/**/*.md` -> `content/**/*.md` (chapters, wrappers, tutorials,
-  and `*.en-US.md` companions).
+- `../docs/**/*.md` -> `content/**/*.md` (chapters, wrappers, tutorials, and `*.en-US.md` companions).
 - `../AGENTS.md` -> `content/agents.md`.
-- `../docs/images/` -> `content/public/images/` (images referenced from
-  the README and the docs).
+- `../docs/images/` -> `content/public/images/` (images referenced from the README and the docs).
 
-Editing the README or the files under `docs/` is the only way to change
-the site. The script rewrites repo-relative links (`docs/foo.md`,
-`src/...`, `docs-site/`) to either site routes or GitHub URLs as needed.
+Editing the README or the files under `docs/` is the only way to change the site. The script rewrites repo-relative links (`docs/foo.md`, `src/...`, `docs-site/`) to either site routes or GitHub URLs as needed.
 
 ### Enable the AI Assistant Locally
 
 1. Create an AI Search instance in the [Cloudflare dashboard](https://dash.cloudflare.com/?to=/:account/ai/ai-search).
-2. Enable **Settings -> Public Endpoint** and add `http://localhost:5173`
-   to **Authorized hosts**.
+2. Enable **Settings -> Public Endpoint** and add `http://localhost:5173` to **Authorized hosts**.
 3. Run the dev server with your public endpoint URL:
 
 ```bash
@@ -44,9 +36,7 @@ VITE_AI_SEARCH_API_URL=https://<INSTANCE_ID>.search.ai.cloudflare.com/ npm run d
 
 ## Production Deployment
 
-The GitHub Actions workflow
-[`.github/workflows/docs.yml`](../.github/workflows/docs.yml) builds and
-deploys to GitHub Pages on pushes to `main`.
+The GitHub Actions workflow [`.github/workflows/docs.yml`](../.github/workflows/docs.yml) builds and deploys to GitHub Pages on pushes to `main`.
 
 ### One-Time GitHub Setup
 
@@ -66,8 +56,7 @@ deploys to GitHub Pages on pushes to `main`.
 | `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account ID |
 | `CLOUDFLARE_API_TOKEN` | Token with **AI Search:Edit** and **AI Search:Run** |
 
-4. **Cloudflare AI Search public endpoint**: add your GitHub Pages origin
-   to **Authorized hosts**, for example `https://pumatronix.github.io`.
+4. **Cloudflare AI Search public endpoint**: add your GitHub Pages origin to **Authorized hosts**, for example `https://pumatronix.github.io`.
 
 ### AI Search Instance Configuration
 
@@ -77,10 +66,21 @@ Recommended settings for the `itscam-sdk-docs` instance:
 - **Search mode:** hybrid search.
 - **Query rewriting:** enabled.
 - **Custom metadata schema:** `type`, `client`, `language`, `source` as text fields.
-- **Generation system prompt:** paste the rules from [`AGENTS.md`](../AGENTS.md),
-  especially REST auth required, CGI auth optional, and the three client surfaces.
+- **Generation system prompt:** paste the rules from [`AGENTS.md`](../AGENTS.md), especially REST auth required, CGI auth optional, and the three client surfaces.
 
 See [system prompt configuration](https://developers.cloudflare.com/ai-search/configuration/retrieval/system-prompt/).
+
+## Markdown style
+
+Published content (`README.md`, `README.en-US.md`, `docs/`, `AGENTS.md`) uses **one line per prose paragraph** — no manual ~80-column wraps. Enable editor soft wrap for comfortable source reading.
+
+To reflow in bulk after large edits:
+
+```bash
+node tools/docs/unwrap-markdown.mjs README.md README.en-US.md AGENTS.md docs/**/*.md
+```
+
+The script preserves fenced code blocks, tables, lists, blockquotes (including fenced code inside `>`), and headings.
 
 ## Scripts
 

@@ -1,10 +1,6 @@
 # Primeira imagem com Python
 
-Walkthrough do zero: criar um projeto Python, instalar o wrapper
-`itscam` e salvar a primeira imagem JPEG da câmera em disco. Caminho
-principal usa o **`ItscamCgiClient`** (HTTP, anônimo por default) e há
-uma seção opcional no final usando o **`ItscamClient`** (Cougar
-TCP :60000).
+Walkthrough do zero: criar um projeto Python, instalar o wrapper `itscam` e salvar a primeira imagem JPEG da câmera em disco. Caminho principal usa o **`ItscamCgiClient`** (HTTP, anônimo por default) e há uma seção opcional no final usando o **`ItscamClient`** (Cougar TCP :60000).
 
 ```mermaid
 flowchart TD
@@ -29,8 +25,7 @@ flowchart TD
 
 ## 2. Buildar a shared library nativa
 
-O wrapper Python é puro ctypes -- ele carrega `libitscam_sdk.so` em
-runtime, então você precisa buildar essa biblioteca uma vez:
+O wrapper Python é puro ctypes -- ele carrega `libitscam_sdk.so` em runtime, então você precisa buildar essa biblioteca uma vez:
 
 ```bash
 git clone https://github.com/pumatronix/itscam-sdk.git
@@ -38,8 +33,7 @@ cd itscam-sdk
 make lib
 ```
 
-O resultado fica em `src/core/build/linux/libitscam_sdk.so.1.0.0` (com
-symlinks).
+O resultado fica em `src/core/build/linux/libitscam_sdk.so.1.0.0` (com symlinks).
 
 ## 3. Criar o projeto
 
@@ -64,10 +58,7 @@ LD_LIBRARY_PATH=/caminho/para/itscam-sdk/src/core/build/linux \
     python -c "import itscam; print(itscam.get_version())"
 ```
 
-> Por que `LD_LIBRARY_PATH`? Se você instalou o SDK em
-> `/usr/local/lib` (`sudo make install`) não é necessário. Caso
-> contrário, exporte a variável para o terminal da sessão ou rode
-> sempre prefixando.
+> Por que `LD_LIBRARY_PATH`? Se você instalou o SDK em `/usr/local/lib` (`sudo make install`) não é necessário. Caso contrário, exporte a variável para o terminal da sessão ou rode sempre prefixando.
 
 ## 5. Escrever o código mínimo
 
@@ -139,8 +130,7 @@ file primeira-imagem.jpg
 
 ## 8. Opcional: capture via `ItscamClient` (TCP :60000)
 
-O CGI é o caminho mais simples. Se você precisa de **trigger em real
-time** ou multi-exposure, use o binary client (porta 60000):
+O CGI é o caminho mais simples. Se você precisa de **trigger em real time** ou multi-exposure, use o binary client (porta 60000):
 
 ```python
 # meu_app_binary.py
@@ -164,16 +154,11 @@ with ItscamClient(host) as camera:
     print(f"OK: {len(results[0].jpeg)} bytes (binary)")
 ```
 
-Detalhe completo (auto-reconnect, exposure groups, eventos de trigger
-contínuos via `on_trigger_image()`) em
-[docs/api/binary-client.md](../api/binary-client.md) e no example
-[`capture_example.py`](../../src/wrappers/python/examples/capture_example.py).
+Detalhe completo (auto-reconnect, exposure groups, eventos de trigger contínuos via `on_trigger_image()`) em [docs/api/binary-client.md](../api/binary-client.md) e no example [`capture_example.py`](../../src/wrappers/python/examples/capture_example.py).
 
 ## Próximos passos
 
 - [Guia do wrapper Python](../wrappers/python.md) -- API completa.
-- [Examples Python](../../src/wrappers/python/examples/) --
-  CGI, REST e binary.
+- [Examples Python](../../src/wrappers/python/examples/) -- CGI, REST e binary.
 - [HTTPS / TLS](../https-tls.md) -- configurar mbedTLS para produção.
-- [Codegen REST](../codegen.md) -- regenerar `rest_types.py` para um
-  firmware específico.
+- [Codegen REST](../codegen.md) -- regenerar `rest_types.py` para um firmware específico.

@@ -2,19 +2,11 @@
 
 [Português (Brasil)](cpp.md) | [English (US)](cpp.en-US.md)
 
-A API nativa fica em [`src/core/`](../../src/core/) e é o ponto de
-partida para os outros wrappers (C# / Python / Go) -- todos eles
-falam com o mesmo binário através da C ABI em
-[`src/core/c_api/`](../../src/core/c_api/). Se você está consumindo
-o SDK direto em um app C++17, este é o guia certo.
+A API nativa fica em [`src/core/`](../../src/core/) e é o ponto de partida para os outros wrappers (C# / Python / Go) -- todos eles falam com o mesmo binário através da C ABI em [`src/core/c_api/`](../../src/core/c_api/). Se você está consumindo o SDK direto em um app C++17, este é o guia certo.
 
-> **Referência completa de classes, structs e funções**:
-> [referência Doxygen](/api-ref/cpp/index.html). Esta página cobre
-> integração, build, link e padrões idiomáticos.
+> **Referência completa de classes, structs e funções**: [referência Doxygen](/api-ref/cpp/index.html). Esta página cobre integração, build, link e padrões idiomáticos.
 
-> Esta página cobre **integração e padrões idiomáticos** do código
-> C++. A referência detalhada de cada client surface (com tabelas de
-> endpoints, tipos de request/response, etc.) vive em `docs/api/`:
+> Esta página cobre **integração e padrões idiomáticos** do código C++. A referência detalhada de cada client surface (com tabelas de endpoints, tipos de request/response, etc.) vive em `docs/api/`:
 >
 > - [Binary client (Cougar TCP :60000)](../api/binary-client.md)
 > - [REST client (HTTP/HTTPS JSON)](../api/rest-client.md)
@@ -50,8 +42,7 @@ Artefatos:
 | `libitscam_sdk.a` | Linux static |
 | `itscam_sdk.dll` + `libitscam_sdk_static.a` | Windows |
 
-Nada de dependência de sistema para TLS: o **mbedTLS 3.6 LTS** é
-statically linked. Veja [`docs/https-tls.md`](../https-tls.md).
+Nada de dependência de sistema para TLS: o **mbedTLS 3.6 LTS** é statically linked. Veja [`docs/https-tls.md`](../https-tls.md).
 
 ## Link
 
@@ -67,13 +58,11 @@ g++ your_app.o \
     -o your_app
 ```
 
-`-Wl,-rpath,$ORIGIN` faz o binário encontrar a `libitscam_sdk.so.1`
-em runtime sem precisar de `LD_LIBRARY_PATH`.
+`-Wl,-rpath,$ORIGIN` faz o binário encontrar a `libitscam_sdk.so.1` em runtime sem precisar de `LD_LIBRARY_PATH`.
 
 ### Static, self-contained
 
-Se você quer um binário sem dependência runtime do SDK, compile os
-sources do core diretamente:
+Se você quer um binário sem dependência runtime do SDK, compile os sources do core diretamente:
 
 ```bash
 g++ -std=c++17 -Isrc/core/ -Isrc/core/3rdparty/ \
@@ -85,13 +74,9 @@ g++ -std=c++17 -Isrc/core/ -Isrc/core/3rdparty/ \
     -o your_app -lpthread
 ```
 
-(Para uma build static você também precisa dos sources vendorados de
-mbedTLS -- o `make lib` no top-level já faz isso por você, então
-prefira o workflow de shared library acima a menos que tenha um
-motivo específico.)
+(Para uma build static você também precisa dos sources vendorados de mbedTLS -- o `make lib` no top-level já faz isso por você, então prefira o workflow de shared library acima a menos que tenha um motivo específico.)
 
-Veja [getting-started.md](../getting-started.md) para o walkthrough
-completo de build, link e Docker.
+Veja [getting-started.md](../getting-started.md) para o walkthrough completo de build, link e Docker.
 
 ## Idiomas C++
 
@@ -176,9 +161,7 @@ rest.patchJson("/api/image/profiles/0", patch);
 auto raw = rest.httpGet("/api/equipment/misc/readonly/volatile").value();
 ```
 
-Detalhe completo (typed helpers, partial PUT semantics e quando usar
-`httpGet` / `httpPut`) em
-[docs/api/rest-client.md](../api/rest-client.md).
+Detalhe completo (typed helpers, partial PUT semantics e quando usar `httpGet` / `httpPut`) em [docs/api/rest-client.md](../api/rest-client.md).
 
 ### Binary (Cougar TCP :60000)
 
@@ -200,8 +183,7 @@ camera.onTriggerImage([](const TriggerImage& t) {
 });
 ```
 
-Auto-reconnect, exposure groups e eventos de GPIO/serial estão em
-[docs/api/binary-client.md](../api/binary-client.md).
+Auto-reconnect, exposure groups e eventos de GPIO/serial estão em [docs/api/binary-client.md](../api/binary-client.md).
 
 ## Examples
 
@@ -218,5 +200,4 @@ Build com `make examples`; binários em `src/examples/build/`.
 
 ## Tutorial passo a passo
 
-Para criar um projeto C++ do zero e salvar a primeira imagem em
-disco, veja [Primeira imagem com C++](../tutorials/first-image-cpp.md).
+Para criar um projeto C++ do zero e salvar a primeira imagem em disco, veja [Primeira imagem com C++](../tutorials/first-image-cpp.md).

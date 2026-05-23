@@ -2,15 +2,9 @@
 
 [Português (Brasil)](go.md) | [English (US)](go.en-US.md)
 
-The Go wrapper lives at
-[`src/wrappers/go/`](../../src/wrappers/go/) and uses **cgo** against
-the SDK's C API.  A `static` build tag toggles between dynamic linking
-(default; relies on `libitscam_sdk.so` at runtime) and full static
-linking (drops in the static archive plus pthread / stdc++ / m).
+The Go wrapper lives at [`src/wrappers/go/`](../../src/wrappers/go/) and uses **cgo** against the SDK's C API. A `static` build tag toggles between dynamic linking (default; relies on `libitscam_sdk.so` at runtime) and full static linking (drops in the static archive plus pthread / stdc++ / m).
 
-> **Full reference of exported types and functions** (generated via
-> gomarkdoc): [`itscam` package reference](/api-ref/go). This page
-> covers build/link, idiomatic patterns, and examples.
+> **Full reference of exported types and functions** (generated via gomarkdoc): [`itscam` package reference](/api-ref/go). This page covers build/link, idiomatic patterns, and examples.
 
 ## Build & run
 
@@ -34,11 +28,7 @@ go build -tags static -o cgi_snapshot_example cgi_snapshot_example.go
 ./cgi_snapshot_example 192.168.254.254
 ```
 
-The cgo `#cgo` directives in
-[`src/wrappers/go/itscam/*.go`](../../src/wrappers/go/itscam/) already
-know where the static archives live (`../../../core/build/<platform>/`)
-relative to the package, so no extra flags are needed beyond
-`CGO_CFLAGS` for the headers.
+The cgo `#cgo` directives in [`src/wrappers/go/itscam/*.go`](../../src/wrappers/go/itscam/) already know where the static archives live (`../../../core/build/<platform>/`) relative to the package, so no extra flags are needed beyond `CGO_CFLAGS` for the headers.
 
 ## Surface
 
@@ -51,8 +41,7 @@ rest,   _ := itscam.NewRestClient()
 cgi,    _ := itscam.NewCgiClient()
 ```
 
-Errors are returned as Go `error` values.  The underlying type carries
-the SDK's `Error::Code`, so callers can map specific failure modes:
+Errors are returned as Go `error` values. The underlying type carries the SDK's `Error::Code`, so callers can map specific failure modes:
 
 ```go
 if err := cgi.Login("admin", "1234", 10000); err != nil {
@@ -89,16 +78,10 @@ cgi.StopMjpegStream()
 
 Two coexisting surfaces:
 
-* **Typed helpers** (preferred) -- `rest.GetOcrConfig`, `rest.SetOcrConfig`,
-  `rest.GetProfiles` etc. return Go structs generated from the camera's
-  OpenAPI document.  See [`docs/codegen.md`](../codegen.md) for the
-  maintainer / downstream refresh workflow.
-* **Generic verbs** (escape hatch) -- `rest.Get`, `rest.Put`, `rest.Post`,
-  `rest.Delete` return the raw JSON response body as a string.
+* **Typed helpers** (preferred) -- `rest.GetOcrConfig`, `rest.SetOcrConfig`, `rest.GetProfiles` etc. return Go structs generated from the camera's OpenAPI document. See [`docs/codegen.md`](../codegen.md) for the maintainer / downstream refresh workflow.
+* **Generic verbs** (escape hatch) -- `rest.Get`, `rest.Put`, `rest.Post`, `rest.Delete` return the raw JSON response body as a string.
 
-* **Partial PUT** -- `rest.PatchJSON(path, patch)` sends only the fields
-  being changed.  Required for image profiles and recommended for most
-  configuration updates.  See [`docs/api/rest-client.md`](../api/rest-client.md).
+* **Partial PUT** -- `rest.PatchJSON(path, patch)` sends only the fields being changed. Required for image profiles and recommended for most configuration updates. See [`docs/api/rest-client.md`](../api/rest-client.md).
 
 ```go
 rest, _ := itscam.NewRestClient()
@@ -120,10 +103,7 @@ body, _ := rest.Get("/api/equipment/misc/readonly/constants", 10000)
 fmt.Println(body)
 ```
 
-The generated structs live in
-[`src/wrappers/go/itscam/rest_types.go`](../../src/wrappers/go/itscam/rest_types.go);
-optional fields are modelled as pointers so `nil` round-trips
-cleanly via `encoding/json`.
+The generated structs live in [`src/wrappers/go/itscam/rest_types.go`](../../src/wrappers/go/itscam/rest_types.go); optional fields are modelled as pointers so `nil` round-trips cleanly via `encoding/json`.
 
 ## Examples
 
@@ -138,8 +118,7 @@ Under [`src/wrappers/go/examples/`](../../src/wrappers/go/examples/):
 
 ## Wails GUI example
 
-The `gui/` example is a static Wails application that exercises the SDK
-from a WebView UI.  Build with:
+The `gui/` example is a static Wails application that exercises the SDK from a WebView UI. Build with:
 
 ```bash
 make go-gui                # Linux
@@ -147,5 +126,4 @@ make go-gui-windows        # Windows cross-compile
 make docker-go-gui         # inside the SDK builder image
 ```
 
-See [`src/wrappers/go/examples/gui/README.md`](../../src/wrappers/go/examples/gui/README.md)
-for prerequisites (Go 1.21+, Wails CLI, WebKit2GTK).
+See [`src/wrappers/go/examples/gui/README.md`](../../src/wrappers/go/examples/gui/README.md) for prerequisites (Go 1.21+, Wails CLI, WebKit2GTK).

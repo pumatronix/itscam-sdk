@@ -1,10 +1,6 @@
 # Primeira imagem com Go
 
-Walkthrough do zero: criar um módulo Go, configurar cgo contra o
-ITSCAM SDK e salvar a primeira imagem JPEG da câmera em disco. Caminho
-principal usa o **`ItscamCgiClient`** (HTTP, anônimo por default) e há
-uma seção opcional no final usando o **`ItscamClient`** (Cougar
-TCP :60000).
+Walkthrough do zero: criar um módulo Go, configurar cgo contra o ITSCAM SDK e salvar a primeira imagem JPEG da câmera em disco. Caminho principal usa o **`ItscamCgiClient`** (HTTP, anônimo por default) e há uma seção opcional no final usando o **`ItscamClient`** (Cougar TCP :60000).
 
 ```mermaid
 flowchart TD
@@ -29,9 +25,7 @@ flowchart TD
 
 ## 2. Buildar a shared library nativa
 
-O wrapper Go usa cgo: dynamic linking precisa de `libitscam_sdk.so` em
-runtime; static linking precisa de `libitscam_sdk.a` em build time.
-Build dos dois com:
+O wrapper Go usa cgo: dynamic linking precisa de `libitscam_sdk.so` em runtime; static linking precisa de `libitscam_sdk.a` em build time. Build dos dois com:
 
 ```bash
 git clone https://github.com/pumatronix/itscam-sdk.git
@@ -52,11 +46,7 @@ go mod init exemplo.com/meu-app
 
 ## 4. Apontar para o módulo Go local do SDK
 
-O wrapper Go vive em
-[`src/wrappers/go/`](../../src/wrappers/go/) sob o module path
-`github.com/pumatronix/itscam-sdk-go`. Enquanto o módulo não estiver
-publicado, use um `replace` directive para apontar para o checkout
-local:
+O wrapper Go vive em [`src/wrappers/go/`](../../src/wrappers/go/) sob o module path `github.com/pumatronix/itscam-sdk-go`. Enquanto o módulo não estiver publicado, use um `replace` directive para apontar para o checkout local:
 
 ```bash
 go mod edit -require=github.com/pumatronix/itscam-sdk-go@v0.0.0
@@ -172,8 +162,7 @@ file primeira-imagem.jpg
 
 ## 8. Opcional: capture via `ItscamClient` (TCP :60000)
 
-O CGI é o caminho mais simples. Se você precisa de **trigger em real
-time** ou multi-exposure, use o binary client (porta 60000):
+O CGI é o caminho mais simples. Se você precisa de **trigger em real time** ou multi-exposure, use o binary client (porta 60000):
 
 ```go
 // main.go (variante binary)
@@ -225,17 +214,11 @@ func main() {
 }
 ```
 
-Detalhe completo (auto-reconnect, exposure groups, eventos de trigger
-contínuos) em [docs/api/binary-client.md](../api/binary-client.md) e
-no example
-[`capture_example.go`](../../src/wrappers/go/examples/capture_example.go).
+Detalhe completo (auto-reconnect, exposure groups, eventos de trigger contínuos) em [docs/api/binary-client.md](../api/binary-client.md) e no example [`capture_example.go`](../../src/wrappers/go/examples/capture_example.go).
 
 ## Próximos passos
 
-- [Guia do wrapper Go](../wrappers/go.md) -- API completa, static vs
-  dynamic linking, Wails GUI.
-- [Examples Go](../../src/wrappers/go/examples/) -- CGI, REST, binary
-  e GUI Wails.
+- [Guia do wrapper Go](../wrappers/go.md) -- API completa, static vs dynamic linking, Wails GUI.
+- [Examples Go](../../src/wrappers/go/examples/) -- CGI, REST, binary e GUI Wails.
 - [HTTPS / TLS](../https-tls.md) -- configurar mbedTLS para produção.
-- [Codegen REST](../codegen.md) -- regenerar `rest_types.go` para um
-  firmware específico.
+- [Codegen REST](../codegen.md) -- regenerar `rest_types.go` para um firmware específico.

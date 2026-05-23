@@ -2,17 +2,11 @@
 
 [Português (Brasil)](binary-client.md) | [English (US)](binary-client.en-US.md)
 
-The binary client speaks the Cougar protocol on TCP port **60000**.  It
-is the lowest-latency surface and the only one that exposes real-time
-events (triggers, GPIO, serial, multi-exposure groups).
+The binary client speaks the Cougar protocol on TCP port **60000**. It is the lowest-latency surface and the only one that exposes real-time events (triggers, GPIO, serial, multi-exposure groups).
 
-Header: [`src/core/itscam_client.h`](../../src/core/itscam_client.h).
-C++ example: [`src/examples/itscam_sdk_example.cpp`](../../src/examples/itscam_sdk_example.cpp).
+Header: [`src/core/itscam_client.h`](../../src/core/itscam_client.h). C++ example: [`src/examples/itscam_sdk_example.cpp`](../../src/examples/itscam_sdk_example.cpp).
 
-> **Full per-method reference** (signatures, parameters, overloads):
-> see the [generated Doxygen reference](/api-ref/cpp/classitscam_1_1ItscamClient.html).
-> This page focuses on usage patterns, typical workflows, and gotchas;
-> the API reference is generated from the header and cannot drift.
+> **Full per-method reference** (signatures, parameters, overloads): see the [generated Doxygen reference](/api-ref/cpp/classitscam_1_1ItscamClient.html). This page focuses on usage patterns, typical workflows, and gotchas; the API reference is generated from the header and cannot drift.
 
 ## Quick start
 
@@ -62,8 +56,7 @@ camera.onConnectionStateChanged(
     });
 ```
 
-On reconnect the SDK fully restores the previous session
-(re-authenticate, re-apply JPEG config, re-subscribe to events).
+On reconnect the SDK fully restores the previous session (re-authenticate, re-apply JPEG config, re-subscribe to events).
 
 ## Event subscriptions
 
@@ -79,8 +72,7 @@ camera.subscribeCaptures();
 
 ## Capture
 
-`captureSnapshot()` is *trigger + wait*.  It returns
-`Result<std::vector<CaptureResult>>`; one entry per exposure step.
+`captureSnapshot()` is *trigger + wait*. It returns `Result<std::vector<CaptureResult>>`; one entry per exposure step.
 
 ```cpp
 SnapshotRequest req;
@@ -127,13 +119,10 @@ camera.setMultiExposureConfig(disable);
 
 ### Exposure groups
 
-When multi-exposure is active the camera produces multiple frames per
-trigger event, all sharing the same RID.
+When multi-exposure is active the camera produces multiple frames per trigger event, all sharing the same RID.
 
-- **Per-frame callbacks** (`onTriggerImage`, `onSnapshotImage`) fire
-  once for each individual frame.
-- **Group callbacks** fire once per complete group; partial groups are
-  delivered after a timeout.
+- **Per-frame callbacks** (`onTriggerImage`, `onSnapshotImage`) fire once for each individual frame.
+- **Group callbacks** fire once per complete group; partial groups are delivered after a timeout.
 
 ```cpp
 camera.onTriggerImage([](const CaptureResult& cr) {
@@ -160,13 +149,11 @@ cfg.imgpkg.embedSignature = 1;
 camera.setJpegConfig(cfg);
 ```
 
-`JpegConfig::imgpkgDefaults()` enables EXIF and embedded comments by
-default; signature embedding is opt-in.
+`JpegConfig::imgpkgDefaults()` enables EXIF and embedded comments by default; signature embedding is opt-in.
 
 ## Profiles
 
-The camera supports up to 4 profiles.  Each carries its own trigger,
-exposure and color settings.  Profile 0 is the default.
+The camera supports up to 4 profiles. Each carries its own trigger, exposure and color settings. Profile 0 is the default.
 
 ```cpp
 auto profiles = camera.listProfiles();
@@ -181,8 +168,7 @@ camera.setActiveProfile(0);
 
 ## Trigger & exposure
 
-All trigger / exposure methods take an optional `profileId` argument.
-Use `CURRENT_PROFILE` (default) to target the active profile.
+All trigger / exposure methods take an optional `profileId` argument. Use `CURRENT_PROFILE` (default) to target the active profile.
 
 ```cpp
 auto trig  = camera.getTriggerConfig();
@@ -254,8 +240,7 @@ camera.onConnectionStateChanged(
     [](ConnectionState s, const std::string& reason) { /* ... */ });
 ```
 
-All callbacks run on the SDK's worker thread; **do not block** inside
-them.
+All callbacks run on the SDK's worker thread; **do not block** inside them.
 
 ## System
 
@@ -268,8 +253,4 @@ camera.setExposureGroupTimeout(3000);   // ms (default: 5000)
 
 ## `captureSnapshot()` vs `onSnapshotImage`
 
-`captureSnapshot()` internally registers a pending capture for the RID
-and returns the full exposure group as
-`Result<std::vector<CaptureResult>>`.  `onSnapshotImage` still fires
-per-frame and is useful when triggers come from outside your process or
-when you need bespoke accumulation logic.
+`captureSnapshot()` internally registers a pending capture for the RID and returns the full exposure group as `Result<std::vector<CaptureResult>>`. `onSnapshotImage` still fires per-frame and is useful when triggers come from outside your process or when you need bespoke accumulation logic.

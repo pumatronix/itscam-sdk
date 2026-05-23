@@ -2,9 +2,7 @@
 
 [Português (Brasil)](migration-cougar.md) | [English (US)](migration-cougar.en-US.md)
 
-The legacy `CougarClient` is replaced by `ItscamClient`.  The new API
-keeps the same on-wire protocol but exposes typed methods instead of
-generic JSON envelopes.
+The legacy `CougarClient` is replaced by `ItscamClient`. The new API keeps the same on-wire protocol but exposes typed methods instead of generic JSON envelopes.
 
 | Old (`CougarClient`)                                | New (`ItscamClient`)                              |
 | --------------------------------------------------- | ------------------------------------------------- |
@@ -22,13 +20,10 @@ generic JSON envelopes.
 What you get on top of the legacy API:
 
 - `Result<T>` / `Future<T>` for explicit, typed error handling.
-- A `ConnectionState` lifecycle callback (`Connected`, `Disconnected`,
-  `Reconnecting`, `Reconnected`).
+- A `ConnectionState` lifecycle callback (`Connected`, `Disconnected`, `Reconnecting`, `Reconnected`).
 - Auto-reconnect with full session restore.
 - Exposure-group accumulator with per-group callbacks.
 - Profile-aware trigger / exposure helpers.
-- Generic `setConfig(path, data)` escape hatch when no typed helper
-  exists yet.
+- Generic `setConfig(path, data)` escape hatch when no typed helper exists yet.
 
-See the [binary client reference](api/binary-client.md) for the full
-surface.
+See the [binary client reference](api/binary-client.md) for the full surface.

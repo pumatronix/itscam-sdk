@@ -2,19 +2,13 @@
 
 [Português (Brasil)](python.md) | [English (US)](python.en-US.md)
 
-The Python wrapper lives at
-[`src/wrappers/python/`](../../src/wrappers/python/) and uses **ctypes**
-on top of the SDK's C API.  It supports Python 3.7+ on Linux and
-Windows.
+The Python wrapper lives at [`src/wrappers/python/`](../../src/wrappers/python/) and uses **ctypes** on top of the SDK's C API. It supports Python 3.7+ on Linux and Windows.
 
-> **Full class and method reference** (generated from source):
-> [pdoc for the `itscam` module](/api-ref/python/itscam.html). This
-> page covers installation, usage patterns, and examples.
+> **Full class and method reference** (generated from source): [pdoc for the `itscam` module](/api-ref/python/itscam.html). This page covers installation, usage patterns, and examples.
 
 ## Install
 
-The wrapper is a regular `setuptools` package.  From a checkout of the
-repo:
+The wrapper is a regular `setuptools` package. From a checkout of the repo:
 
 ```bash
 make lib                         # build libitscam_sdk.so first
@@ -29,8 +23,7 @@ ctypes locates the shared library by:
 3. System paths (`/usr/local/lib`, `/usr/lib`).
 4. Every entry in `LD_LIBRARY_PATH`.
 
-For ad-hoc usage without `pip install`, point `LD_LIBRARY_PATH` at the
-build directory and prepend the wrapper to `PYTHONPATH`:
+For ad-hoc usage without `pip install`, point `LD_LIBRARY_PATH` at the build directory and prepend the wrapper to `PYTHONPATH`:
 
 ```bash
 export LD_LIBRARY_PATH=$PWD/src/core/build/linux:$LD_LIBRARY_PATH
@@ -50,9 +43,7 @@ from itscam import (
 )
 ```
 
-Each client is a context-manager-friendly Python class that mirrors its
-C++ counterpart 1:1.  Errors are raised as exceptions instead of
-returned as `Result<T>`.
+Each client is a context-manager-friendly Python class that mirrors its C++ counterpart 1:1. Errors are raised as exceptions instead of returned as `Result<T>`.
 
 ## CGI usage (auth optional)
 
@@ -84,18 +75,10 @@ with ItscamCgiClient() as cgi:
 
 The REST client exposes two coexisting surfaces:
 
-* **Typed helpers** (preferred) -- `rest.get_ocr_config()`,
-  `rest.set_ocr_config(cfg)`, `rest.get_profiles()` etc. return
-  dataclasses generated from the camera's OpenAPI document.  See
-  [`docs/codegen.md`](../codegen.md) for the maintainer / downstream
-  refresh workflow.
-* **Generic verbs** (escape hatch) -- `rest.get(path)`,
-  `rest.put(path, body)`, `rest.post`, `rest.delete` return parsed
-  JSON (`dict` / `list`).
+* **Typed helpers** (preferred) -- `rest.get_ocr_config()`, `rest.set_ocr_config(cfg)`, `rest.get_profiles()` etc. return dataclasses generated from the camera's OpenAPI document. See [`docs/codegen.md`](../codegen.md) for the maintainer / downstream refresh workflow.
+* **Generic verbs** (escape hatch) -- `rest.get(path)`, `rest.put(path, body)`, `rest.post`, `rest.delete` return parsed JSON (`dict` / `list`).
 
-* **Partial PUT** -- `rest.patch_json(path, patch)` sends only the
-  fields being changed.  Required for image profiles and recommended
-  for most configuration updates.  See [`docs/api/rest-client.md`](../api/rest-client.md).
+* **Partial PUT** -- `rest.patch_json(path, patch)` sends only the fields being changed. Required for image profiles and recommended for most configuration updates. See [`docs/api/rest-client.md`](../api/rest-client.md).
 
 ```python
 from itscam import ItscamRestClient, ProfileConfig
@@ -115,8 +98,7 @@ with ItscamRestClient() as rest:
     print(rest.get("/api/equipment/misc/readonly/constants"))
 ```
 
-The full POCO module is also available as `itscam.rest_types` for
-explicit imports.
+The full POCO module is also available as `itscam.rest_types` for explicit imports.
 
 ## Binary client usage
 
@@ -133,8 +115,7 @@ result = camera.capture_snapshot()
 
 ## Examples
 
-Ready-to-run scripts under
-[`src/wrappers/python/examples/`](../../src/wrappers/python/examples/):
+Ready-to-run scripts under [`src/wrappers/python/examples/`](../../src/wrappers/python/examples/):
 
 | Script                                   | Purpose                            |
 | ---------------------------------------- | ---------------------------------- |
@@ -142,5 +123,4 @@ Ready-to-run scripts under
 | `rest_example.py <host> <user> <pass>`   | REST login + read configuration.   |
 | `cgi_snapshot_example.py <host> [...]`   | CGI lastframe + snapshot + MJPEG.  |
 
-The CGI example accepts optional `--user`/`--password` flags; without
-them it talks to the camera anonymously.
+The CGI example accepts optional `--user`/`--password` flags; without them it talks to the camera anonymously.

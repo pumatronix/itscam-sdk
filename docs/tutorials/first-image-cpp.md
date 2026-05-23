@@ -1,9 +1,6 @@
 # Primeira imagem com C++
 
-Walkthrough do zero: criar um projeto C++, linkar contra o ITSCAM SDK
-e salvar a primeira imagem JPEG da câmera em disco. Caminho principal
-usa o **`ItscamCgiClient`** (HTTP, anônimo por default) e há uma seção
-opcional no final usando o **`ItscamClient`** (Cougar TCP :60000).
+Walkthrough do zero: criar um projeto C++, linkar contra o ITSCAM SDK e salvar a primeira imagem JPEG da câmera em disco. Caminho principal usa o **`ItscamCgiClient`** (HTTP, anônimo por default) e há uma seção opcional no final usando o **`ItscamClient`** (Cougar TCP :60000).
 
 ```mermaid
 flowchart TD
@@ -25,9 +22,7 @@ flowchart TD
 | Git | qualquer | `git --version` |
 | Câmera ITSCAM | ITSCAM450 / ITSCAM600 alcançável na rede | `ping <ip-da-camera>` |
 
-Nada de mbedTLS, cpp-httplib ou nlohmann/json no sistema -- todas as
-dependências do SDK são vendoradas em
-[`src/core/3rdparty/`](../../src/core/3rdparty/).
+Nada de mbedTLS, cpp-httplib ou nlohmann/json no sistema -- todas as dependências do SDK são vendoradas em [`src/core/3rdparty/`](../../src/core/3rdparty/).
 
 ## 2. Obter e buildar o SDK
 
@@ -37,8 +32,7 @@ cd itscam-sdk
 make lib
 ```
 
-Depois desse passo você vai ter `libitscam_sdk.so.1.0.0` (e os symlinks
-`libitscam_sdk.so` / `.so.1`) em `src/core/build/linux/`.
+Depois desse passo você vai ter `libitscam_sdk.so.1.0.0` (e os symlinks `libitscam_sdk.so` / `.so.1`) em `src/core/build/linux/`.
 
 ## 3. Criar o projeto
 
@@ -69,8 +63,7 @@ clean:
 .PHONY: clean
 ```
 
-O `-Wl,-rpath,$ORIGIN` faz o binário encontrar a shared library em
-runtime sem precisar exportar `LD_LIBRARY_PATH`.
+O `-Wl,-rpath,$ORIGIN` faz o binário encontrar a shared library em runtime sem precisar exportar `LD_LIBRARY_PATH`.
 
 ## 4. Escrever o código mínimo
 
@@ -147,10 +140,7 @@ file primeira-imagem.jpg
 
 ## 7. Opcional: capture via `ItscamClient` (TCP :60000)
 
-O CGI é o caminho mais simples para uma primeira imagem. Se você
-precisa de **trigger em real time** ou multi-exposure, use o binary
-client. Ele exige `authenticate()` mesmo que a câmera não tenha CGI
-auth.
+O CGI é o caminho mais simples para uma primeira imagem. Se você precisa de **trigger em real time** ou multi-exposure, use o binary client. Ele exige `authenticate()` mesmo que a câmera não tenha CGI auth.
 
 ```cpp
 #include "itscam_sdk.h"
@@ -182,14 +172,11 @@ int main(int argc, char* argv[]) {
 }
 ```
 
-Detalhe completo (auto-reconnect, exposure groups, eventos de trigger
-contínuos) em [docs/api/binary-client.md](../api/binary-client.md).
+Detalhe completo (auto-reconnect, exposure groups, eventos de trigger contínuos) em [docs/api/binary-client.md](../api/binary-client.md).
 
 ## Próximos passos
 
 - [Guia do wrapper C++](../wrappers/cpp.md) -- padrões idiomáticos.
 - [Getting started](../getting-started.md) -- build, exemplos e Docker.
-- [Examples completos](../../src/examples/) --
-  [`itscam_cgi_example.cpp`](../../src/examples/itscam_cgi_example.cpp),
-  [`itscam_sdk_example.cpp`](../../src/examples/itscam_sdk_example.cpp).
+- [Examples completos](../../src/examples/) -- [`itscam_cgi_example.cpp`](../../src/examples/itscam_cgi_example.cpp), [`itscam_sdk_example.cpp`](../../src/examples/itscam_sdk_example.cpp).
 - [HTTPS / TLS](../https-tls.md) -- configurar mbedTLS para produção.

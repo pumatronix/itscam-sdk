@@ -2,17 +2,11 @@
 
 [Português (Brasil)](binary-client.md) | [English (US)](binary-client.en-US.md)
 
-O binary client fala o protocolo Cougar na porta TCP **60000**. É a
-superfície de menor latência e a única que expõe eventos em real time
-(triggers, GPIO, serial, multi-exposure groups).
+O binary client fala o protocolo Cougar na porta TCP **60000**. É a superfície de menor latência e a única que expõe eventos em real time (triggers, GPIO, serial, multi-exposure groups).
 
-Header: [`src/core/itscam_client.h`](../../src/core/itscam_client.h).
-Example C++: [`src/examples/itscam_sdk_example.cpp`](../../src/examples/itscam_sdk_example.cpp).
+Header: [`src/core/itscam_client.h`](../../src/core/itscam_client.h). Example C++: [`src/examples/itscam_sdk_example.cpp`](../../src/examples/itscam_sdk_example.cpp).
 
-> **Referência completa de cada método** (assinatura, parâmetros,
-> overloads): veja a [referência Doxygen do C++](/api-ref/cpp/classitscam_1_1ItscamClient.html).
-> Esta página foca em padrões de uso, fluxos típicos e gotchas; a
-> referência API é gerada do header e nunca fica fora de sincronia.
+> **Referência completa de cada método** (assinatura, parâmetros, overloads): veja a [referência Doxygen do C++](/api-ref/cpp/classitscam_1_1ItscamClient.html). Esta página foca em padrões de uso, fluxos típicos e gotchas; a referência API é gerada do header e nunca fica fora de sincronia.
 
 ## Quick start
 
@@ -62,8 +56,7 @@ camera.onConnectionStateChanged(
     });
 ```
 
-No reconnect, o SDK restaura totalmente a session anterior
-(re-autentica, re-aplica JPEG config, re-subscribe nos eventos).
+No reconnect, o SDK restaura totalmente a session anterior (re-autentica, re-aplica JPEG config, re-subscribe nos eventos).
 
 ## Event subscriptions
 
@@ -79,8 +72,7 @@ camera.subscribeCaptures();
 
 ## Capture
 
-`captureSnapshot()` é *trigger + wait*. Devolve
-`Result<std::vector<CaptureResult>>`; um entry por exposure step.
+`captureSnapshot()` é *trigger + wait*. Devolve `Result<std::vector<CaptureResult>>`; um entry por exposure step.
 
 ```cpp
 SnapshotRequest req;
@@ -127,13 +119,10 @@ camera.setMultiExposureConfig(disable);
 
 ### Exposure groups
 
-Quando multi-exposure está ativo, a câmera produz múltiplos frames por
-trigger, todos compartilhando o mesmo RID.
+Quando multi-exposure está ativo, a câmera produz múltiplos frames por trigger, todos compartilhando o mesmo RID.
 
-- **Callbacks por frame** (`onTriggerImage`, `onSnapshotImage`)
-  disparam uma vez para cada frame individual.
-- **Callbacks por grupo** disparam uma vez por grupo completo;
-  partial groups são entregues após um timeout.
+- **Callbacks por frame** (`onTriggerImage`, `onSnapshotImage`) disparam uma vez para cada frame individual.
+- **Callbacks por grupo** disparam uma vez por grupo completo; partial groups são entregues após um timeout.
 
 ```cpp
 camera.onTriggerImage([](const CaptureResult& cr) {
@@ -160,13 +149,11 @@ cfg.imgpkg.embedSignature = 1;
 camera.setJpegConfig(cfg);
 ```
 
-`JpegConfig::imgpkgDefaults()` habilita EXIF e embedded comments por
-default; signature embedding é opt-in.
+`JpegConfig::imgpkgDefaults()` habilita EXIF e embedded comments por default; signature embedding é opt-in.
 
 ## Profiles
 
-A câmera suporta até 4 profiles. Cada um carrega seus próprios
-trigger, exposure e color settings. O profile 0 é o default.
+A câmera suporta até 4 profiles. Cada um carrega seus próprios trigger, exposure e color settings. O profile 0 é o default.
 
 ```cpp
 auto profiles = camera.listProfiles();
@@ -181,9 +168,7 @@ camera.setActiveProfile(0);
 
 ## Trigger e exposure
 
-Todos os métodos de trigger / exposure aceitam um argumento opcional
-`profileId`. Use `CURRENT_PROFILE` (default) para mirar no profile
-ativo.
+Todos os métodos de trigger / exposure aceitam um argumento opcional `profileId`. Use `CURRENT_PROFILE` (default) para mirar no profile ativo.
 
 ```cpp
 auto trig  = camera.getTriggerConfig();
@@ -201,8 +186,7 @@ exp.gain.automatic    = 1; exp.gain.maxValue    = 800;
 camera.setExposureConfig(exp, 0);
 ```
 
-`-1` significa "deixa como está" -- só preenche os fields que você
-quer modificar.
+`-1` significa "deixa como está" -- só preenche os fields que você quer modificar.
 
 ## Serial I/O
 
@@ -256,8 +240,7 @@ camera.onConnectionStateChanged(
     [](ConnectionState s, const std::string& reason) { /* ... */ });
 ```
 
-Todos os callbacks rodam na worker thread do SDK; **não bloqueie**
-dentro deles.
+Todos os callbacks rodam na worker thread do SDK; **não bloqueie** dentro deles.
 
 ## System
 
@@ -270,8 +253,4 @@ camera.setExposureGroupTimeout(3000);   // ms (default: 5000)
 
 ## `captureSnapshot()` vs `onSnapshotImage`
 
-`captureSnapshot()` internamente registra um pending capture para o
-RID e devolve o exposure group completo como
-`Result<std::vector<CaptureResult>>`. `onSnapshotImage` continua
-disparando por frame e é útil quando os triggers vêm de fora do seu
-processo ou quando você precisa de uma lógica de acumulação custom.
+`captureSnapshot()` internamente registra um pending capture para o RID e devolve o exposure group completo como `Result<std::vector<CaptureResult>>`. `onSnapshotImage` continua disparando por frame e é útil quando os triggers vêm de fora do seu processo ou quando você precisa de uma lógica de acumulação custom.

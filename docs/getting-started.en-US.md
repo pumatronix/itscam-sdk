@@ -2,23 +2,15 @@
 
 [Português (Brasil)](getting-started.md) | [English (US)](getting-started.en-US.md)
 
-Five-minute path from a fresh checkout to a running C++ example. The
-recommended workflow uses the **Docker builder** because it already
-ships GCC, MinGW-w64, .NET 8 SDK, Go 1.25, Python 3, Wails, and the
-full cross-compile toolchain.
+Five-minute path from a fresh checkout to a running C++ example. The recommended workflow uses the **Docker builder** because it already ships GCC, MinGW-w64, .NET 8 SDK, Go 1.25, Python 3, Wails, and the full cross-compile toolchain.
 
 ## Prerequisites
 
 - Docker Engine (recommended path).
-- Alternatively, for native builds: a C++17 compiler (GCC 7+, Clang 5+,
-  MinGW-w64 for Windows) and GNU `make`.
-- Optional: `dotnet` (C# wrapper), `go` (Go wrapper), `python3` (Python
-  wrapper) -- only required on the host if you are **not** using the
-  Docker builder.
+- Alternatively, for native builds: a C++17 compiler (GCC 7+, Clang 5+, MinGW-w64 for Windows) and GNU `make`.
+- Optional: `dotnet` (C# wrapper), `go` (Go wrapper), `python3` (Python wrapper) -- only required on the host if you are **not** using the Docker builder.
 
-Everything else (cpp-httplib, nlohmann/json, mbedTLS) is vendored under
-[`src/core/3rdparty/`](../src/core/3rdparty), so no system packages are
-required.
+Everything else (cpp-httplib, nlohmann/json, mbedTLS) is vendored under [`src/core/3rdparty/`](../src/core/3rdparty), so no system packages are required.
 
 ## Build via Docker (recommended)
 
@@ -33,8 +25,7 @@ make docker-shell      # interactive shell inside the builder image
 make help              # list every target (docker-* and native)
 ```
 
-Artefacts land under `src/core/build/<platform>/` and
-`src/examples/build/`, mounted on the host via a volume.
+Artefacts land under `src/core/build/<platform>/` and `src/examples/build/`, mounted on the host via a volume.
 
 ## Native build (optional)
 
@@ -89,15 +80,11 @@ g++ -std=c++17 \
     -o your_app -lpthread
 ```
 
-(For static builds you must also compile and link the vendored
-mbedTLS sources. The top-level `make lib` already handles that, so
-prefer the shared-library workflow unless you have a specific reason
-to avoid it.)
+(For static builds you must also compile and link the vendored mbedTLS sources. The top-level `make lib` already handles that, so prefer the shared-library workflow unless you have a specific reason to avoid it.)
 
 ## Dependencies (vendored)
 
-The repo is self-contained -- nothing in the table below needs to be
-installed on the host.
+The repo is self-contained -- nothing in the table below needs to be installed on the host.
 
 | Dependency       | Version   | Location                              |
 | ---------------- | --------- | ------------------------------------- |
@@ -105,5 +92,4 @@ installed on the host.
 | nlohmann/json    | single h  | `src/core/3rdparty/nlohmann/json.hpp` |
 | mbedTLS          | 3.6.2 LTS | `src/core/3rdparty/mbedtls/`          |
 
-See [`docs/https-tls.md`](https-tls.md) for the mbedTLS configuration
-and upgrade procedure.
+See [`docs/https-tls.md`](https-tls.md) for the mbedTLS configuration and upgrade procedure.

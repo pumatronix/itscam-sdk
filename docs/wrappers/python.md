@@ -2,18 +2,13 @@
 
 [Português (Brasil)](python.md) | [English (US)](python.en-US.md)
 
-O wrapper Python fica em
-[`src/wrappers/python/`](../../src/wrappers/python/) e usa **ctypes**
-sobre a C API do SDK. Suporta Python 3.7+ no Linux e no Windows.
+O wrapper Python fica em [`src/wrappers/python/`](../../src/wrappers/python/) e usa **ctypes** sobre a C API do SDK. Suporta Python 3.7+ no Linux e no Windows.
 
-> **Referência completa de classes e métodos** (gerada do código):
-> [pdoc do módulo `itscam`](/api-ref/python/itscam.html). Esta página
-> cobre instalação, padrões de uso e exemplos.
+> **Referência completa de classes e métodos** (gerada do código): [pdoc do módulo `itscam`](/api-ref/python/itscam.html). Esta página cobre instalação, padrões de uso e exemplos.
 
 ## Instalação
 
-O wrapper é um pacote `setuptools` comum. A partir de um checkout do
-repositório:
+O wrapper é um pacote `setuptools` comum. A partir de um checkout do repositório:
 
 ```bash
 make lib                         # build libitscam_sdk.so primeiro
@@ -28,8 +23,7 @@ O ctypes localiza a shared library na seguinte ordem:
 3. Paths do sistema (`/usr/local/lib`, `/usr/lib`).
 4. Todas as entradas de `LD_LIBRARY_PATH`.
 
-Para uso ad-hoc sem `pip install`, aponte `LD_LIBRARY_PATH` para o
-diretório de build e adicione o wrapper ao `PYTHONPATH`:
+Para uso ad-hoc sem `pip install`, aponte `LD_LIBRARY_PATH` para o diretório de build e adicione o wrapper ao `PYTHONPATH`:
 
 ```bash
 export LD_LIBRARY_PATH=$PWD/src/core/build/linux:$LD_LIBRARY_PATH
@@ -49,9 +43,7 @@ from itscam import (
 )
 ```
 
-Cada client é uma classe Python compatível com `with` (context
-manager) que espelha 1:1 a sua contraparte em C++. Erros são lançados
-como exceptions em vez de retornados como `Result<T>`.
+Cada client é uma classe Python compatível com `with` (context manager) que espelha 1:1 a sua contraparte em C++. Erros são lançados como exceptions em vez de retornados como `Result<T>`.
 
 ## Uso do CGI (auth opcional)
 
@@ -83,19 +75,10 @@ with ItscamCgiClient() as cgi:
 
 O REST client expõe duas superfícies que coexistem:
 
-* **Typed helpers** (preferencial) -- `rest.get_ocr_config()`,
-  `rest.set_ocr_config(cfg)`, `rest.get_profiles()` etc. retornam
-  dataclasses geradas a partir do documento OpenAPI da câmera. Veja
-  [`docs/codegen.md`](../codegen.md) para o workflow de
-  regeneração (maintainer e downstream).
-* **Generic verbs** (escape hatch) -- `rest.get(path)`,
-  `rest.put(path, body)`, `rest.post`, `rest.delete` retornam JSON
-  já parseado (`dict` / `list`).
+* **Typed helpers** (preferencial) -- `rest.get_ocr_config()`, `rest.set_ocr_config(cfg)`, `rest.get_profiles()` etc. retornam dataclasses geradas a partir do documento OpenAPI da câmera. Veja [`docs/codegen.md`](../codegen.md) para o workflow de regeneração (maintainer e downstream).
+* **Generic verbs** (escape hatch) -- `rest.get(path)`, `rest.put(path, body)`, `rest.post`, `rest.delete` retornam JSON já parseado (`dict` / `list`).
 
-* **Partial PUT** -- `rest.patch_json(path, patch)` envia somente os
-  campos que mudaram. Obrigatório para image profiles e recomendado
-  para a maioria das configuration updates. Veja
-  [`docs/api/rest-client.md`](../api/rest-client.md).
+* **Partial PUT** -- `rest.patch_json(path, patch)` envia somente os campos que mudaram. Obrigatório para image profiles e recomendado para a maioria das configuration updates. Veja [`docs/api/rest-client.md`](../api/rest-client.md).
 
 ```python
 from itscam import ItscamRestClient, ProfileConfig
@@ -115,8 +98,7 @@ with ItscamRestClient() as rest:
     print(rest.get("/api/equipment/misc/readonly/constants"))
 ```
 
-O módulo completo de POCOs também está disponível em
-`itscam.rest_types` para imports explícitos.
+O módulo completo de POCOs também está disponível em `itscam.rest_types` para imports explícitos.
 
 ## Uso do binary client
 
@@ -133,8 +115,7 @@ result = camera.capture_snapshot()
 
 ## Examples
 
-Scripts prontos para rodar em
-[`src/wrappers/python/examples/`](../../src/wrappers/python/examples/):
+Scripts prontos para rodar em [`src/wrappers/python/examples/`](../../src/wrappers/python/examples/):
 
 | Script                                   | Função                                |
 | ---------------------------------------- | ------------------------------------- |
@@ -142,11 +123,8 @@ Scripts prontos para rodar em
 | `rest_example.py <host> <user> <pass>`   | REST login + leitura de configuration.|
 | `cgi_snapshot_example.py <host> [...]`   | CGI lastframe + snapshot + MJPEG.     |
 
-O example de CGI aceita flags opcionais `--user` / `--password`; sem
-elas, ele fala com a câmera de forma anônima.
+O example de CGI aceita flags opcionais `--user` / `--password`; sem elas, ele fala com a câmera de forma anônima.
 
 ## Tutorial passo a passo
 
-Para um walkthrough do zero (criar projeto, instalar dependência e
-salvar a primeira imagem em disco), veja
-[Primeira imagem com Python](../tutorials/first-image-python.md).
+Para um walkthrough do zero (criar projeto, instalar dependência e salvar a primeira imagem em disco), veja [Primeira imagem com Python](../tutorials/first-image-python.md).

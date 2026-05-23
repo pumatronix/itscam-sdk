@@ -2,17 +2,9 @@
 
 [Português (Brasil)](overview.md) | [English (US)](overview.en-US.md)
 
-The **ITSCAM Client SDK** is a cross-platform C++17 library that talks
-to [Pumatronix](https://www.pumatronix.com) ITSCAM cameras over three
-complementary transports (binary TCP Cougar, REST, and CGI). Native
-bindings for Python, Go and C# / .NET sit on top of a single C ABI, so
-a single build of the core library serves every language.
+The **ITSCAM Client SDK** is a cross-platform C++17 library that talks to [Pumatronix](https://www.pumatronix.com) ITSCAM cameras over three complementary transports (binary TCP Cougar, REST, and CGI). Native bindings for Python, Go and C# / .NET sit on top of a single C ABI, so a single build of the core library serves every language.
 
-> The short description of the three client classes and the
-> supported-platform tables live in the
-> [`README.en-US.md`](https://github.com/pumatronix/itscam-sdk/blob/main/README.en-US.md)
-> (also the home of the [docs site](https://pumatronix.github.io/itscam-sdk/README.en-US)).
-> This page focuses on the repository layout and where to go next.
+> The short description of the three client classes and the supported-platform tables live in the [`README.en-US.md`](https://github.com/pumatronix/itscam-sdk/blob/main/README.en-US.md) (also the home of the [docs site](https://pumatronix.github.io/itscam-sdk/README.en-US)). This page focuses on the repository layout and where to go next.
 
 ## Build artefacts
 
@@ -25,8 +17,7 @@ a single build of the core library serves every language.
 | `itscam_sdk.dll`                | Windows DLL      |
 | `libitscam_sdk_static.a`        | Windows static   |
 
-mbedTLS is statically linked, so the resulting libraries have no
-runtime dependency on OpenSSL or system mbedTLS.
+mbedTLS is statically linked, so the resulting libraries have no runtime dependency on OpenSSL or system mbedTLS.
 
 ## Repository layout
 

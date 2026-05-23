@@ -2,16 +2,9 @@
 
 [Português (Brasil)](README.md) | [English (US)](README.en-US.md)
 
-A cross-platform C++17 library for integrating
-[Pumatronix](https://www.pumatronix.com) ITSCAM cameras (ITSCAM450 /
-ITSCAM600), with idiomatic bindings for **C# / .NET**, **Python**, and
-**Go**. HTTPS support and the mbedTLS backend are bundled with the SDK,
-so no system TLS dependency is required beyond a C++ compiler.
+A cross-platform C++17 library for integrating [Pumatronix](https://www.pumatronix.com) ITSCAM cameras (ITSCAM450 / ITSCAM600), with idiomatic bindings for **C# / .NET**, **Python**, and **Go**. HTTPS support and the mbedTLS backend are bundled with the SDK, so no system TLS dependency is required beyond a C++ compiler.
 
-The SDK exposes three independent client classes across C++, C#, Python,
-and Go. Choose the client by protocol and task. They can run side by
-side in the same process. The binary client uses the **Cougar** protocol
-on TCP port **60000**. REST and CGI use HTTP/HTTPS on ports **80/443**.
+The SDK exposes three independent client classes across C++, C#, Python, and Go. Choose the client by protocol and task. They can run side by side in the same process. The binary client uses the **Cougar** protocol on TCP port **60000**. REST and CGI use HTTP/HTTPS on ports **80/443**.
 
 | Client | Transport | Use it for | Do not use it for |
 | ------ | --------- | ---------- | ----------------- |
@@ -21,8 +14,7 @@ on TCP port **60000**. REST and CGI use HTTP/HTTPS on ports **80/443**.
 
 ## Quick Links
 
-Choose a row by **what you want to do** and a column by **the language
-you ship in**. Every cell links to a runnable example.
+Choose a row by **what you want to do** and a column by **the language you ship in**. Every cell links to a runnable example.
 
 | Use case | C++ | C# / .NET | Python | Go |
 | -------- | --- | --------- | ------ | -- |
@@ -57,14 +49,11 @@ git clone https://github.com/pumatronix/itscam-sdk.git
 cd itscam-sdk
 ```
 
-The Docker builder (`Dockerfile` at the repo root) ships GCC, MinGW,
-.NET, Go, Python, and Node — you do not need to install toolchains on
-the host to build the SDK.
+The Docker builder (`Dockerfile` at the repo root) ships GCC, MinGW, .NET, Go, Python, and Node — you do not need to install toolchains on the host to build the SDK.
 
 ## Quick Build
 
-Use the top-level `docker-*` targets. They build the `itscam-sdk-builder`
-image on first run and invoke `make` inside the container:
+Use the top-level `docker-*` targets. They build the `itscam-sdk-builder` image on first run and invoke `make` inside the container:
 
 ```bash
 make docker-all     # everything: Linux + Windows cross + wrappers (recommended)
@@ -81,35 +70,22 @@ make examples       # build the four C++ example binaries
 make all            # build everything: Linux + Windows cross + wrappers
 ```
 
-All native code lives under [`src/`](src/). See
-[`docs/overview.md`](docs/overview.md) for the full repository layout and
-[`docs/getting-started.md`](docs/getting-started.md) to build examples and
-link your app.
+All native code lives under [`src/`](src/). See [`docs/overview.md`](docs/overview.md) for the full repository layout and [`docs/getting-started.md`](docs/getting-started.md) to build examples and link your app.
 
 ## Using AI Agents
 
-This repository ships [`AGENTS.md`](AGENTS.md), a short, scannable briefing
-for coding agents (Cursor, Copilot, Claude Code, and similar tools). Read
-it **before** asking for SDK changes or integration work in apps that embed
-the library.
+This repository ships [`AGENTS.md`](AGENTS.md), a short, scannable briefing for coding agents (Cursor, Copilot, Claude Code, and similar tools). Read it **before** asking for SDK changes or integration work in apps that embed the library.
 
 **In this repository**
 
-- Tools that support [AGENTS.md](https://agents.md/) load the file
-  automatically from the workspace root.
-- In chat, reference `@AGENTS.md` or point the agent at the
-  [Quick Links](#quick-links) table and the example for your language.
-- Ask for reproducible builds with `make docker-all` or `make docker-linux`
-  instead of installing toolchains by hand.
+- Tools that support [AGENTS.md](https://agents.md/) load the file automatically from the workspace root.
+- In chat, reference `@AGENTS.md` or point the agent at the [Quick Links](#quick-links) table and the example for your language.
+- Ask for reproducible builds with `make docker-all` or `make docker-linux` instead of installing toolchains by hand.
 
 **In your app that consumes the SDK**
 
-- Add [`AGENTS.md`](AGENTS.md) to the agent context (reference,
-  `@`-mention, or project rule) to avoid picking the wrong client or auth
-  model.
-- State explicitly: language (C++ / C# / Python / Go), client
-  (`ItscamClient`, `ItscamRestClient`, or `ItscamCgiClient`), and whether
-  the task is real-time capture, REST configuration, or a CGI snapshot.
+- Add [`AGENTS.md`](AGENTS.md) to the agent context (reference, `@`-mention, or project rule) to avoid picking the wrong client or auth model.
+- State explicitly: language (C++ / C# / Python / Go), client (`ItscamClient`, `ItscamRestClient`, or `ItscamCgiClient`), and whether the task is real-time capture, REST configuration, or a CGI snapshot.
 
 **Rules agents should follow** (full detail in [`AGENTS.md`](AGENTS.md)):
 
@@ -123,15 +99,11 @@ the library.
 
 **Documentation assistant**
 
-The [docs site](docs-site/) (GitHub Pages) can embed an assistant powered by
-[Cloudflare AI Search](https://developers.cloudflare.com/ai-search/), with a
-corpus synced from `docs/`, examples, and `AGENTS.md`. See
-[`docs-site/README.md`](docs-site/README.md) for local setup and deployment.
+The [docs site](docs-site/) (GitHub Pages) can embed an assistant powered by [Cloudflare AI Search](https://developers.cloudflare.com/ai-search/), with a corpus synced from `docs/`, examples, and `AGENTS.md`. See [`docs-site/README.md`](docs-site/README.md) for local setup and deployment.
 
 ## Documentation Map
 
-This README is intentionally concise. Chapter-style documentation lives
-under [`docs/`](docs/):
+This README is intentionally concise. Chapter-style documentation lives under [`docs/`](docs/):
 
 - [Documentation index](docs/README.md) -- the main entry point for the docs.
 - [Overview](docs/overview.md) -- what the SDK includes and where to find it.
@@ -139,27 +111,18 @@ under [`docs/`](docs/):
 - [HTTPS / TLS](docs/https-tls.md) -- vendored mbedTLS, configuration, and troubleshooting.
 - [Error handling](docs/error-handling.md) -- `Result<T>`, `Future<T>`, error codes, and logging.
 - [Typed REST helpers & codegen](docs/codegen.md) -- bundled OpenAPI snapshot and regeneration workflows.
-- API reference:
-  [Binary client](docs/api/binary-client.md) -- [REST client](docs/api/rest-client.md) -- [CGI client](docs/api/cgi-client.md).
-- Wrappers:
-  [C# / .NET](docs/wrappers/csharp.md) -- [Python](docs/wrappers/python.md) -- [Go](docs/wrappers/go.md).
+- API reference: [Binary client](docs/api/binary-client.md) -- [REST client](docs/api/rest-client.md) -- [CGI client](docs/api/cgi-client.md).
+- Wrappers: [C# / .NET](docs/wrappers/csharp.md) -- [Python](docs/wrappers/python.md) -- [Go](docs/wrappers/go.md).
 - [Migration from CougarClient](docs/migration-cougar.md).
 - [`AGENTS.md`](AGENTS.md) — briefing for coding agents; see [Using AI Agents](#using-ai-agents).
 - **[Documentation website](docs-site/)** -- VitePress site for GitHub Pages with an optional [Cloudflare AI Search](https://developers.cloudflare.com/ai-search/) assistant. See [`docs-site/README.md`](docs-site/README.md) for setup.
 
 ## Highlights
 
-- **Three client surfaces, one library.** Cougar binary for real-time
-  capture and pipeline control. REST for equipment administration. CGI
-  for HTTP image endpoints.
-- **HTTPS out of the box.** mbedTLS 3.6 LTS is vendored under
-  [`src/core/3rdparty/mbedtls/`](src/core/3rdparty/mbedtls/) and
-  statically linked into `libitscam_sdk`.
-- **Auth-aware examples.** REST always requires login. CGI is anonymous
-  by default (`configCgi.blockAPI = false`), and credentials are
-  opt-in (`--user / --password`) in every language wrapper.
-- **Feature parity** across the C#, Python, and Go wrappers through the
-  C API in [`src/core/c_api/`](src/core/c_api/).
+- **Three client surfaces, one library.** Cougar binary for real-time capture and pipeline control. REST for equipment administration. CGI for HTTP image endpoints.
+- **HTTPS out of the box.** mbedTLS 3.6 LTS is vendored under [`src/core/3rdparty/mbedtls/`](src/core/3rdparty/mbedtls/) and statically linked into `libitscam_sdk`.
+- **Auth-aware examples.** REST always requires login. CGI is anonymous by default (`configCgi.blockAPI = false`), and credentials are opt-in (`--user / --password`) in every language wrapper.
+- **Feature parity** across the C#, Python, and Go wrappers through the C API in [`src/core/c_api/`](src/core/c_api/).
 
 ## Platform Support
 
@@ -170,5 +133,4 @@ under [`docs/`](docs/):
 
 ## License and Contact
 
-Copyright (c) 2026 Pumatronix Equipamentos Eletrônicos. Proprietary
-software. Contact Pumatronix for licensing terms.
+Copyright (c) 2026 Pumatronix Equipamentos Eletrônicos. Proprietary software. Contact Pumatronix for licensing terms.

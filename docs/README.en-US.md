@@ -2,8 +2,7 @@
 
 [Português (Brasil)](README.md) | [English (US)](README.en-US.md)
 
-Chapter-style reference for the ITSCAM Client SDK. Start with
-[Overview](overview.en-US.md) or jump straight to the topic you need.
+Chapter-style reference for the ITSCAM Client SDK. Start with [Overview](overview.en-US.md) or jump straight to the topic you need.
 
 ## Foundations
 
@@ -28,8 +27,7 @@ Chapter-style reference for the ITSCAM Client SDK. Start with
 
 ## Tutorials
 
-Step-by-step walkthroughs -- create a project, install the SDK
-dependency and save the first camera image to disk:
+Step-by-step walkthroughs -- create a project, install the SDK dependency and save the first camera image to disk:
 
 - [First image with C++](tutorials/first-image-cpp.md)
 - [First image with C# / .NET](tutorials/first-image-csharp.md)
@@ -40,9 +38,6 @@ dependency and save the first camera image to disk:
 
 - [Migration from CougarClient](migration-cougar.en-US.md)
 
-PT-BR is the primary language for every page; the `*.en-US.md`
-companions track the current translation pass. Tutorials are PT-BR-only
-for now.
+PT-BR is the primary language for every page; the `*.en-US.md` companions track the current translation pass. Tutorials are PT-BR-only for now.
 
-For the project entry point with quick-link tables, see
-[../README.en-US.md](../README.en-US.md).
+For the project entry point with quick-link tables, see [../README.en-US.md](../README.en-US.md).

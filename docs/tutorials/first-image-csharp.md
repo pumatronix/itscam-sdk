@@ -1,10 +1,6 @@
 # Primeira imagem com C# / .NET
 
-Walkthrough do zero: criar um projeto .NET console, referenciar o
-SDK e salvar a primeira imagem JPEG da câmera em disco. Caminho
-principal usa o **`ItscamCgiClient`** (HTTP, anônimo por default) e há
-uma seção opcional no final usando o **`ItscamClient`** (Cougar
-TCP :60000).
+Walkthrough do zero: criar um projeto .NET console, referenciar o SDK e salvar a primeira imagem JPEG da câmera em disco. Caminho principal usa o **`ItscamCgiClient`** (HTTP, anônimo por default) e há uma seção opcional no final usando o **`ItscamClient`** (Cougar TCP :60000).
 
 ```mermaid
 flowchart TD
@@ -36,9 +32,7 @@ make lib        # libitscam_sdk.so
 make csharp     # Itscam.Sdk.dll (netstandard2.0)
 ```
 
-Para consumo via NuGet (multi-RID), rode `make csharp-pack`. O
-walkthrough abaixo usa o caminho mais simples para desenvolvimento:
-**`ProjectReference`** direto ao csproj do SDK.
+Para consumo via NuGet (multi-RID), rode `make csharp-pack`. O walkthrough abaixo usa o caminho mais simples para desenvolvimento: **`ProjectReference`** direto ao csproj do SDK.
 
 ## 3. Criar o projeto
 
@@ -58,10 +52,7 @@ dotnet add reference \
     ../src/wrappers/csharp/Itscam.Sdk/Itscam.Sdk.csproj
 ```
 
-Isso já cuida da cópia do `libitscam_sdk.so` para o output de build
-via [`Itscam.Sdk.targets`](../../src/wrappers/csharp/Itscam.Sdk/build/Itscam.Sdk.targets)
-quando o native binary está em
-`src/core/build/<rid>/`.
+Isso já cuida da cópia do `libitscam_sdk.so` para o output de build via [`Itscam.Sdk.targets`](../../src/wrappers/csharp/Itscam.Sdk/build/Itscam.Sdk.targets) quando o native binary está em `src/core/build/<rid>/`.
 
 > Consumindo via NuGet em vez de `ProjectReference`?
 >
@@ -142,8 +133,7 @@ file primeira-imagem.jpg
 
 ## 8. Opcional: capture via `ItscamClient` (TCP :60000)
 
-O CGI é o caminho mais simples. Se você precisa de **trigger em real
-time** ou multi-exposure, use o binary client (porta 60000):
+O CGI é o caminho mais simples. Se você precisa de **trigger em real time** ou multi-exposure, use o binary client (porta 60000):
 
 ```csharp
 // Program.cs (variante binary)
@@ -168,16 +158,11 @@ File.WriteAllBytes("primeira-imagem-binary.jpg", results[0].Jpeg);
 Console.WriteLine($"OK: {results[0].Jpeg.Length} bytes (binary)");
 ```
 
-Detalhe completo (auto-reconnect, exposure groups, eventos de trigger
-contínuos via `TriggerImage` event) em
-[docs/api/binary-client.md](../api/binary-client.md) e no example
-[`CaptureExample/Program.cs`](../../src/wrappers/csharp/examples/CaptureExample/Program.cs).
+Detalhe completo (auto-reconnect, exposure groups, eventos de trigger contínuos via `TriggerImage` event) em [docs/api/binary-client.md](../api/binary-client.md) e no example [`CaptureExample/Program.cs`](../../src/wrappers/csharp/examples/CaptureExample/Program.cs).
 
 ## Próximos passos
 
 - [Guia do wrapper C#](../wrappers/csharp.md) -- API completa.
-- [Examples C#](../../src/wrappers/csharp/examples/) -- `CaptureExample`,
-  `MjpegGrabberExample`, `SoftwareTriggerSnapshotExample`.
+- [Examples C#](../../src/wrappers/csharp/examples/) -- `CaptureExample`, `MjpegGrabberExample`, `SoftwareTriggerSnapshotExample`.
 - [HTTPS / TLS](../https-tls.md) -- configurar mbedTLS para produção.
-- [Codegen REST](../codegen.md) -- regenerar `RestTypes.g.cs` para um
-  firmware específico.
+- [Codegen REST](../codegen.md) -- regenerar `RestTypes.g.cs` para um firmware específico.

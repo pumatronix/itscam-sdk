@@ -2,23 +2,13 @@
 
 [Português (Brasil)](https-tls.md) | [English (US)](https-tls.en-US.md)
 
-`ItscamRestClient` and `ItscamCgiClient` both speak HTTPS through a
-statically-linked build of [mbedTLS](https://github.com/Mbed-TLS/mbedtls)
-that ships inside `libitscam_sdk`.  There is **no system OpenSSL or
-mbedTLS dependency** -- a single SDK binary is everything you need.
+`ItscamRestClient` and `ItscamCgiClient` both speak HTTPS through a statically-linked build of [mbedTLS](https://github.com/Mbed-TLS/mbedtls) that ships inside `libitscam_sdk`. There is **no system OpenSSL or mbedTLS dependency** -- a single SDK binary is everything you need.
 
 ## What's vendored
 
-The full mbedTLS source tree (currently **v3.6.2 LTS**) lives under
-[`src/core/3rdparty/mbedtls/`](../src/core/3rdparty/mbedtls).  See
-[`src/core/3rdparty/mbedtls/README.md`](../src/core/3rdparty/mbedtls/README.md)
-for the version-policy and upgrade procedure.
+The full mbedTLS source tree (currently **v3.6.2 LTS**) lives under [`src/core/3rdparty/mbedtls/`](../src/core/3rdparty/mbedtls). See [`src/core/3rdparty/mbedtls/README.md`](../src/core/3rdparty/mbedtls/README.md) for the version-policy and upgrade procedure.
 
-The custom build configuration (`itscam_mbedtls_config.h`, also in that
-directory) trims mbedTLS down to a TLS 1.2 / 1.3 **client** profile:
-ECDHE-ECDSA, ECDHE-RSA, RSA-PSK; AEAD ciphers (AES-GCM, ChaCha20-Poly1305);
-PEM / X.509 parsing; PSA crypto.  The resulting static contribution is
-roughly 600 KB on ARM64 release builds.
+The custom build configuration (`itscam_mbedtls_config.h`, also in that directory) trims mbedTLS down to a TLS 1.2 / 1.3 **client** profile: ECDHE-ECDSA, ECDHE-RSA, RSA-PSK; AEAD ciphers (AES-GCM, ChaCha20-Poly1305); PEM / X.509 parsing; PSA crypto. The resulting static contribution is roughly 600 KB on ARM64 release builds.
 
 ## Configuration API (C++)
 
@@ -42,17 +32,12 @@ cgi.setVerifyServerCertificate(false);
 cgi.setClientCertificate(clientPem, clientKeyPem);
 ```
 
-The same setters exist on `ItscamRestClient` and are mirrored in every
-language wrapper (`SetCaCertFile` / `set_ca_cert_file` / etc.).
+The same setters exist on `ItscamRestClient` and are mirrored in every language wrapper (`SetCaCertFile` / `set_ca_cert_file` / etc.).
 
 ## Auth notes
 
-- **REST** requires authentication for every endpoint.  Call
-  `rest.login(user, pass)` (or `rest.setAuthToken(jwt)`).
-- **CGI** auth is gated by the camera's `configCgi.blockAPI` flag, which
-  defaults to `false`.  Calling `cgi.login(...)` or
-  `cgi.setBasicAuth(...)` is **optional**; skip it when the camera is in
-  the default configuration.
+- **REST** requires authentication for every endpoint. Call `rest.login(user, pass)` (or `rest.setAuthToken(jwt)`).
+- **CGI** auth is gated by the camera's `configCgi.blockAPI` flag, which defaults to `false`. Calling `cgi.login(...)` or `cgi.setBasicAuth(...)` is **optional**; skip it when the camera is in the default configuration.
 
 ## Failure modes
 

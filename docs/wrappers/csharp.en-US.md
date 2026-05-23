@@ -2,13 +2,9 @@
 
 [Português (Brasil)](csharp.md) | [English (US)](csharp.en-US.md)
 
-The C# wrapper lives at
-[`src/wrappers/csharp/`](../../src/wrappers/csharp/) and targets
-**netstandard2.0**, which makes it consumable from:
+The C# wrapper lives at [`src/wrappers/csharp/`](../../src/wrappers/csharp/) and targets **netstandard2.0**, which makes it consumable from:
 
-> **Full class, method, and XML doc reference**:
-> [DocFX for `Pumatronix.Itscam.Sdk`](/api-ref/csharp/index.html).
-> This page covers installation, idiomatic patterns, and examples.
+> **Full class, method, and XML doc reference**: [DocFX for `Pumatronix.Itscam.Sdk`](/api-ref/csharp/index.html). This page covers installation, idiomatic patterns, and examples.
 
 
 - .NET 6 / 7 / 8 / 9
@@ -30,34 +26,21 @@ make csharp              # builds Itscam.Sdk.dll for the host platform
 make csharp-pack         # builds native binaries + produces a NuGet
 ```
 
-`make csharp-pack` produces
-`src/wrappers/csharp/nupkg/Pumatronix.Itscam.Sdk.<version>.nupkg`
-containing the managed assembly and a per-**host RID** native binary
-under `runtimes/<rid>/native/`. The RID describes the machine where
-the .NET application runs (Linux x64, Windows x64, etc.) -- **not**
-the ITSCAM camera, which is reached over the network via REST/CGI/
-binary and does not host your app.
+`make csharp-pack` produces `src/wrappers/csharp/nupkg/Pumatronix.Itscam.Sdk.<version>.nupkg` containing the managed assembly and a per-**host RID** native binary under `runtimes/<rid>/native/`. The RID describes the machine where the .NET application runs (Linux x64, Windows x64, etc.) -- **not** the ITSCAM camera, which is reached over the network via REST/CGI/ binary and does not host your app.
 
-By default the pack ships the RIDs that the `Makefile` actually
-builds:
+By default the pack ships the RIDs that the `Makefile` actually builds:
 
 - `linux-x64` -- produced by `make lib`
 - `win-x64`, `win-x86` -- produced by `make windows` (MinGW cross-compile)
 
-Additional slots exist in
-[`Itscam.Sdk.csproj`](../../src/wrappers/csharp/Itscam.Sdk/Itscam.Sdk.csproj)
-and are packed *only if* you produce the binaries yourself:
+Additional slots exist in [`Itscam.Sdk.csproj`](../../src/wrappers/csharp/Itscam.Sdk/Itscam.Sdk.csproj) and are packed *only if* you produce the binaries yourself:
 
 - `linux-arm` -- requires `src/core/build/linux-arm/libitscam_sdk.so.*`
 - `linux-arm64` -- requires `src/core/build/linux-arm64/libitscam_sdk.so.*`
 
-The bundled toolchain does not yet compile those variants; see the
-"ARM toolchains may be wired in" comment in the
-[`Makefile`](../../Makefile) if you need to add them.
+The bundled toolchain does not yet compile those variants; see the "ARM toolchains may be wired in" comment in the [`Makefile`](../../Makefile) if you need to add them.
 
-Detailed wrapper-specific notes (P/Invoke conventions, native binary
-layout, MSBuild target file) live in
-[`src/wrappers/csharp/README.md`](../../src/wrappers/csharp/README.md).
+Detailed wrapper-specific notes (P/Invoke conventions, native binary layout, MSBuild target file) live in [`src/wrappers/csharp/README.md`](../../src/wrappers/csharp/README.md).
 
 ## Idiomatic surface
 
@@ -113,15 +96,11 @@ await rest.PatchJsonAsync("/api/image/profiles/0",
 string json = await rest.GetAsync("/api/equipment/misc/readonly/volatile");
 ```
 
-`PatchJsonAsync` PUTs a partial JSON document; the daemon merges the
-supplied fields into the existing config.  Do **not** GET a full profile
-and PUT it back -- `PUT /api/image/profiles/{id}` rejects full-document
-bodies with HTTP 500.  See `docs/api/rest-client.md` for details.
+`PatchJsonAsync` PUTs a partial JSON document; the daemon merges the supplied fields into the existing config. Do **not** GET a full profile and PUT it back -- `PUT /api/image/profiles/{id}` rejects full-document bodies with HTTP 500. See `docs/api/rest-client.md` for details.
 
 ## Example project
 
-A complete end-to-end example lives at
-[`src/wrappers/csharp/examples/CaptureExample/`](../../src/wrappers/csharp/examples/CaptureExample/):
+A complete end-to-end example lives at [`src/wrappers/csharp/examples/CaptureExample/`](../../src/wrappers/csharp/examples/CaptureExample/):
 
 ```bash
 cd src/wrappers/csharp/examples/CaptureExample
@@ -129,5 +108,4 @@ dotnet run -- 192.168.254.254
 dotnet run -- 192.168.254.254 --https --insecure --user admin --password 1234
 ```
 
-CGI is always exercised; the REST section is skipped when no
-credentials are supplied (REST always requires auth).
+CGI is always exercised; the REST section is skipped when no credentials are supplied (REST always requires auth).

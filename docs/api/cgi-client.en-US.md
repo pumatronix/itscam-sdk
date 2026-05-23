@@ -2,18 +2,11 @@
 
 [Português (Brasil)](cgi-client.md) | [English (US)](cgi-client.en-US.md)
 
-The CGI client targets the legacy camera-daemon CGI endpoints that the
-webapp backend proxies under `/api/*.cgi`.  It is the recommended way
-to obtain images over HTTP / HTTPS without taking on the binary client.
+The CGI client targets the legacy camera-daemon CGI endpoints that the webapp backend proxies under `/api/*.cgi`. It is the recommended way to obtain images over HTTP / HTTPS without taking on the binary client.
 
-Header: [`src/core/itscam_cgi_client.h`](../../src/core/itscam_cgi_client.h).
-C++ example: [`src/examples/itscam_cgi_example.cpp`](../../src/examples/itscam_cgi_example.cpp).
+Header: [`src/core/itscam_cgi_client.h`](../../src/core/itscam_cgi_client.h). C++ example: [`src/examples/itscam_cgi_example.cpp`](../../src/examples/itscam_cgi_example.cpp).
 
-> **Full per-method reference** (signatures, parameters, response
-> types): see the
-> [generated Doxygen reference](/api-ref/cpp/classitscam_1_1ItscamCgiClient.html).
-> This page focuses on usage patterns (anonymous vs authenticated,
-> snapshot vs streaming, multi-exposure).
+> **Full per-method reference** (signatures, parameters, response types): see the [generated Doxygen reference](/api-ref/cpp/classitscam_1_1ItscamCgiClient.html). This page focuses on usage patterns (anonymous vs authenticated, snapshot vs streaming, multi-exposure).
 
 ## Quick start
 
@@ -49,10 +42,7 @@ int main() {
 
 ## Authentication is optional
 
-The camera daemon's CGI proxy is gated by the `configCgi.blockAPI`
-Redis flag in the webapp backend.  It **defaults to `false`** on every
-shipped camera, which means anonymous requests are accepted.  Only call
-the credential helpers when the operator has explicitly opted in:
+The camera daemon's CGI proxy is gated by the `configCgi.blockAPI` Redis flag in the webapp backend. It **defaults to `false`** on every shipped camera, which means anonymous requests are accepted. Only call the credential helpers when the operator has explicitly opted in:
 
 ```cpp
 cgi.login("admin", "1234");                // POST /api/auth, store JWT
@@ -62,8 +52,7 @@ cgi.clearAuthToken();
 cgi.clearBasicAuth();
 ```
 
-The four example programs (C++, Python, Go, C#) all run anonymously by
-default and accept opt-in `--user` / `--password` flags.
+The four example programs (C++, Python, Go, C#) all run anonymously by default and accept opt-in `--user` / `--password` flags.
 
 ## Endpoints
 
@@ -79,14 +68,11 @@ default and accept opt-in `--user` / `--password` flags.
 | `reboot(timeoutMs = 10000)`                       | `GET /api/reboot.cgi`   | Restart the camera-daemon process.                              |
 | `httpGetRaw(path, headers, timeoutMs)`            | `GET <path>`            | Generic escape hatch returning `Result<CgiResponse>`.           |
 
-> `trigger.cgi` is a non-standard streaming protocol (back-to-back HTTP
-> responses on one socket) that cpp-httplib cannot parse continuously.
-> Use `ItscamClient::onTriggerImage` for live trigger events.
+> `trigger.cgi` is a non-standard streaming protocol (back-to-back HTTP responses on one socket) that cpp-httplib cannot parse continuously. Use `ItscamClient::onTriggerImage` for live trigger events.
 
 ## `SnapshotCgiRequest`
 
-Mirrors the URL parameters accepted by the daemon's `snapshot.cgi`
-plugin:
+Mirrors the URL parameters accepted by the daemon's `snapshot.cgi` plugin:
 
 ```cpp
 struct SnapshotCgiRequest {
@@ -111,16 +97,11 @@ The return type is **always** `std::vector<CgiImage>`:
 | `image/jpeg` mosaic (mosaic = true)          | 1                                        |
 | `multipart/related; boundary=snapshot`       | N (one entry per exposure step)          |
 
-`CgiImage` carries `mimeType`, `data` (bytes) and a `headers` map so
-applications can recover per-part `Content-Type`, `X-Frame-Index`, etc.
+`CgiImage` carries `mimeType`, `data` (bytes) and a `headers` map so applications can recover per-part `Content-Type`, `X-Frame-Index`, etc.
 
 ## Streaming MJPEG
 
-`startMjpegStream` spins up a worker thread that decodes the
-`multipart/x-mixed-replace; boundary=MjpegBoundary` body frame-by-frame
-and invokes the callback for each `CgiStreamFrame`.  Stop with
-`stopMjpegStream()`, which cancels the in-flight request and joins the
-worker.
+`startMjpegStream` spins up a worker thread that decodes the `multipart/x-mixed-replace; boundary=MjpegBoundary` body frame-by-frame and invokes the callback for each `CgiStreamFrame`. Stop with `stopMjpegStream()`, which cancels the in-flight request and joins the worker.
 
 ```cpp
 cgi.startMjpegStream(
@@ -133,8 +114,7 @@ cgi.startMjpegStream(
     /*timeoutMs=*/ 10000);
 ```
 
-The callback runs on the SDK's worker thread; offload heavy work
-(decoding, disk I/O) to your own queue.
+The callback runs on the SDK's worker thread; offload heavy work (decoding, disk I/O) to your own queue.
 
 ## Logging
 
@@ -145,6 +125,4 @@ cgi.setLogHandler([](LogLevel lvl, const std::string& msg) {
 });
 ```
 
-See [`docs/error-handling.md`](../error-handling.md) for the shared
-`Result<T>` / `Error` model and [`docs/https-tls.md`](../https-tls.md)
-for HTTPS configuration.
+See [`docs/error-handling.md`](../error-handling.md) for the shared `Result<T>` / `Error` model and [`docs/https-tls.md`](../https-tls.md) for HTTPS configuration.

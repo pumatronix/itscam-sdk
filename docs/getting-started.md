@@ -2,23 +2,15 @@
 
 [Português (Brasil)](getting-started.md) | [English (US)](getting-started.en-US.md)
 
-Caminho de cinco minutos: do checkout fresh até um example C++ rodando
-contra a câmera. O fluxo recomendado usa o **builder Docker** porque
-ele já inclui GCC, MinGW-w64, .NET 8 SDK, Go 1.25, Python 3, Wails e
-toda a toolchain de cross-compile.
+Caminho de cinco minutos: do checkout fresh até um example C++ rodando contra a câmera. O fluxo recomendado usa o **builder Docker** porque ele já inclui GCC, MinGW-w64, .NET 8 SDK, Go 1.25, Python 3, Wails e toda a toolchain de cross-compile.
 
 ## Pré-requisitos
 
 - Docker Engine (caminho recomendado).
-- Alternativamente, para builds nativos: compilador C++17
-  (GCC 7+, Clang 5+, MinGW-w64 para Windows) e GNU `make`.
-- Opcional: `dotnet` (wrapper C#), `go` (wrapper Go), `python3`
-  (wrapper Python) -- só precisam estar instalados no host se você
-  **não** for usar o builder Docker.
+- Alternativamente, para builds nativos: compilador C++17 (GCC 7+, Clang 5+, MinGW-w64 para Windows) e GNU `make`.
+- Opcional: `dotnet` (wrapper C#), `go` (wrapper Go), `python3` (wrapper Python) -- só precisam estar instalados no host se você **não** for usar o builder Docker.
 
-Tudo o mais (cpp-httplib, nlohmann/json, mbedTLS) é vendored em
-[`src/core/3rdparty/`](../src/core/3rdparty), então não há packages de
-sistema obrigatórios.
+Tudo o mais (cpp-httplib, nlohmann/json, mbedTLS) é vendored em [`src/core/3rdparty/`](../src/core/3rdparty), então não há packages de sistema obrigatórios.
 
 ## Build via Docker (recomendado)
 
@@ -33,8 +25,7 @@ make docker-shell      # shell interativo dentro do builder
 make help              # lista todos os targets (docker-* e nativos)
 ```
 
-Os artefatos caem em `src/core/build/<platform>/` e
-`src/examples/build/`, montados no host via volume.
+Os artefatos caem em `src/core/build/<platform>/` e `src/examples/build/`, montados no host via volume.
 
 ## Build nativo (opcional)
 
@@ -89,15 +80,11 @@ g++ -std=c++17 \
     -o your_app -lpthread
 ```
 
-(Para builds estáticos você também precisa compilar e linkar os
-sources do mbedTLS vendored. O `make lib` de top-level já cuida disso,
-então prefira o fluxo da shared library a menos que você tenha uma
-razão específica para evitar.)
+(Para builds estáticos você também precisa compilar e linkar os sources do mbedTLS vendored. O `make lib` de top-level já cuida disso, então prefira o fluxo da shared library a menos que você tenha uma razão específica para evitar.)
 
 ## Dependências (vendored)
 
-O repo é self-contained -- nada da tabela abaixo precisa estar
-instalado no host.
+O repo é self-contained -- nada da tabela abaixo precisa estar instalado no host.
 
 | Dependência     | Versão    | Local                                 |
 | ---------------- | --------- | ------------------------------------- |
@@ -105,5 +92,4 @@ instalado no host.
 | nlohmann/json    | single h  | `src/core/3rdparty/nlohmann/json.hpp` |
 | mbedTLS          | 3.6.2 LTS | `src/core/3rdparty/mbedtls/`          |
 
-Veja [`docs/https-tls.md`](https-tls.md) para a configuration do mbedTLS
-e o procedimento de upgrade.
+Veja [`docs/https-tls.md`](https-tls.md) para a configuration do mbedTLS e o procedimento de upgrade.

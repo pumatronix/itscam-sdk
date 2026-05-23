@@ -2,10 +2,7 @@
 
 [Português (Brasil)](error-handling.md) | [English (US)](error-handling.en-US.md)
 
-Every SDK method returns one of two value-or-error types: `Result<T>`
-for synchronous calls and `Future<T>` for asynchronous ones.  Both are
-defined in [`src/core/itscam_types.h`](../src/core/itscam_types.h) and
-shared across `ItscamClient`, `ItscamRestClient` and `ItscamCgiClient`.
+Every SDK method returns one of two value-or-error types: `Result<T>` for synchronous calls and `Future<T>` for asynchronous ones. Both are defined in [`src/core/itscam_types.h`](../src/core/itscam_types.h) and shared across `ItscamClient`, `ItscamRestClient` and `ItscamCgiClient`.
 
 ## `Result<T>`
 
@@ -60,9 +57,7 @@ if (!waitAll(f1, f2)) {
 
 ## HTTP status mapping
 
-The REST and CGI clients translate HTTP status codes into the same
-`Error::Code` taxonomy so wrappers and applications can switch on a
-single enum:
+The REST and CGI clients translate HTTP status codes into the same `Error::Code` taxonomy so wrappers and applications can switch on a single enum:
 
 | HTTP status | `Error::Code`        |
 | ----------- | -------------------- |
@@ -76,8 +71,7 @@ single enum:
 
 ## Logging
 
-Every client supports an optional log handler.  Set it once early in
-your program; the SDK never owns stdout/stderr.
+Every client supports an optional log handler. Set it once early in your program; the SDK never owns stdout/stderr.
 
 ```cpp
 rest.setLogHandler([](LogLevel lvl, const std::string& msg) {
@@ -94,11 +88,8 @@ rest.setLogHandler([](LogLevel lvl, const std::string& msg) {
 
 Each language wrapper maps the table above into idiomatic constructs:
 
-- **C# / .NET** raises an `ItscamException` hierarchy (`ItscamTimeoutException`,
-  `ItscamAuthException`, ...) and `Task<T>` propagates them.
-- **Python** raises `ItscamError` subclasses (`ItscamTimeoutError`,
-  `ItscamAuthError`, `ItscamConnectionError`).
-- **Go** returns a typed `error` whose underlying type carries the
-  `Error::Code` value so callers can `errors.Is(err, itscam.ErrTimeout)`.
+- **C# / .NET** raises an `ItscamException` hierarchy (`ItscamTimeoutException`, `ItscamAuthException`, ...) and `Task<T>` propagates them.
+- **Python** raises `ItscamError` subclasses (`ItscamTimeoutError`, `ItscamAuthError`, `ItscamConnectionError`).
+- **Go** returns a typed `error` whose underlying type carries the `Error::Code` value so callers can `errors.Is(err, itscam.ErrTimeout)`.
 
 See the per-wrapper chapters for details.

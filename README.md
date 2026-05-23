@@ -2,16 +2,9 @@
 
 [Português (Brasil)](README.md) | [English (US)](README.en-US.md)
 
-Biblioteca C++17 cross-platform para integrar câmeras ITSCAM da
-[Pumatronix](https://www.pumatronix.com) (ITSCAM450 / ITSCAM600), com
-bindings idiomáticos para **C# / .NET**, **Python** e **Go**. O SDK já
-inclui suporte a HTTPS e o backend mbedTLS, sem dependências de sistema
-além de um compilador C++.
+Biblioteca C++17 cross-platform para integrar câmeras ITSCAM da [Pumatronix](https://www.pumatronix.com) (ITSCAM450 / ITSCAM600), com bindings idiomáticos para **C# / .NET**, **Python** e **Go**. O SDK já inclui suporte a HTTPS e o backend mbedTLS, sem dependências de sistema além de um compilador C++.
 
-O SDK expõe três classes de client independentes em C++, C#, Python e Go.
-Escolha o client pelo protocolo e pelo tipo de tarefa. Eles podem rodar
-lado a lado no mesmo processo. O binary client usa o protocolo **Cougar**
-na porta TCP **60000**. REST e CGI usam HTTP/HTTPS nas portas **80/443**.
+O SDK expõe três classes de client independentes em C++, C#, Python e Go. Escolha o client pelo protocolo e pelo tipo de tarefa. Eles podem rodar lado a lado no mesmo processo. O binary client usa o protocolo **Cougar** na porta TCP **60000**. REST e CGI usam HTTP/HTTPS nas portas **80/443**.
 
 | Client | Transport | Use para | Não use para |
 | ------ | --------- | -------- | ------------ |
@@ -21,9 +14,7 @@ na porta TCP **60000**. REST e CGI usam HTTP/HTTPS nas portas **80/443**.
 
 ## Links rápidos
 
-Escolha uma linha pelo **que você quer fazer** e uma coluna pela
-**linguagem do seu projeto**. Cada célula aponta para um example pronto
-para executar.
+Escolha uma linha pelo **que você quer fazer** e uma coluna pela **linguagem do seu projeto**. Cada célula aponta para um example pronto para executar.
 
 | Use case | C++ | C# / .NET | Python | Go |
 | -------- | --- | --------- | ------ | -- |
@@ -42,12 +33,7 @@ Reference docs por client surface:
 | REST client (HTTP/HTTPS JSON) | [docs/api/rest-client.md](docs/api/rest-client.md) | [C++](docs/wrappers/cpp.md) -- [Python](docs/wrappers/python.md) -- [Go](docs/wrappers/go.md) -- [C#](docs/wrappers/csharp.md) |
 | CGI client (HTTP/HTTPS multipart) | [docs/api/cgi-client.md](docs/api/cgi-client.md) | [C++](docs/wrappers/cpp.md) -- [Python](docs/wrappers/python.md) -- [Go](docs/wrappers/go.md) -- [C#](docs/wrappers/csharp.md) |
 
-Tutoriais passo a passo (criar projeto do zero e salvar a primeira
-imagem em disco):
-[C++](docs/tutorials/first-image-cpp.md) --
-[C# / .NET](docs/tutorials/first-image-csharp.md) --
-[Python](docs/tutorials/first-image-python.md) --
-[Go](docs/tutorials/first-image-go.md).
+Tutoriais passo a passo (criar projeto do zero e salvar a primeira imagem em disco): [C++](docs/tutorials/first-image-cpp.md) -- [C# / .NET](docs/tutorials/first-image-csharp.md) -- [Python](docs/tutorials/first-image-python.md) -- [Go](docs/tutorials/first-image-go.md).
 
 ## Configurar ambiente (Ubuntu)
 
@@ -65,14 +51,11 @@ git clone https://github.com/pumatronix/itscam-sdk.git
 cd itscam-sdk
 ```
 
-O builder Docker (`Dockerfile` na raiz) já inclui GCC, MinGW, .NET, Go,
-Python e Node — você não precisa instalar toolchains localmente para
-compilar o SDK.
+O builder Docker (`Dockerfile` na raiz) já inclui GCC, MinGW, .NET, Go, Python e Node — você não precisa instalar toolchains localmente para compilar o SDK.
 
 ## Build rápido
 
-Use os targets `docker-*` na raiz do repositório. Eles constroem a imagem
-`itscam-sdk-builder` na primeira execução e rodam `make` dentro dela:
+Use os targets `docker-*` na raiz do repositório. Eles constroem a imagem `itscam-sdk-builder` na primeira execução e rodam `make` dentro dela:
 
 ```bash
 make docker-all     # tudo: Linux + Windows cross + wrappers (recomendado)
@@ -89,34 +72,22 @@ make examples       # build dos quatro C++ example binaries
 make all            # tudo: Linux + Windows cross + wrappers
 ```
 
-Todo código nativo fica em [`src/`](src/). Veja
-[`docs/overview.md`](docs/overview.md) para o layout completo do
-repository e [`docs/getting-started.md`](docs/getting-started.md) para
-compilar examples e linkar o seu app.
+Todo código nativo fica em [`src/`](src/). Veja [`docs/overview.md`](docs/overview.md) para o layout completo do repository e [`docs/getting-started.md`](docs/getting-started.md) para compilar examples e linkar o seu app.
 
 ## Uso com AI agents
 
-Este repositório inclui [`AGENTS.md`](AGENTS.md), um briefing curto e
-escaneável para coding agents (Cursor, Copilot, Claude Code, etc.).
-Leia-o **antes** de pedir mudanças no SDK ou em apps que o embutem.
+Este repositório inclui [`AGENTS.md`](AGENTS.md), um briefing curto e escaneável para coding agents (Cursor, Copilot, Claude Code, etc.). Leia-o **antes** de pedir mudanças no SDK ou em apps que o embutem.
 
 **Neste repositório**
 
-- Ferramentas compatíveis com [AGENTS.md](https://agents.md/) carregam o
-  arquivo automaticamente na raiz do workspace.
-- No chat, cite `@AGENTS.md` ou aponte o agent para a tabela de
-  [Links rápidos](#links-rápidos) e para o example da sua linguagem.
-- Peça builds reproduzíveis com `make docker-all` ou `make docker-linux`
-  em vez de instalar toolchains manualmente.
+- Ferramentas compatíveis com [AGENTS.md](https://agents.md/) carregam o arquivo automaticamente na raiz do workspace.
+- No chat, cite `@AGENTS.md` ou aponte o agent para a tabela de [Links rápidos](#links-rápidos) e para o example da sua linguagem.
+- Peça builds reproduzíveis com `make docker-all` ou `make docker-linux` em vez de instalar toolchains manualmente.
 
 **No seu app que consome o SDK**
 
-- Adicione [`AGENTS.md`](AGENTS.md) ao contexto do agent (referência,
-  `@`-mention ou regra de projeto) para evitar escolhas erradas de client
-  e auth.
-- Diga explicitamente: linguagem (C++ / C# / Python / Go), client
-  (`ItscamClient`, `ItscamRestClient` ou `ItscamCgiClient`) e se a
-  tarefa é capture em real time, config REST ou snapshot CGI.
+- Adicione [`AGENTS.md`](AGENTS.md) ao contexto do agent (referência, `@`-mention ou regra de projeto) para evitar escolhas erradas de client e auth.
+- Diga explicitamente: linguagem (C++ / C# / Python / Go), client (`ItscamClient`, `ItscamRestClient` ou `ItscamCgiClient`) e se a tarefa é capture em real time, config REST ou snapshot CGI.
 
 **Regras que os agents devem respeitar** (detalhes em [`AGENTS.md`](AGENTS.md)):
 
@@ -130,15 +101,11 @@ Leia-o **antes** de pedir mudanças no SDK ou em apps que o embutem.
 
 **Assistant na documentação**
 
-O [site de docs](docs-site/) (GitHub Pages) pode incluir um assistant via
-[Cloudflare AI Search](https://developers.cloudflare.com/ai-search/), com
-corpus sincronizado de `docs/`, examples e `AGENTS.md`. Veja
-[`docs-site/README.md`](docs-site/README.md) para setup local e deploy.
+O [site de docs](docs-site/) (GitHub Pages) pode incluir um assistant via [Cloudflare AI Search](https://developers.cloudflare.com/ai-search/), com corpus sincronizado de `docs/`, examples e `AGENTS.md`. Veja [`docs-site/README.md`](docs-site/README.md) para setup local e deploy.
 
 ## Mapa da documentação
 
-Este README é intencionalmente direto. A documentação completa fica
-em [`docs/`](docs/):
+Este README é intencionalmente direto. A documentação completa fica em [`docs/`](docs/):
 
 - [Índice da documentação](docs/README.md) -- ponto de partida dos docs.
 - [Overview](docs/overview.md) -- o que existe no SDK e onde encontrar.
@@ -146,29 +113,19 @@ em [`docs/`](docs/):
 - [HTTPS / TLS](docs/https-tls.md) -- mbedTLS vendored, configuration e troubleshooting.
 - [Error handling](docs/error-handling.md) -- `Result<T>`, `Future<T>`, error codes e logging.
 - [Typed REST helpers & codegen](docs/codegen.md) -- snapshot OpenAPI bundled e regeneration workflows.
-- API reference:
-  [Binary client](docs/api/binary-client.md) -- [REST client](docs/api/rest-client.md) -- [CGI client](docs/api/cgi-client.md).
-- Wrappers:
-  [C++ (nativo)](docs/wrappers/cpp.md) -- [C# / .NET](docs/wrappers/csharp.md) -- [Python](docs/wrappers/python.md) -- [Go](docs/wrappers/go.md).
-- Tutoriais (primeira imagem em disco):
-  [C++](docs/tutorials/first-image-cpp.md) -- [C# / .NET](docs/tutorials/first-image-csharp.md) -- [Python](docs/tutorials/first-image-python.md) -- [Go](docs/tutorials/first-image-go.md).
+- API reference: [Binary client](docs/api/binary-client.md) -- [REST client](docs/api/rest-client.md) -- [CGI client](docs/api/cgi-client.md).
+- Wrappers: [C++ (nativo)](docs/wrappers/cpp.md) -- [C# / .NET](docs/wrappers/csharp.md) -- [Python](docs/wrappers/python.md) -- [Go](docs/wrappers/go.md).
+- Tutoriais (primeira imagem em disco): [C++](docs/tutorials/first-image-cpp.md) -- [C# / .NET](docs/tutorials/first-image-csharp.md) -- [Python](docs/tutorials/first-image-python.md) -- [Go](docs/tutorials/first-image-go.md).
 - [Migration from CougarClient](docs/migration-cougar.md).
 - [`AGENTS.md`](AGENTS.md) — briefing para coding agents; veja [Uso com AI agents](#uso-com-ai-agents).
 - **[Documentation website](docs-site/)** -- site VitePress para GitHub Pages com assistant opcional via [Cloudflare AI Search](https://developers.cloudflare.com/ai-search/). Veja [`docs-site/README.md`](docs-site/README.md) para setup.
 
 ## Destaques
 
-- **Três client surfaces, uma library.** Cougar binary para capture em
-  real time e pipeline control. REST para equipment administration. CGI
-  para endpoints HTTP de imagem.
-- **HTTPS out of the box.** O mbedTLS 3.6 LTS fica vendored em
-  [`src/core/3rdparty/mbedtls/`](src/core/3rdparty/mbedtls/) e é
-  statically linked em `libitscam_sdk`.
-- **Examples auth-aware.** REST sempre exige login. CGI é anonymous por
-  default (`configCgi.blockAPI = false`) e credentials são opt-in
-  (`--user / --password`) em todos os language wrappers.
-- **Feature parity** entre os wrappers C#, Python e Go por meio da C API
-  em [`src/core/c_api/`](src/core/c_api/).
+- **Três client surfaces, uma library.** Cougar binary para capture em real time e pipeline control. REST para equipment administration. CGI para endpoints HTTP de imagem.
+- **HTTPS out of the box.** O mbedTLS 3.6 LTS fica vendored em [`src/core/3rdparty/mbedtls/`](src/core/3rdparty/mbedtls/) e é statically linked em `libitscam_sdk`.
+- **Examples auth-aware.** REST sempre exige login. CGI é anonymous por default (`configCgi.blockAPI = false`) e credentials são opt-in (`--user / --password`) em todos os language wrappers.
+- **Feature parity** entre os wrappers C#, Python e Go por meio da C API em [`src/core/c_api/`](src/core/c_api/).
 
 ## Platform support
 
@@ -179,6 +136,4 @@ em [`docs/`](docs/):
 
 ## Licença e contato
 
-Copyright (c) 2026 Pumatronix Equipamentos Eletrônicos. Software
-proprietário. Entre em contato com a Pumatronix para termos de
-licenciamento.
+Copyright (c) 2026 Pumatronix Equipamentos Eletrônicos. Software proprietário. Entre em contato com a Pumatronix para termos de licenciamento.

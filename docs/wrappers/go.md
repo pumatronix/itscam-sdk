@@ -2,15 +2,9 @@
 
 [Português (Brasil)](go.md) | [English (US)](go.en-US.md)
 
-O wrapper Go fica em
-[`src/wrappers/go/`](../../src/wrappers/go/) e usa **cgo** sobre a C
-API do SDK. A build tag `static` alterna entre dynamic linking
-(default; depende de `libitscam_sdk.so` em runtime) e static linking
-completo (puxa o static archive mais pthread / stdc++ / m).
+O wrapper Go fica em [`src/wrappers/go/`](../../src/wrappers/go/) e usa **cgo** sobre a C API do SDK. A build tag `static` alterna entre dynamic linking (default; depende de `libitscam_sdk.so` em runtime) e static linking completo (puxa o static archive mais pthread / stdc++ / m).
 
-> **Referência completa de tipos e funções exportadas** (gerada via
-> gomarkdoc): [`itscam` package reference](/api-ref/go). Esta página
-> cobre build/link, padrões idiomáticos e exemplos.
+> **Referência completa de tipos e funções exportadas** (gerada via gomarkdoc): [`itscam` package reference](/api-ref/go). Esta página cobre build/link, padrões idiomáticos e exemplos.
 
 ## Build e execução
 
@@ -34,11 +28,7 @@ go build -tags static -o cgi_snapshot_example cgi_snapshot_example.go
 ./cgi_snapshot_example 192.168.254.254
 ```
 
-Os directives `#cgo` em
-[`src/wrappers/go/itscam/*.go`](../../src/wrappers/go/itscam/) já
-sabem onde ficam os static archives
-(`../../../core/build/<platform>/`) relativos ao package, então não
-são necessárias flags extras além de `CGO_CFLAGS` para os headers.
+Os directives `#cgo` em [`src/wrappers/go/itscam/*.go`](../../src/wrappers/go/itscam/) já sabem onde ficam os static archives (`../../../core/build/<platform>/`) relativos ao package, então não são necessárias flags extras além de `CGO_CFLAGS` para os headers.
 
 ## Superfície
 
@@ -51,9 +41,7 @@ rest,   _ := itscam.NewRestClient()
 cgi,    _ := itscam.NewCgiClient()
 ```
 
-Errors são retornados como valores `error` do Go. O tipo subjacente
-carrega o `Error::Code` do SDK, então o caller pode mapear modos de
-falha específicos:
+Errors são retornados como valores `error` do Go. O tipo subjacente carrega o `Error::Code` do SDK, então o caller pode mapear modos de falha específicos:
 
 ```go
 if err := cgi.Login("admin", "1234", 10000); err != nil {
@@ -90,18 +78,10 @@ cgi.StopMjpegStream()
 
 Duas superfícies que coexistem:
 
-* **Typed helpers** (preferencial) -- `rest.GetOcrConfig`,
-  `rest.SetOcrConfig`, `rest.GetProfiles` etc. retornam structs Go
-  geradas a partir do documento OpenAPI da câmera. Veja
-  [`docs/codegen.md`](../codegen.md) para o workflow de regeneração
-  (maintainer e downstream).
-* **Generic verbs** (escape hatch) -- `rest.Get`, `rest.Put`,
-  `rest.Post`, `rest.Delete` retornam o body JSON cru como string.
+* **Typed helpers** (preferencial) -- `rest.GetOcrConfig`, `rest.SetOcrConfig`, `rest.GetProfiles` etc. retornam structs Go geradas a partir do documento OpenAPI da câmera. Veja [`docs/codegen.md`](../codegen.md) para o workflow de regeneração (maintainer e downstream).
+* **Generic verbs** (escape hatch) -- `rest.Get`, `rest.Put`, `rest.Post`, `rest.Delete` retornam o body JSON cru como string.
 
-* **Partial PUT** -- `rest.PatchJSON(path, patch)` envia somente os
-  campos que mudaram. Obrigatório para image profiles e recomendado
-  para a maioria das configuration updates. Veja
-  [`docs/api/rest-client.md`](../api/rest-client.md).
+* **Partial PUT** -- `rest.PatchJSON(path, patch)` envia somente os campos que mudaram. Obrigatório para image profiles e recomendado para a maioria das configuration updates. Veja [`docs/api/rest-client.md`](../api/rest-client.md).
 
 ```go
 rest, _ := itscam.NewRestClient()
@@ -123,10 +103,7 @@ body, _ := rest.Get("/api/equipment/misc/readonly/constants", 10000)
 fmt.Println(body)
 ```
 
-As structs geradas ficam em
-[`src/wrappers/go/itscam/rest_types.go`](../../src/wrappers/go/itscam/rest_types.go);
-campos opcionais são modelados como ponteiros, então `nil` faz
-round-trip limpo via `encoding/json`.
+As structs geradas ficam em [`src/wrappers/go/itscam/rest_types.go`](../../src/wrappers/go/itscam/rest_types.go); campos opcionais são modelados como ponteiros, então `nil` faz round-trip limpo via `encoding/json`.
 
 ## Examples
 
@@ -141,8 +118,7 @@ Em [`src/wrappers/go/examples/`](../../src/wrappers/go/examples/):
 
 ## Example Wails GUI
 
-O example em `gui/` é uma aplicação Wails estática que exercita o
-SDK a partir de uma UI WebView. Build com:
+O example em `gui/` é uma aplicação Wails estática que exercita o SDK a partir de uma UI WebView. Build com:
 
 ```bash
 make go-gui                # Linux
@@ -150,12 +126,8 @@ make go-gui-windows        # cross-compile para Windows
 make docker-go-gui         # dentro da builder image do SDK
 ```
 
-Veja
-[`src/wrappers/go/examples/gui/README.md`](../../src/wrappers/go/examples/gui/README.md)
-para pré-requisitos (Go 1.21+, Wails CLI, WebKit2GTK).
+Veja [`src/wrappers/go/examples/gui/README.md`](../../src/wrappers/go/examples/gui/README.md) para pré-requisitos (Go 1.21+, Wails CLI, WebKit2GTK).
 
 ## Tutorial passo a passo
 
-Para um walkthrough do zero (`go mod init`, configurar cgo e salvar
-a primeira imagem em disco), veja
-[Primeira imagem com Go](../tutorials/first-image-go.md).
+Para um walkthrough do zero (`go mod init`, configurar cgo e salvar a primeira imagem em disco), veja [Primeira imagem com Go](../tutorials/first-image-go.md).
