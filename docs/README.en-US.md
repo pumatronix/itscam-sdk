@@ -20,9 +20,20 @@ Chapter-style reference for the ITSCAM Client SDK. Start with
 
 ## Language Wrappers
 
-- [C# / .NET](wrappers/csharp.md)
-- [Python](wrappers/python.md)
-- [Go](wrappers/go.md)
+- [Native C++](wrappers/cpp.en-US.md)
+- [C# / .NET](wrappers/csharp.en-US.md)
+- [Python](wrappers/python.en-US.md)
+- [Go](wrappers/go.en-US.md)
+
+## Tutorials
+
+Step-by-step walkthroughs -- create a project, install the SDK
+dependency and save the first camera image to disk:
+
+- [First image with C++](tutorials/first-image-cpp.md)
+- [First image with C# / .NET](tutorials/first-image-csharp.md)
+- [First image with Python](tutorials/first-image-python.md)
+- [First image with Go](tutorials/first-image-go.md)
 
 ## History
 

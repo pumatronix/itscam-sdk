@@ -67,6 +67,8 @@ export function inferMetadata(repoPath) {
     meta.type = "reference";
   } else if (normalized.includes("/examples/")) {
     meta.type = "example";
+  } else if (normalized.startsWith("docs/tutorials/")) {
+    meta.type = "tutorial";
   }
 
   const ext = extname(normalized);
@@ -92,6 +94,19 @@ export function inferMetadata(repoPath) {
   if (normalized.startsWith("docs/api/binary")) meta.client = "binary";
   if (normalized.startsWith("docs/api/rest")) meta.client = "rest";
   if (normalized.startsWith("docs/api/cgi")) meta.client = "cgi";
+
+  if (normalized.startsWith("docs/wrappers/cpp")) meta.language = "cpp";
+  else if (normalized.startsWith("docs/wrappers/python")) meta.language = "python";
+  else if (normalized.startsWith("docs/wrappers/go")) meta.language = "go";
+  else if (normalized.startsWith("docs/wrappers/csharp")) meta.language = "csharp";
+
+  if (normalized.startsWith("docs/tutorials/first-image-")) {
+    meta.client = "cgi";
+    if (normalized.includes("first-image-cpp")) meta.language = "cpp";
+    else if (normalized.includes("first-image-python")) meta.language = "python";
+    else if (normalized.includes("first-image-go")) meta.language = "go";
+    else if (normalized.includes("first-image-csharp")) meta.language = "csharp";
+  }
 
   return meta;
 }

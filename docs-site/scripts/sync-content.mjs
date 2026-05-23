@@ -110,9 +110,14 @@ function writeDocsIndex() {
     .replace("(api/binary-client.md)", "(/api/binary-client)")
     .replace("(api/rest-client.md)", "(/api/rest-client)")
     .replace("(api/cgi-client.md)", "(/api/cgi-client)")
+    .replace("(wrappers/cpp.md)", "(/wrappers/cpp)")
     .replace("(wrappers/csharp.md)", "(/wrappers/csharp)")
     .replace("(wrappers/python.md)", "(/wrappers/python)")
     .replace("(wrappers/go.md)", "(/wrappers/go)")
+    .replace("(tutorials/first-image-cpp.md)", "(/tutorials/first-image-cpp)")
+    .replace("(tutorials/first-image-csharp.md)", "(/tutorials/first-image-csharp)")
+    .replace("(tutorials/first-image-python.md)", "(/tutorials/first-image-python)")
+    .replace("(tutorials/first-image-go.md)", "(/tutorials/first-image-go)")
     .replace("(migration-cougar.md)", "(/migration-cougar)");
 
   writeFileSync(join(CONTENT, "documentation-index.md"), raw);

@@ -1,16 +1,18 @@
-# C# / .NET wrapper
+# Wrapper C# / .NET
 
-The C# wrapper lives at
-[`src/wrappers/csharp/`](../../src/wrappers/csharp/) and targets
-**netstandard2.0**, which makes it consumable from:
+[Português (Brasil)](csharp.md) | [English (US)](csharp.en-US.md)
+
+O wrapper C# fica em
+[`src/wrappers/csharp/`](../../src/wrappers/csharp/) e tem como target
+**netstandard2.0**, o que o torna consumível por:
 
 - .NET 6 / 7 / 8 / 9
 - .NET Framework 4.6.1+
-- Mono / Xamarin / Unity (any runtime that speaks netstandard2.0)
+- Mono / Xamarin / Unity (qualquer runtime que fale netstandard2.0)
 
-It wraps all three SDK surfaces:
+Ele cobre as três superfícies do SDK:
 
-| Class             | Native counterpart                            |
+| Classe            | Contraparte nativa                            |
 | ----------------- | --------------------------------------------- |
 | `ItscamClient`    | `src/core/itscam_client.h`                    |
 | `ItscamRestClient`| `src/core/itscam_rest_client.h`               |
@@ -19,36 +21,36 @@ It wraps all three SDK surfaces:
 ## Build
 
 ```bash
-make csharp              # builds Itscam.Sdk.dll for the host platform
-make csharp-pack         # builds native binaries + produces a NuGet
+make csharp              # gera Itscam.Sdk.dll para a host platform
+make csharp-pack         # gera native binaries + produz o NuGet
 ```
 
-`make csharp-pack` produces
+`make csharp-pack` produz
 `src/wrappers/csharp/nupkg/Pumatronix.Itscam.Sdk.<version>.nupkg`
-containing the managed assembly and a per-RID native binary under
-`runtimes/<rid>/native/`.  Supported runtime identifiers:
+contendo o managed assembly e um native binary por RID em
+`runtimes/<rid>/native/`. Runtime identifiers suportados:
 
 - `linux-x64`
-- `linux-arm`   (32-bit ARMv7, ITSCAM450)
+- `linux-arm`   (ARMv7 32-bit, ITSCAM450)
 - `linux-arm64` (ITSCAM600)
 - `win-x64`
 - `win-x86`
 
-Detailed wrapper-specific notes (P/Invoke conventions, native binary
-layout, MSBuild target file) live in
+Notas específicas do wrapper (convenções de P/Invoke, layout dos
+native binaries, MSBuild target file) ficam em
 [`src/wrappers/csharp/README.md`](../../src/wrappers/csharp/README.md).
 
-## Idiomatic surface
+## Superfície idiomática
 
-| Concern        | What you get                                                                 |
-| -------------- | ---------------------------------------------------------------------------- |
-| Async          | `Task` / `Task<T>` on every blocking call (work runs on the ThreadPool).     |
-| Lifetime       | Every client implements `IDisposable`; use `using` or `Dispose()`.           |
-| Streaming      | `event EventHandler<CgiStreamFrame> MjpegFrame` raised on the SDK worker.    |
-| Errors         | `ItscamException` hierarchy (`ItscamTimeoutException`, `ItscamAuthException`, ...). |
-| Strings        | UTF-8 marshalling helpers, safe on netstandard2.0 (no .NET 6+ APIs).         |
+| Aspecto        | O que você ganha                                                              |
+| -------------- | ----------------------------------------------------------------------------- |
+| Async          | `Task` / `Task<T>` em toda blocking call (roda no ThreadPool).                |
+| Lifetime       | Todo client implementa `IDisposable`; use `using` ou `Dispose()`.             |
+| Streaming      | `event EventHandler<CgiStreamFrame> MjpegFrame` disparado na worker do SDK.   |
+| Errors         | Hierarquia `ItscamException` (`ItscamTimeoutException`, `ItscamAuthException`, ...). |
+| Strings        | Helpers de UTF-8 marshalling, seguros em netstandard2.0 (sem APIs do .NET 6+).|
 
-## CGI usage (auth optional)
+## Uso do CGI (auth opcional)
 
 ```csharp
 using Pumatronix.Itscam;
@@ -56,9 +58,9 @@ using Pumatronix.Itscam;
 using var cgi = new ItscamCgiClient();
 cgi.SetBaseUrl("192.168.254.254", 80);
 // cgi.SetBaseUrl("camera.example.com", 443, "https");
-// cgi.SetVerifyServerCertificate(false);   // demo / dev only
+// cgi.SetVerifyServerCertificate(false);   // só para demo / dev
 
-// Optional: only when the camera enables CGI auth.
+// Opcional: somente quando a câmera tem CGI auth habilitado.
 // await cgi.LoginAsync("admin", "1234");
 
 var last = await cgi.GetLastFrameAsync();
@@ -68,38 +70,39 @@ var snap = await cgi.GetSnapshotAsync(new SnapshotCgiRequest {
     Quality = 80, Mosaic = false,
 });
 
-cgi.MjpegFrame += (_, frame) => { /* runs on SDK worker */ };
+cgi.MjpegFrame += (_, frame) => { /* roda na worker do SDK */ };
 cgi.StartMjpegStream();
 await Task.Delay(5000);
 cgi.StopMjpegStream();
 ```
 
-## REST usage (auth required)
+## Uso do REST (auth obrigatória)
 
 ```csharp
 using var rest = new ItscamRestClient();
 rest.SetBaseUrl("192.168.254.254", 80);
 await rest.LoginAsync("admin", "1234");
 
-// Read-only inspection: typed POCO is convenient.
+// Read-only: typed POCO é conveniente.
 List<ProfileConfig> profiles = await rest.GetProfilesAsync();
 
-// Configuration changes: partial PUT (send only what you change).
+// Configuration changes: partial PUT (envie só o que você muda).
 await rest.PatchJsonAsync("/api/image/profiles/0",
     new JsonObject { ["trigger"] = new JsonObject { ["enabled"] = false } });
 
-// Raw JSON for endpoints not yet promoted to typed helpers:
+// Raw JSON para endpoints ainda não promovidos a typed helpers:
 string json = await rest.GetAsync("/api/equipment/misc/readonly/volatile");
 ```
 
-`PatchJsonAsync` PUTs a partial JSON document; the daemon merges the
-supplied fields into the existing config.  Do **not** GET a full profile
-and PUT it back -- `PUT /api/image/profiles/{id}` rejects full-document
-bodies with HTTP 500.  See `docs/api/rest-client.md` for details.
+`PatchJsonAsync` faz um PUT de documento JSON parcial; o daemon faz
+merge dos campos enviados sobre a config existente. **Não** dê GET no
+profile inteiro e PUT de volta -- `PUT /api/image/profiles/{id}`
+rejeita bodies com documento completo com HTTP 500. Veja
+[`docs/api/rest-client.md`](../api/rest-client.md) para detalhes.
 
-## Example project
+## Projeto de example
 
-A complete end-to-end example lives at
+Um example end-to-end completo fica em
 [`src/wrappers/csharp/examples/CaptureExample/`](../../src/wrappers/csharp/examples/CaptureExample/):
 
 ```bash
@@ -108,5 +111,11 @@ dotnet run -- 192.168.254.254
 dotnet run -- 192.168.254.254 --https --insecure --user admin --password 1234
 ```
 
-CGI is always exercised; the REST section is skipped when no
-credentials are supplied (REST always requires auth).
+A parte de CGI sempre é executada; a parte de REST é pulada quando
+credentials não são fornecidas (REST sempre exige auth).
+
+## Tutorial passo a passo
+
+Para um walkthrough do zero (criar `dotnet new console`, referenciar
+o SDK e salvar a primeira imagem em disco), veja
+[Primeira imagem com C#](../tutorials/first-image-csharp.md).

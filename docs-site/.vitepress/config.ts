@@ -13,6 +13,20 @@ export default defineConfig({
   cleanUrls: true,
   lastUpdated: true,
 
+  // Markdown across docs/ intentionally links into the repository source
+  // tree (e.g. ../../src/core/itscam_sdk.h, ../README, ../Dockerfile) so
+  // GitHub renders the same files correctly. Those targets sit outside
+  // the synced VitePress content/ folder, so we tell the build to skip
+  // them instead of failing.
+  ignoreDeadLinks: [
+    /^\.\.?\/(?:\.\.\/)*src\//,
+    /^\.\.?\/(?:\.\.\/)*tools\//,
+    /^\.\.?\/(?:\.\.\/)*Dockerfile/,
+    /^\.\.?\/(?:\.\.\/)*README(?:$|[#.])/,
+    /^\.\.?\/(?:\.\.\/)*AGENTS(?:$|[#.])/,
+    /^\.\.?\/(?:\.\.\/)*docs\//,
+  ],
+
   themeConfig: {
     logo: "/logo.svg",
     siteTitle: "ITSCAM SDK",
@@ -57,9 +71,19 @@ export default defineConfig({
       {
         text: "Language wrappers",
         items: [
+          { text: "C++ (nativo)", link: "/wrappers/cpp" },
           { text: "Python", link: "/wrappers/python" },
           { text: "Go", link: "/wrappers/go" },
           { text: "C# / .NET", link: "/wrappers/csharp" },
+        ],
+      },
+      {
+        text: "Tutoriais",
+        items: [
+          { text: "Primeira imagem -- C++", link: "/tutorials/first-image-cpp" },
+          { text: "Primeira imagem -- C# / .NET", link: "/tutorials/first-image-csharp" },
+          { text: "Primeira imagem -- Python", link: "/tutorials/first-image-python" },
+          { text: "Primeira imagem -- Go", link: "/tutorials/first-image-go" },
         ],
       },
       {

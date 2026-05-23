@@ -38,9 +38,16 @@ Reference docs por client surface:
 
 | Surface | API guide | Wrapper guide |
 | ------- | --------- | ------------- |
-| Binary client (Cougar TCP 60000) | [docs/api/binary-client.md](docs/api/binary-client.md) | [Python](docs/wrappers/python.md) -- [Go](docs/wrappers/go.md) -- [C#](docs/wrappers/csharp.md) |
-| REST client (HTTP/HTTPS JSON) | [docs/api/rest-client.md](docs/api/rest-client.md) | [Python](docs/wrappers/python.md) -- [Go](docs/wrappers/go.md) -- [C#](docs/wrappers/csharp.md) |
-| CGI client (HTTP/HTTPS multipart) | [docs/api/cgi-client.md](docs/api/cgi-client.md) | [Python](docs/wrappers/python.md) -- [Go](docs/wrappers/go.md) -- [C#](docs/wrappers/csharp.md) |
+| Binary client (Cougar TCP 60000) | [docs/api/binary-client.md](docs/api/binary-client.md) | [C++](docs/wrappers/cpp.md) -- [Python](docs/wrappers/python.md) -- [Go](docs/wrappers/go.md) -- [C#](docs/wrappers/csharp.md) |
+| REST client (HTTP/HTTPS JSON) | [docs/api/rest-client.md](docs/api/rest-client.md) | [C++](docs/wrappers/cpp.md) -- [Python](docs/wrappers/python.md) -- [Go](docs/wrappers/go.md) -- [C#](docs/wrappers/csharp.md) |
+| CGI client (HTTP/HTTPS multipart) | [docs/api/cgi-client.md](docs/api/cgi-client.md) | [C++](docs/wrappers/cpp.md) -- [Python](docs/wrappers/python.md) -- [Go](docs/wrappers/go.md) -- [C#](docs/wrappers/csharp.md) |
+
+Tutoriais passo a passo (criar projeto do zero e salvar a primeira
+imagem em disco):
+[C++](docs/tutorials/first-image-cpp.md) --
+[C# / .NET](docs/tutorials/first-image-csharp.md) --
+[Python](docs/tutorials/first-image-python.md) --
+[Go](docs/tutorials/first-image-go.md).
 
 ## Configurar ambiente (Ubuntu)
 
@@ -142,7 +149,9 @@ em [`docs/`](docs/):
 - API reference:
   [Binary client](docs/api/binary-client.md) -- [REST client](docs/api/rest-client.md) -- [CGI client](docs/api/cgi-client.md).
 - Wrappers:
-  [C# / .NET](docs/wrappers/csharp.md) -- [Python](docs/wrappers/python.md) -- [Go](docs/wrappers/go.md).
+  [C++ (nativo)](docs/wrappers/cpp.md) -- [C# / .NET](docs/wrappers/csharp.md) -- [Python](docs/wrappers/python.md) -- [Go](docs/wrappers/go.md).
+- Tutoriais (primeira imagem em disco):
+  [C++](docs/tutorials/first-image-cpp.md) -- [C# / .NET](docs/tutorials/first-image-csharp.md) -- [Python](docs/tutorials/first-image-python.md) -- [Go](docs/tutorials/first-image-go.md).
 - [Migration from CougarClient](docs/migration-cougar.md).
 - [`AGENTS.md`](AGENTS.md) — briefing para coding agents; veja [Uso com AI agents](#uso-com-ai-agents).
 - **[Documentation website](docs-site/)** -- site VitePress para GitHub Pages com assistant opcional via [Cloudflare AI Search](https://developers.cloudflare.com/ai-search/). Veja [`docs-site/README.md`](docs-site/README.md) para setup.

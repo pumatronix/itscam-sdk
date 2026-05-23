@@ -1,30 +1,31 @@
-# Python wrapper
+# Wrapper Python
 
-The Python wrapper lives at
-[`src/wrappers/python/`](../../src/wrappers/python/) and uses **ctypes**
-on top of the SDK's C API.  It supports Python 3.7+ on Linux and
-Windows.
+[Português (Brasil)](python.md) | [English (US)](python.en-US.md)
 
-## Install
+O wrapper Python fica em
+[`src/wrappers/python/`](../../src/wrappers/python/) e usa **ctypes**
+sobre a C API do SDK. Suporta Python 3.7+ no Linux e no Windows.
 
-The wrapper is a regular `setuptools` package.  From a checkout of the
-repo:
+## Instalação
+
+O wrapper é um pacote `setuptools` comum. A partir de um checkout do
+repositório:
 
 ```bash
-make lib                         # build libitscam_sdk.so first
+make lib                         # build libitscam_sdk.so primeiro
 cd src/wrappers/python
 pip install -e .                 # editable install
 ```
 
-ctypes locates the shared library by:
+O ctypes localiza a shared library na seguinte ordem:
 
-1. The directory containing `bindings.py`, then its parent.
-2. `<parent>/build/` (handy when bundled with a build output).
-3. System paths (`/usr/local/lib`, `/usr/lib`).
-4. Every entry in `LD_LIBRARY_PATH`.
+1. O diretório que contém `bindings.py`, depois seu pai.
+2. `<pai>/build/` (útil quando empacotado junto com o output de build).
+3. Paths do sistema (`/usr/local/lib`, `/usr/lib`).
+4. Todas as entradas de `LD_LIBRARY_PATH`.
 
-For ad-hoc usage without `pip install`, point `LD_LIBRARY_PATH` at the
-build directory and prepend the wrapper to `PYTHONPATH`:
+Para uso ad-hoc sem `pip install`, aponte `LD_LIBRARY_PATH` para o
+diretório de build e adicione o wrapper ao `PYTHONPATH`:
 
 ```bash
 export LD_LIBRARY_PATH=$PWD/src/core/build/linux:$LD_LIBRARY_PATH
@@ -32,7 +33,7 @@ export PYTHONPATH=$PWD/src/wrappers/python:$PYTHONPATH
 python -c "import itscam; print(itscam.get_version())"
 ```
 
-## Surface
+## Superfície
 
 ```python
 from itscam import (
@@ -44,11 +45,11 @@ from itscam import (
 )
 ```
 
-Each client is a context-manager-friendly Python class that mirrors its
-C++ counterpart 1:1.  Errors are raised as exceptions instead of
-returned as `Result<T>`.
+Cada client é uma classe Python compatível com `with` (context
+manager) que espelha 1:1 a sua contraparte em C++. Erros são lançados
+como exceptions em vez de retornados como `Result<T>`.
 
-## CGI usage (auth optional)
+## Uso do CGI (auth opcional)
 
 ```python
 from itscam import ItscamCgiClient, SnapshotCgiRequest
@@ -57,7 +58,7 @@ with ItscamCgiClient() as cgi:
     cgi.set_base_url("192.168.254.254", 80)
     # cgi.set_base_url("camera.example.com", 443, "https")
     # cgi.set_verify_server_certificate(False)
-    # cgi.login("admin", "1234")   # only when blockAPI=true
+    # cgi.login("admin", "1234")   # somente quando blockAPI=true
 
     with open("lastframe.jpg", "wb") as f:
         f.write(cgi.get_last_frame().data)
@@ -68,28 +69,29 @@ with ItscamCgiClient() as cgi:
             f.write(img.data)
 
     def on_frame(frame: CgiStreamFrame) -> None:
-        ...  # runs on the SDK worker thread; do not block
+        ...  # roda na worker thread do SDK; não bloqueie
     cgi.start_mjpeg_stream(on_frame)
     time.sleep(5)
     cgi.stop_mjpeg_stream()
 ```
 
-## REST usage (auth required)
+## Uso do REST (auth obrigatória)
 
-The REST client exposes two coexisting surfaces:
+O REST client expõe duas superfícies que coexistem:
 
-* **Typed helpers** (preferred) -- `rest.get_ocr_config()`,
-  `rest.set_ocr_config(cfg)`, `rest.get_profiles()` etc. return
-  dataclasses generated from the camera's OpenAPI document.  See
-  [`docs/codegen.md`](../codegen.md) for the maintainer / downstream
-  refresh workflow.
+* **Typed helpers** (preferencial) -- `rest.get_ocr_config()`,
+  `rest.set_ocr_config(cfg)`, `rest.get_profiles()` etc. retornam
+  dataclasses geradas a partir do documento OpenAPI da câmera. Veja
+  [`docs/codegen.md`](../codegen.md) para o workflow de
+  regeneração (maintainer e downstream).
 * **Generic verbs** (escape hatch) -- `rest.get(path)`,
-  `rest.put(path, body)`, `rest.post`, `rest.delete` return parsed
-  JSON (`dict` / `list`).
+  `rest.put(path, body)`, `rest.post`, `rest.delete` retornam JSON
+  já parseado (`dict` / `list`).
 
-* **Partial PUT** -- `rest.patch_json(path, patch)` sends only the
-  fields being changed.  Required for image profiles and recommended
-  for most configuration updates.  See [`docs/api/rest-client.md`](../api/rest-client.md).
+* **Partial PUT** -- `rest.patch_json(path, patch)` envia somente os
+  campos que mudaram. Obrigatório para image profiles e recomendado
+  para a maioria das configuration updates. Veja
+  [`docs/api/rest-client.md`](../api/rest-client.md).
 
 ```python
 from itscam import ItscamRestClient, ProfileConfig
@@ -98,10 +100,10 @@ with ItscamRestClient() as rest:
     rest.set_base_url("192.168.254.254", 80)
     rest.login("admin", "1234")
 
-    # Read-only: typed POCO is convenient.
+    # Read-only: typed POCO é conveniente.
     profiles = rest.get_profiles()
 
-    # Write: partial PUT (do not round-trip the full profile object).
+    # Write: partial PUT (não faça round-trip do profile completo).
     rest.patch_json("/api/image/profiles/0",
                     {"trigger": {"enabled": False}})
 
@@ -109,10 +111,10 @@ with ItscamRestClient() as rest:
     print(rest.get("/api/equipment/misc/readonly/constants"))
 ```
 
-The full POCO module is also available as `itscam.rest_types` for
-explicit imports.
+O módulo completo de POCOs também está disponível em
+`itscam.rest_types` para imports explícitos.
 
-## Binary client usage
+## Uso do binary client
 
 ```python
 from itscam import ItscamClient
@@ -122,19 +124,25 @@ camera.connect("192.168.254.254")
 camera.authenticate("1234")
 camera.subscribe_captures()
 result = camera.capture_snapshot()
-# result is a list of CaptureResult (one per exposure step)
+# result é uma lista de CaptureResult (um por exposure step)
 ```
 
 ## Examples
 
-Ready-to-run scripts under
+Scripts prontos para rodar em
 [`src/wrappers/python/examples/`](../../src/wrappers/python/examples/):
 
-| Script                                   | Purpose                            |
-| ---------------------------------------- | ---------------------------------- |
-| `capture_example.py <host>`              | Binary client capture loop.        |
-| `rest_example.py <host> <user> <pass>`   | REST login + read configuration.   |
-| `cgi_snapshot_example.py <host> [...]`   | CGI lastframe + snapshot + MJPEG.  |
+| Script                                   | Função                                |
+| ---------------------------------------- | ------------------------------------- |
+| `capture_example.py <host>`              | Capture loop pelo binary client.      |
+| `rest_example.py <host> <user> <pass>`   | REST login + leitura de configuration.|
+| `cgi_snapshot_example.py <host> [...]`   | CGI lastframe + snapshot + MJPEG.     |
 
-The CGI example accepts optional `--user`/`--password` flags; without
-them it talks to the camera anonymously.
+O example de CGI aceita flags opcionais `--user` / `--password`; sem
+elas, ele fala com a câmera de forma anônima.
+
+## Tutorial passo a passo
+
+Para um walkthrough do zero (criar projeto, instalar dependência e
+salvar a primeira imagem em disco), veja
+[Primeira imagem com Python](../tutorials/first-image-python.md).
