@@ -37,6 +37,21 @@ VERSION_SCRIPT := tools/version/gen-version.sh
 VERSION_MK := tools/version/sdk-version.mk
 -include $(VERSION_MK)
 
+# Docker runs bind-mount the repo; always map the caller's uid/gid so
+# generated artefacts stay owned by the host user (never root).
+DOCKER_IMAGE := itscam-sdk-builder
+DOCKER_UID := $(shell id -u)
+DOCKER_GID := $(shell id -g)
+DOCKER_RUN := docker run --rm \
+	-v $(CURDIR):/sdk \
+	-w /sdk \
+	-u $(DOCKER_UID):$(DOCKER_GID) \
+	-e HOME=/tmp \
+	-e XDG_CACHE_HOME=/tmp/.cache \
+	-e NPM_CONFIG_CACHE=/tmp/.npm \
+	-e DOTNET_CLI_HOME=/tmp/dotnet
+DOCKER_RUN_IT := $(DOCKER_RUN) -it
+
 # Default target - build library and C++ examples
 default: lib examples
 
@@ -460,9 +475,6 @@ docker-docs-site: docker-build
 #  Docker Build
 # ============================================================================
 
-DOCKER_IMAGE := itscam-sdk-builder
-DOCKER_RUN := docker run --rm -v $(CURDIR):/sdk -u $(shell id -u):$(shell id -g)
-
 docker-build:
 	@echo "=== Building Docker image ==="
 	docker build -t $(DOCKER_IMAGE) .
@@ -481,7 +493,7 @@ docker-windows: docker-build
 
 docker-shell: docker-build
 	@echo "=== Opening interactive shell in Docker ==="
-	docker run --rm -it -v $(CURDIR):/sdk -u $(shell id -u):$(shell id -g) $(DOCKER_IMAGE) bash
+	$(DOCKER_RUN_IT) $(DOCKER_IMAGE) bash
 
 docker-go-gui: docker-build
 	@echo "=== Building Go GUI (Wails) inside Docker ==="

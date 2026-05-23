@@ -5,8 +5,11 @@
 #
 # Usage:
 #   docker build -t itscam-sdk-builder .
-#   docker run --rm -v $(pwd):/sdk itscam-sdk-builder make all
-#   docker run --rm -v $(pwd):/sdk itscam-sdk-builder make windows
+#   make docker-all          # recommended (passes -u automatically)
+#   docker run --rm -v "$(pwd)":/sdk -w /sdk \
+#     -u "$(id -u):$(id -g)" itscam-sdk-builder make all
+#
+# Never run without -u on a bind mount -- files would be root-owned on the host.
 #
 # Copyright (c) 2026 Pumatronix
 
@@ -124,6 +127,10 @@ RUN GOBIN=/go/bin go install github.com/wailsapp/wails/v2/cmd/wails@${WAILS_VERS
 # so VitePress can serve it natively under /api-ref/go.
 RUN GOBIN=/go/bin go install github.com/princjef/gomarkdoc/cmd/gomarkdoc@latest
 
+# Refuse root when /sdk is bind-mounted (see tools/docker/entrypoint.sh).
+COPY tools/docker/entrypoint.sh /usr/local/bin/itscam-docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/itscam-docker-entrypoint.sh
+
 # =============================================================================
 #  Non-root user setup
 # =============================================================================
@@ -143,6 +150,8 @@ USER builder
 
 # Working directory
 WORKDIR /sdk
+
+ENTRYPOINT ["/usr/local/bin/itscam-docker-entrypoint.sh"]
 
 # =============================================================================
 #  Build targets
