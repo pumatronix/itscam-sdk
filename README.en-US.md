@@ -112,6 +112,7 @@ This README is intentionally concise. Chapter-style documentation lives under [`
 - [Getting started](docs/getting-started.md) -- build the SDK, run examples, and link your app.
 - [HTTPS / TLS](docs/https-tls.md) -- vendored mbedTLS, configuration, and troubleshooting.
 - [Error handling](docs/error-handling.md) -- `Result<T>`, `Future<T>`, error codes, and logging.
+- [JPEG metadata (COM marker)](docs/jpeg-metadata.en-US.md) -- extracting plate-recognition and classification metadata embedded in JPEG images.
 - [Typed REST helpers & codegen](docs/codegen.md) -- bundled OpenAPI snapshot and regeneration workflows.
 - API reference: [Binary client](docs/api/binary-client.md) -- [REST client](docs/api/rest-client.md) -- [CGI client](docs/api/cgi-client.md).
 - Wrappers: [C# / .NET](docs/wrappers/csharp.md) -- [Python](docs/wrappers/python.md) -- [Go](docs/wrappers/go.md).

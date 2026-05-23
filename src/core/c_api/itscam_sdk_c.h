@@ -527,6 +527,32 @@ ITSCAM_C_API int ITSCAM_ProfileArray_get(
 ITSCAM_C_API void ITSCAM_ProfileArray_destroy(ITSCAM_ProfileArray* array);
 
 /* ============================================================================
+ *  JPEG Comment Utilities
+ * ============================================================================ */
+
+/**
+ * @brief Extract the raw comment string from a JPEG's COM marker (0xFF 0xFE).
+ *
+ * ITSCAM cameras embed recognition and classification metadata in the JPEG
+ * COM marker using a semicolon-delimited key=value format such as:
+ *
+ *     "Placa=ABC1234;CoordPlaca=100x200,150x40;ClassifierList=[1,95,50,100,300,200]"
+ *
+ * @param jpegData  Pointer to the raw JPEG bytes.
+ * @param jpegSize  Size of the JPEG buffer in bytes.
+ * @param outBuf    Buffer to receive the comment string (may be NULL to query length).
+ * @param bufSize   Size of the output buffer.
+ * @return Length of the comment string (excluding null terminator), or 0 if
+ *         no COM marker was found.  When outBuf is non-NULL and bufSize is
+ *         sufficient, the comment is written as a null-terminated C string.
+ */
+ITSCAM_C_API size_t ITSCAM_Jpeg_extractComment(
+    const uint8_t* jpegData,
+    size_t jpegSize,
+    char* outBuf,
+    size_t bufSize);
+
+/* ============================================================================
  *  Utility Functions
  * ============================================================================ */
 

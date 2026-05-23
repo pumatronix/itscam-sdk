@@ -122,6 +122,27 @@ namespace Pumatronix.Itscam
             Jpeg   = jpeg ?? Array.Empty<byte>();
             Plates = plates ?? Array.Empty<string>();
         }
+
+        private string _comment;
+        private IReadOnlyDictionary<string, string> _commentTags;
+
+        /// <summary>
+        /// Extract the JPEG COM marker comment string.  Returns the raw
+        /// semicolon-delimited metadata embedded by the camera, or
+        /// <see cref="string.Empty"/> if the JPEG has no COM marker.
+        /// The result is cached after the first call.
+        /// </summary>
+        public string Comment =>
+            _comment ?? (_comment = JpegUtils.ExtractComment(Jpeg));
+
+        /// <summary>
+        /// Parse the JPEG COM marker into a tag dictionary.
+        /// Keys include <c>Placa</c>, <c>CoordPlaca</c>,
+        /// <c>ClassifierList</c>, <c>BMCList</c>, etc.
+        /// The result is cached after the first call.
+        /// </summary>
+        public IReadOnlyDictionary<string, string> CommentTags =>
+            _commentTags ?? (_commentTags = JpegUtils.ParseCommentTags(Comment));
     }
 
     /// <summary>Camera profile entry from the binary client.</summary>

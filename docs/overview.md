@@ -66,5 +66,6 @@ itscam-sdk/
 - [API: CGI client](api/cgi-client.md) -- HTTP image endpoints.
 - [HTTPS / TLS](https-tls.md) -- configuration do mbedTLS.
 - [Error handling](error-handling.md) -- `Result<T>`, `Future<T>`, error codes.
+- [JPEG metadata (COM marker)](jpeg-metadata.md) -- extração de metadados de placas e classificação embutidos no JPEG.
 - Wrappers: [Python](wrappers/python.md) -- [Go](wrappers/go.md) -- [C# / .NET](wrappers/csharp.md).
 - [Migration from CougarClient](migration-cougar.md).

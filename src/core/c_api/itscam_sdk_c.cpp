@@ -10,6 +10,7 @@
 #include "../itscam_sdk_version.h"
 #include "../itscam_client.h"
 #include "../itscam_sdk_utils.h"
+#include "../itscam_jpeg_utils.h"
 #include "impl/itscam_c_internal.h"
 
 #include <cstdarg>
@@ -651,6 +652,27 @@ int ITSCAM_ProfileArray_get(
 
 void ITSCAM_ProfileArray_destroy(ITSCAM_ProfileArray* array) {
     delete array;
+}
+
+// ============================================================================
+//  JPEG Comment Utilities
+// ============================================================================
+
+size_t ITSCAM_Jpeg_extractComment(
+    const uint8_t* jpegData,
+    size_t jpegSize,
+    char* outBuf,
+    size_t bufSize)
+{
+    auto comment = itscam::extractJpegComment(jpegData, jpegSize);
+    if (comment.empty()) return 0;
+
+    if (outBuf && bufSize > 0) {
+        size_t copyLen = comment.size() < bufSize ? comment.size() : bufSize - 1;
+        std::memcpy(outBuf, comment.data(), copyLen);
+        outBuf[copyLen] = '\0';
+    }
+    return comment.size();
 }
 
 // ============================================================================

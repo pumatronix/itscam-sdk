@@ -6,7 +6,7 @@ Data classes and exception types for the ITSCAM SDK.
 
 from dataclasses import dataclass, field
 from enum import IntEnum
-from typing import List, Optional
+from typing import Dict, List, Optional
 from datetime import datetime
 
 
@@ -158,7 +158,32 @@ class CaptureResult:
     def plates(self) -> List[str]:
         """Shortcut to access recognized plates."""
         return self.info.plates
-    
+
+    @property
+    def comment(self) -> str:
+        """Extract the JPEG COM marker comment string.
+
+        Returns the raw semicolon-delimited metadata string embedded by the
+        camera, or ``""`` if the JPEG has no COM marker.  The result is
+        cached after the first call.
+        """
+        if not hasattr(self, "_comment"):
+            from .jpeg_utils import extract_jpeg_comment
+            self._comment = extract_jpeg_comment(self.jpeg) if self.jpeg else ""
+        return self._comment
+
+    @property
+    def comment_tags(self) -> Dict[str, str]:
+        """Parse the JPEG COM marker into a ``{key: value}`` dictionary.
+
+        The camera writes tags such as ``Placa``, ``CoordPlaca``,
+        ``ClassifierList``, and ``BMCList``.  The result is cached.
+        """
+        if not hasattr(self, "_comment_tags"):
+            from .jpeg_utils import parse_jpeg_comment_tags
+            self._comment_tags = parse_jpeg_comment_tags(self.comment)
+        return self._comment_tags
+
     def save(self, path: str) -> None:
         """Save JPEG data to file."""
         with open(path, "wb") as f:

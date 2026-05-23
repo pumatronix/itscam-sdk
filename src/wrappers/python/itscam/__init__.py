@@ -71,6 +71,16 @@ from .types import (
     ItscamTimeoutError,
     ItscamAuthError,
 )
+from .jpeg_utils import (
+    extract_jpeg_comment,
+    parse_jpeg_comment_tags,
+    parse_jpeg_metadata,
+    PlateRecognition,
+    ObjectDetection,
+    JpegCommentMetadata,
+    extract_plate_recognitions,
+    extract_object_detections,
+)
 from .utils import (
     get_system_local_time,
     get_system_utc_time,
@@ -148,6 +158,15 @@ __all__ = [
     "RESTAPIClientConfig",
     "RESTAPIClientStatus",
     "Licenses",
+    # JPEG metadata
+    "extract_jpeg_comment",
+    "parse_jpeg_comment_tags",
+    "parse_jpeg_metadata",
+    "PlateRecognition",
+    "ObjectDetection",
+    "JpegCommentMetadata",
+    "extract_plate_recognitions",
+    "extract_object_detections",
     # Utilities
     "get_system_local_time",
     "get_system_utc_time",
