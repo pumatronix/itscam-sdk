@@ -9,11 +9,11 @@
 #include "itscam_cgi_client.h"
 #include "impl/itscam_http_transport.h"
 #include "impl/itscam_multipart.h"
+#include "itscam_os.h"
 
 #include <atomic>
 #include <cstring>
 #include <sstream>
-#include <thread>
 
 namespace itscam {
 
@@ -23,6 +23,7 @@ using detail::HttpResponse;
 using detail::extractMultipartBoundary;
 using detail::parseMultipart;
 using detail::StreamingMultipartParser;
+using Thread = itscam_os::Thread;
 
 // ============================================================================
 //  Local helpers
@@ -116,7 +117,7 @@ public:
             return Error{Error::InvalidParameter, "stream already running"};
         }
         mShouldStop = false;
-        mThread = std::thread(&StreamWorker::run, this);
+        mThread = Thread([this]() { run(); });
         return Result<void>::success();
     }
 
@@ -178,7 +179,7 @@ private:
     uint32_t            mTimeoutMs;
     std::string         mExpectedBoundary;
     CgiStreamCallback   mUserCallback;
-    std::thread         mThread;
+    Thread              mThread;
     std::atomic<bool>   mRunning{false};
     std::atomic<bool>   mShouldStop{false};
 };
@@ -411,8 +412,8 @@ Future<std::vector<CgiImage>> ItscamCgiClient::getSnapshotAsync(
     const SnapshotCgiRequest& request, uint32_t timeoutMs) {
     Promise<std::vector<CgiImage>> promise;
     auto future = promise.get_future();
-    std::thread([this, request, timeoutMs,
-                 promise = std::move(promise)]() mutable {
+    Thread([this, request, timeoutMs,
+            promise = std::move(promise)]() mutable {
         promise.set_value(this->getSnapshot(request, timeoutMs));
     }).detach();
     return future;

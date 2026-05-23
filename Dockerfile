@@ -37,6 +37,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     # MinGW for Windows cross-compilation
     mingw-w64 \
     g++-mingw-w64-x86-64 \
+    g++-mingw-w64-i686 \
     # Python for Python wrapper
     python3 \
     python3-pip \

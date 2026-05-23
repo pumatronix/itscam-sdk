@@ -11,7 +11,7 @@
 #
 # Copyright (c) 2026 Pumatronix
 
-.PHONY: all linux windows clean install help version
+.PHONY: all linux windows windows-x64 windows-x86 clean install help version
 
 # Default target
 all: linux
@@ -27,7 +27,8 @@ version:
 # Build directories
 BUILD_DIR        := build
 BUILD_DIR_LINUX  := $(BUILD_DIR)/linux
-BUILD_DIR_WINDOWS := $(BUILD_DIR)/windows
+BUILD_DIR_WIN_X64 := $(BUILD_DIR)/win-x64
+BUILD_DIR_WIN_X86 := $(BUILD_DIR)/win-x86
 
 # Third-party dependencies (committed in repository)
 3RDPARTY_DIR     := 3rdparty
@@ -37,9 +38,15 @@ MBEDTLS_INC      := $(MBEDTLS_DIR)/include
 # Compilers
 CC_LINUX    := gcc
 CXX_LINUX   := g++
-# Use win32 variant - we have our own OS abstraction layer for threading
-CC_WINDOWS  := x86_64-w64-mingw32-gcc
-CXX_WINDOWS := x86_64-w64-mingw32-g++
+# MinGW win32 threading model (not posix).  libgcc/libstdc++ are linked
+# statically so consumers do not need libgcc.dll / libstdc++-6.dll.
+CC_WIN_X64  := x86_64-w64-mingw32-gcc
+CXX_WIN_X64 := x86_64-w64-mingw32-g++
+AR_WIN_X64  := x86_64-w64-mingw32-ar
+
+CC_WIN_X86  := i686-w64-mingw32-gcc
+CXX_WIN_X86 := i686-w64-mingw32-g++
+AR_WIN_X86  := i686-w64-mingw32-ar
 
 # Common flags
 CXXFLAGS_COMMON := -std=c++17 -O2 -fPIC -Wall -Wextra
@@ -58,7 +65,9 @@ endif
 # Platform-specific flags
 CXXFLAGS_LINUX   := $(CXXFLAGS_COMMON) $(TLS_DEFINES)
 # ITSCAM_SDK_BUILDING enables dllexport in the C API header
-CXXFLAGS_WINDOWS := $(CXXFLAGS_COMMON) $(TLS_DEFINES) -DWIN32 -D_WIN32 -DITSCAM_SDK_BUILDING
+# ITSCAM_MINGW_WIN32_THREADS: use Win32 sync shims instead of libstdc++ <thread>
+CXXFLAGS_WINDOWS := $(CXXFLAGS_COMMON) $(TLS_DEFINES) -DWIN32 -D_WIN32 \
+    -DITSCAM_SDK_BUILDING -DITSCAM_MINGW_WIN32_THREADS
 
 # mbedTLS C compile flags.  The custom user config lives next to the
 # vendored sources, so we add $(MBEDTLS_DIR) to the include path.
@@ -72,7 +81,7 @@ MBEDTLS_CFLAGS_WINDOWS := $(MBEDTLS_CFLAGS_COMMON)
 LDFLAGS_LINUX   := -shared -lpthread
 # bcrypt is required by mbedTLS' Windows RNG.  Static link libgcc and
 # libstdc++ to avoid DLL dependencies; native Win32 threading is used.
-LDFLAGS_WINDOWS := -shared -lws2_32 -lbcrypt -static-libgcc -static-libstdc++
+LDFLAGS_WINDOWS := -shared -lws2_32 -lbcrypt -lcrypt32 -static-libgcc -static-libstdc++
 
 # Include paths
 INCLUDES := -I. -Ic_api -I$(3RDPARTY_DIR) -I$(MBEDTLS_INC)
@@ -110,21 +119,29 @@ SDK_SOURCES_WINDOWS := $(SOURCES_COMMON) $(SOURCES_NETWORK) $(SOURCE_WINDOWS_PLA
 MBEDTLS_SRCS := $(wildcard $(MBEDTLS_DIR)/library/*.c)
 
 OBJS_SDK_LINUX     := $(patsubst %.cpp,$(BUILD_DIR_LINUX)/%.o,$(SDK_SOURCES_LINUX))
-OBJS_SDK_WINDOWS   := $(patsubst %.cpp,$(BUILD_DIR_WINDOWS)/%.o,$(SDK_SOURCES_WINDOWS))
+OBJS_WIN_X64       := $(patsubst %.cpp,$(BUILD_DIR_WIN_X64)/%.o,$(SDK_SOURCES_WINDOWS))
+OBJS_WIN_X86       := $(patsubst %.cpp,$(BUILD_DIR_WIN_X86)/%.o,$(SDK_SOURCES_WINDOWS))
 OBJS_MBEDTLS_LINUX := $(patsubst $(MBEDTLS_DIR)/library/%.c,$(BUILD_DIR_LINUX)/mbedtls/%.o,$(MBEDTLS_SRCS))
-OBJS_MBEDTLS_WIN   := $(patsubst $(MBEDTLS_DIR)/library/%.c,$(BUILD_DIR_WINDOWS)/mbedtls/%.o,$(MBEDTLS_SRCS))
+OBJS_MBEDTLS_WIN_X64 := $(patsubst $(MBEDTLS_DIR)/library/%.c,$(BUILD_DIR_WIN_X64)/mbedtls/%.o,$(MBEDTLS_SRCS))
+OBJS_MBEDTLS_WIN_X86 := $(patsubst $(MBEDTLS_DIR)/library/%.c,$(BUILD_DIR_WIN_X86)/mbedtls/%.o,$(MBEDTLS_SRCS))
 
 OBJS_LINUX   := $(OBJS_SDK_LINUX)   $(OBJS_MBEDTLS_LINUX)
-OBJS_WINDOWS := $(OBJS_SDK_WINDOWS) $(OBJS_MBEDTLS_WIN)
+OBJS_WIN_X64 := $(OBJS_WIN_X64)     $(OBJS_MBEDTLS_WIN_X64)
+OBJS_WIN_X86 := $(OBJS_WIN_X86)     $(OBJS_MBEDTLS_WIN_X86)
 
 # Output files
 LIB_LINUX_SO     := $(BUILD_DIR_LINUX)/libitscam_sdk.so
 LIB_LINUX_SONAME := libitscam_sdk.so.$(word 1,$(subst ., ,$(SDK_LIB_VERSION)))
 LIB_LINUX_REAL   := $(BUILD_DIR_LINUX)/libitscam_sdk.so.$(SDK_LIB_VERSION)
 LIB_LINUX_A      := $(BUILD_DIR_LINUX)/libitscam_sdk.a
-LIB_WINDOWS      := $(BUILD_DIR_WINDOWS)/itscam_sdk.dll
-IMPLIB_WINDOWS   := $(BUILD_DIR_WINDOWS)/libitscam_sdk.a
-LIB_WINDOWS_A    := $(BUILD_DIR_WINDOWS)/libitscam_sdk_static.a
+
+LIB_WIN_X64_DLL    := $(BUILD_DIR_WIN_X64)/itscam_sdk.dll
+LIB_WIN_X64_IMPLIB := $(BUILD_DIR_WIN_X64)/libitscam_sdk.a
+LIB_WIN_X64_STATIC := $(BUILD_DIR_WIN_X64)/libitscam_sdk_static.a
+
+LIB_WIN_X86_DLL    := $(BUILD_DIR_WIN_X86)/itscam_sdk.dll
+LIB_WIN_X86_IMPLIB := $(BUILD_DIR_WIN_X86)/libitscam_sdk.a
+LIB_WIN_X86_STATIC := $(BUILD_DIR_WIN_X86)/libitscam_sdk_static.a
 
 # ============================================================================
 #  Linux build
@@ -153,31 +170,56 @@ $(BUILD_DIR_LINUX)/mbedtls/%.o: $(MBEDTLS_DIR)/library/%.c
 	@$(CC_LINUX) $(MBEDTLS_CFLAGS_LINUX) -c $< -o $@
 
 # ============================================================================
-#  Windows build (cross-compile)
+#  Windows build (cross-compile, win32 + win64)
 # ============================================================================
 
-windows: check-mingw $(LIB_WINDOWS) $(LIB_WINDOWS_A)
+windows: windows-x64 windows-x86
 
-$(LIB_WINDOWS): $(OBJS_WINDOWS)
-	@echo "Linking itscam_sdk.dll..."
-	@$(CXX_WINDOWS) -o $@ $^ $(LDFLAGS_WINDOWS) -Wl,--out-implib,$(IMPLIB_WINDOWS)
+windows-x64: check-mingw-x64 $(LIB_WIN_X64_DLL) $(LIB_WIN_X64_STATIC)
 
-$(LIB_WINDOWS_A): $(OBJS_WINDOWS)
-	@echo "Creating libitscam_sdk_static.a (Windows)..."
-	@x86_64-w64-mingw32-ar rcs $@ $^
+windows-x86: check-mingw-x86 $(LIB_WIN_X86_DLL) $(LIB_WIN_X86_STATIC)
 
-$(BUILD_DIR_WINDOWS)/%.o: %.cpp
+$(LIB_WIN_X64_DLL): $(OBJS_WIN_X64)
+	@echo "Linking win-x64/itscam_sdk.dll..."
+	@$(CXX_WIN_X64) -o $@ $^ $(LDFLAGS_WINDOWS) -Wl,--out-implib,$(LIB_WIN_X64_IMPLIB)
+
+$(LIB_WIN_X64_STATIC): $(OBJS_WIN_X64)
+	@echo "Creating win-x64/libitscam_sdk_static.a..."
+	@$(AR_WIN_X64) rcs $@ $^
+
+$(LIB_WIN_X86_DLL): $(OBJS_WIN_X86)
+	@echo "Linking win-x86/itscam_sdk.dll..."
+	@$(CXX_WIN_X86) -o $@ $^ $(LDFLAGS_WINDOWS) -Wl,--out-implib,$(LIB_WIN_X86_IMPLIB)
+
+$(LIB_WIN_X86_STATIC): $(OBJS_WIN_X86)
+	@echo "Creating win-x86/libitscam_sdk_static.a..."
+	@$(AR_WIN_X86) rcs $@ $^
+
+$(BUILD_DIR_WIN_X64)/%.o: %.cpp
 	@mkdir -p $(dir $@)
-	@echo "Compiling (Windows): $<"
-	@$(CXX_WINDOWS) $(CXXFLAGS_WINDOWS) $(INCLUDES) -c $< -o $@
+	@echo "Compiling (win-x64): $<"
+	@$(CXX_WIN_X64) $(CXXFLAGS_WINDOWS) $(INCLUDES) -c $< -o $@
 
-$(BUILD_DIR_WINDOWS)/mbedtls/%.o: $(MBEDTLS_DIR)/library/%.c
+$(BUILD_DIR_WIN_X86)/%.o: %.cpp
 	@mkdir -p $(dir $@)
-	@echo "Compiling (mbedtls/Windows): $<"
-	@$(CC_WINDOWS) $(MBEDTLS_CFLAGS_WINDOWS) -c $< -o $@
+	@echo "Compiling (win-x86): $<"
+	@$(CXX_WIN_X86) $(CXXFLAGS_WINDOWS) $(INCLUDES) -c $< -o $@
 
-check-mingw:
-	@which $(CXX_WINDOWS) > /dev/null || (echo "Error: MinGW not found. Install mingw-w64." && exit 1)
+$(BUILD_DIR_WIN_X64)/mbedtls/%.o: $(MBEDTLS_DIR)/library/%.c
+	@mkdir -p $(dir $@)
+	@echo "Compiling (mbedtls/win-x64): $<"
+	@$(CC_WIN_X64) $(MBEDTLS_CFLAGS_WINDOWS) -c $< -o $@
+
+$(BUILD_DIR_WIN_X86)/mbedtls/%.o: $(MBEDTLS_DIR)/library/%.c
+	@mkdir -p $(dir $@)
+	@echo "Compiling (mbedtls/win-x86): $<"
+	@$(CC_WIN_X86) $(MBEDTLS_CFLAGS_WINDOWS) -c $< -o $@
+
+check-mingw-x64:
+	@which $(CXX_WIN_X64) > /dev/null || (echo "Error: x86_64 MinGW not found. Install mingw-w64." && exit 1)
+
+check-mingw-x86:
+	@which $(CXX_WIN_X86) > /dev/null || (echo "Error: i686 MinGW not found. Install g++-mingw-w64-i686." && exit 1)
 
 # ============================================================================
 #  Installation
@@ -212,7 +254,7 @@ install: linux
 
 clean:
 	@echo "Cleaning build artifacts..."
-	@rm -rf $(BUILD_DIR_LINUX) $(BUILD_DIR_WINDOWS)
+	@rm -rf $(BUILD_DIR_LINUX) $(BUILD_DIR_WIN_X64) $(BUILD_DIR_WIN_X86)
 
 # ============================================================================
 #  Help
@@ -225,7 +267,9 @@ help:
 	@echo ""
 	@echo "Targets:"
 	@echo "  linux           Build for Linux (native) - default"
-	@echo "  windows         Cross-compile for Windows (MinGW)"
+	@echo "  windows         Cross-compile for Windows (win-x64 + win-x86)"
+	@echo "  windows-x64     Cross-compile for Windows x64"
+	@echo "  windows-x86     Cross-compile for Windows x86 (win32)"
 	@echo "  all             Build for all platforms"
 	@echo "  clean           Remove build artifacts"
 	@echo "  install         Install to system (Linux)"

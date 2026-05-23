@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 #
-# Stage a consumer-ready SDK distribution and pack it as tar.gz.
+# Stage a consumer-ready multi-platform SDK distribution and pack it as tar.gz.
 #
-# Layout (under dist/itscam-sdk-<version>-<rid>/):
-#   cpp/     Public C++ headers + libitscam_sdk.so
-#   c/       C API headers + libitscam_sdk.so
-#   csharp/  Pumatronix.Itscam.Sdk NuGet package
-#   python/  itscam wheel with bundled native library
-#   go/      Standalone Go module source + native/ + include/
+# Layout (under dist/itscam-sdk-<version>/):
+#   VERSION.json, README.txt
+#   csharp/              NuGet (linux-x64 + win-x64 + win-x86 native runtimes)
+#   linux-x64/cpp|c|python|go/
+#   win-x64/cpp|c|python|go/
+#   win-x86/cpp|c|python|go/
 #
 # Copyright (c) 2026 Pumatronix
 
@@ -20,6 +20,27 @@ CS="$ROOT/src/wrappers/csharp"
 GO="$ROOT/src/wrappers/go"
 VERSION_JSON="$ROOT/VERSION.json"
 VERSION_MK="$ROOT/tools/version/sdk-version.mk"
+
+LINUX_LIB_DIR="$CORE/build/linux"
+WIN_X64_LIB_DIR="$CORE/build/win-x64"
+WIN_X86_LIB_DIR="$CORE/build/win-x86"
+LINUX_LIB="$LINUX_LIB_DIR/libitscam_sdk.so"
+WIN_X64_DLL="$WIN_X64_LIB_DIR/itscam_sdk.dll"
+WIN_X64_IMPLIB="$WIN_X64_LIB_DIR/libitscam_sdk.a"
+WIN_X86_DLL="$WIN_X86_LIB_DIR/itscam_sdk.dll"
+WIN_X86_IMPLIB="$WIN_X86_LIB_DIR/libitscam_sdk.a"
+
+DIST_ROOT="$ROOT/dist"
+
+die() { echo "make-sdk-dist: $*" >&2; exit 1; }
+
+require_file() {
+    [ -f "$1" ] || die "missing $1 (run 'make lib' / 'make windows' first)"
+}
+
+require_cmd() {
+    command -v "$1" >/dev/null 2>&1 || die "required command not found: $1"
+}
 
 load_version_metadata() {
     if [ -f "$VERSION_JSON" ]; then
@@ -52,22 +73,8 @@ PY
     die "missing VERSION.json (run 'make version' first)"
 }
 
-SDK_RID="${SDK_RID:-linux-x64}"
-
-DIST_ROOT="$ROOT/dist"
-
-die() { echo "make-sdk-dist: $*" >&2; exit 1; }
-
-require_file() {
-    [ -f "$1" ] || die "missing $1 (run 'make lib' first)"
-}
-
-require_cmd() {
-    command -v "$1" >/dev/null 2>&1 || die "required command not found: $1"
-}
-
 stage_cpp_headers() {
-    local dest="$STAGING/cpp/include"
+    local dest="$1"
     mkdir -p "$dest/c_api" "$dest/3rdparty/nlohmann"
 
     local headers=(
@@ -94,16 +101,33 @@ stage_cpp_headers() {
     cp "$CORE/3rdparty/nlohmann/json.hpp" "$dest/3rdparty/nlohmann/"
 }
 
-stage_native_lib() {
-    local dest="$1"
-    mkdir -p "$dest"
-    cp "$LIB_REAL" "$dest/libitscam_sdk.so.${SDK_LIB_VERSION}"
-    ln -sf "libitscam_sdk.so.${SDK_LIB_VERSION}" "$dest/libitscam_sdk.so.$(echo "$SDK_LIB_VERSION" | cut -d. -f1)"
-    ln -sf "libitscam_sdk.so.${SDK_LIB_VERSION}" "$dest/libitscam_sdk.so"
+stage_linux_libs() {
+    local cpp_lib="$1/cpp/lib"
+    local c_lib="$2/c/lib"
+    local lib_real="$LINUX_LIB_DIR/libitscam_sdk.so.${SDK_LIB_VERSION}"
+
+    mkdir -p "$cpp_lib" "$c_lib"
+    cp "$lib_real" "$cpp_lib/libitscam_sdk.so.${SDK_LIB_VERSION}"
+    ln -sf "libitscam_sdk.so.${SDK_LIB_VERSION}" "$cpp_lib/libitscam_sdk.so.$(echo "$SDK_LIB_VERSION" | cut -d. -f1)"
+    ln -sf "libitscam_sdk.so.${SDK_LIB_VERSION}" "$cpp_lib/libitscam_sdk.so"
+    cp -a "$cpp_lib/." "$c_lib/"
+}
+
+stage_windows_libs() {
+    local cpp_bin="$1/cpp/bin"
+    local c_bin="$2/c/bin"
+    local dll="$3"
+    local implib="$4"
+
+    mkdir -p "$cpp_bin" "$c_bin"
+    cp "$dll" "$cpp_bin/itscam_sdk.dll"
+    cp "$implib" "$cpp_bin/libitscam_sdk.a"
+    cp "$dll" "$c_bin/itscam_sdk.dll"
+    cp "$implib" "$c_bin/libitscam_sdk.a"
 }
 
 stage_c_headers() {
-    local dest="$STAGING/c/include/c_api"
+    local dest="$1/c/include/c_api"
     mkdir -p "$dest"
     cp "$CORE/c_api/itscam_sdk_c.h" \
        "$CORE/c_api/itscam_rest_client_c.h" \
@@ -112,7 +136,7 @@ stage_c_headers() {
 }
 
 stage_csharp_nupkg() {
-    local dest="$STAGING/csharp"
+    local dest="$1/csharp"
     mkdir -p "$dest"
     shopt -s nullglob
     local pkgs=("$CS/nupkg"/*.nupkg)
@@ -121,13 +145,15 @@ stage_csharp_nupkg() {
     cp "${pkgs[@]}" "$dest/"
 }
 
-stage_python_wheel() {
-    local dest="$STAGING/python"
+stage_python_wheel_linux() {
+    local dest="$1/python"
+    local lib_real="$LINUX_LIB_DIR/libitscam_sdk.so.${SDK_LIB_VERSION}"
     mkdir -p "$dest"
 
     require_cmd python3
 
-    cp "$LIB_REAL" "$PY/itscam/libitscam_sdk.so"
+    rm -f "$PY/itscam/itscam_sdk.dll"
+    cp "$lib_real" "$PY/itscam/libitscam_sdk.so"
     trap 'rm -f "$PY/itscam/libitscam_sdk.so"' RETURN
 
     if python3 -m build --help >/dev/null 2>&1; then
@@ -143,7 +169,31 @@ stage_python_wheel() {
     shopt -s nullglob
     local wheels=("$dest"/*.whl)
     shopt -u nullglob
-    [ "${#wheels[@]}" -gt 0 ] || die "python wheel build produced no .whl in $dest"
+    [ "${#wheels[@]}" -gt 0 ] || die "linux python wheel build produced no .whl in $dest"
+}
+
+stage_python_wheel_windows() {
+    local dest="$1/python"
+    local dll="$2"
+    local plat_name="$3"
+    mkdir -p "$dest"
+
+    require_cmd python3
+
+    rm -f "$PY/itscam/libitscam_sdk.so"
+    cp "$dll" "$PY/itscam/itscam_sdk.dll"
+    trap 'rm -f "$PY/itscam/itscam_sdk.dll"' RETURN
+
+    (cd "$PY" && python3 setup.py bdist_wheel --plat-name "$plat_name" --dist-dir "$dest")
+
+    rm -f "$PY/itscam/itscam_sdk.dll"
+    rm -rf "$PY/build" "$PY/itscam.egg-info"
+    trap - RETURN
+
+    shopt -s nullglob
+    local wheels=("$dest"/*.whl)
+    shopt -u nullglob
+    [ "${#wheels[@]}" -gt 0 ] || die "windows python wheel ($plat_name) build produced no .whl in $dest"
 }
 
 patch_go_cgo_block() {
@@ -188,15 +238,15 @@ PY
 }
 
 stage_go_module() {
-    local dest="$STAGING/go/itscam-sdk-go"
+    local platform_root="$1"
+    local dll="$2"
+    local implib="$3"
+    local dest="$platform_root/go/itscam-sdk-go"
     mkdir -p "$dest/itscam" "$dest/native" "$dest/include"
 
     cp "$GO/go.mod" "$dest/"
     cp "$GO"/itscam/*.go "$dest/itscam/"
     cp "$GO/README.md" "$dest/" 2>/dev/null || true
-
-    cp "$LIB_REAL" "$dest/native/libitscam_sdk.so"
-    ln -sf libitscam_sdk.so "$dest/native/libitscam_sdk.so.1"
 
     cp "$CORE/c_api/itscam_sdk_c.h" \
        "$CORE/c_api/itscam_rest_client_c.h" \
@@ -207,97 +257,148 @@ stage_go_module() {
     patch_go_cgo_block "$dest/itscam/callbacks.go" "itscam_sdk_c.h"
     patch_go_cgo_block "$dest/itscam/rest_client.go" "itscam_rest_client_c.h"
     patch_go_cgo_block "$dest/itscam/cgi_client.go" "itscam_cgi_client_c.h"
+
+    if [[ "$platform_root" == *linux* ]]; then
+        cp "$LINUX_LIB_DIR/libitscam_sdk.so.${SDK_LIB_VERSION}" "$dest/native/libitscam_sdk.so"
+        ln -sf libitscam_sdk.so "$dest/native/libitscam_sdk.so.1"
+    else
+        cp "$dll" "$dest/native/itscam_sdk.dll"
+        cp "$implib" "$dest/native/libitscam_sdk.a"
+    fi
+}
+
+stage_linux_platform() {
+    local dest="$STAGING/linux-x64"
+    mkdir -p "$dest"
+    stage_cpp_headers "$dest/cpp/include"
+    stage_linux_libs "$dest" "$dest"
+    stage_c_headers "$dest"
+    stage_python_wheel_linux "$dest"
+    stage_go_module "$dest" "" ""
+}
+
+stage_windows_x64_platform() {
+    local dest="$STAGING/win-x64"
+    mkdir -p "$dest"
+    stage_cpp_headers "$dest/cpp/include"
+    stage_windows_libs "$dest" "$dest" "$WIN_X64_DLL" "$WIN_X64_IMPLIB"
+    stage_c_headers "$dest"
+    stage_python_wheel_windows "$dest" "$WIN_X64_DLL" "win_amd64"
+    stage_go_module "$dest" "$WIN_X64_DLL" "$WIN_X64_IMPLIB"
+}
+
+stage_windows_x86_platform() {
+    local dest="$STAGING/win-x86"
+    mkdir -p "$dest"
+    stage_cpp_headers "$dest/cpp/include"
+    stage_windows_libs "$dest" "$dest" "$WIN_X86_DLL" "$WIN_X86_IMPLIB"
+    stage_c_headers "$dest"
+    stage_python_wheel_windows "$dest" "$WIN_X86_DLL" "win32"
+    stage_go_module "$dest" "$WIN_X86_DLL" "$WIN_X86_IMPLIB"
 }
 
 write_readme() {
     cat >"$STAGING/README.txt" <<EOF
-ITSCAM Client SDK ${SDK_VERSION_FULL} (${SDK_RID})
-============================================
+ITSCAM Client SDK ${SDK_VERSION_FULL}
+=====================================
 
 Consumer bundle produced by: make sdk-dist
 Git commit: ${SDK_GIT_SHA}
 Build date: ${SDK_BUILD_DATE}
 
+Platforms: linux-x64, win-x64, win-x86
 See VERSION.json for machine-readable metadata.
 
-C / C++
--------
-  Headers: cpp/include/   (-I path for g++/clang++)
-  Library: cpp/lib/       (-L path, link -litscam_sdk)
-
-  Example:
-    g++ -std=c++17 -Icpp/include -c your_app.cpp
-    g++ your_app.o -Lcpp/lib -litscam_sdk -lpthread \\
-        -Wl,-rpath,'\$ORIGIN/cpp/lib' -o your_app
-
-C API
------
-  Headers: c/include/c_api/
-  Library: c/lib/
-
-  Example:
-    gcc -std=c11 -Ic/include/c_api -c your_app.c
-    gcc your_app.o -Lc/lib -litscam_sdk -lpthread \\
-        -Wl,-rpath,'\$ORIGIN/c/lib' -o your_app
+Layout
+------
+  csharp/       NuGet (multi-RID: linux-x64 + win-x64 + win-x86 native binaries)
+  linux-x64/    C/C++ headers + .so, Python wheel, Go module
+  win-x64/      C/C++ headers + .dll/.a (64-bit), Python wheel, Go module
+  win-x86/      C/C++ headers + .dll/.a (32-bit), Python wheel, Go module
 
 C# / .NET
 ---------
   dotnet add package Pumatronix.Itscam.Sdk --source \$(pwd)/csharp
 
-  Or add a local NuGet source pointing at the csharp/ directory.
+Linux C / C++
+-------------
+  Headers: linux-x64/cpp/include/
+  Library: linux-x64/cpp/lib/       (link -litscam_sdk -lpthread)
 
-Python
-------
-  pip install python/itscam-*.whl
+  g++ -std=c++17 -Ilinux-x64/cpp/include -c your_app.cpp
+  g++ your_app.o -Llinux-x64/cpp/lib -litscam_sdk -lpthread \\
+      -Wl,-rpath,'\$ORIGIN/linux-x64/cpp/lib' -o your_app
 
-Go
---
-  Copy go/itscam-sdk-go into your project or add it as a module replace.
+Linux C API
+-----------
+  Headers: linux-x64/c/include/c_api/
+  Library: linux-x64/c/lib/
 
-  export LD_LIBRARY_PATH=\$(pwd)/go/itscam-sdk-go/native:\$LD_LIBRARY_PATH
-  go build -C go/itscam-sdk-go ./...
+Linux Python
+------------
+  pip install linux-x64/python/itscam-*.whl
 
-  See go/itscam-sdk-go/README.md for module import path details.
+Linux Go
+--------
+  export LD_LIBRARY_PATH=\$(pwd)/linux-x64/go/itscam-sdk-go/native:\$LD_LIBRARY_PATH
+  go build -C linux-x64/go/itscam-sdk-go ./...
+
+Windows C / C++
+-----------------
+  Headers: win-x64/cpp/include/
+  Binaries: win-x64/cpp/bin/itscam_sdk.dll + libitscam_sdk.a
+
+  Link with libitscam_sdk.a and ship itscam_sdk.dll next to your .exe.
+
+Windows C API
+-------------
+  Headers: win-x64/c/include/c_api/
+  Binaries: win-x64/c/bin/
+
+Windows Python
+--------------
+  pip install win-x64/python/itscam-*.whl    (64-bit)
+  pip install win-x86/python/itscam-*.whl    (32-bit)
+
+Windows Go
+----------
+  Copy win-x64/go/itscam-sdk-go or win-x86/go/itscam-sdk-go into your project.
+  Build on Windows with CGO; native/itscam_sdk.dll must be on PATH or beside the .exe.
 EOF
 }
 
 main() {
     load_version_metadata
 
-    local lib_dir="$CORE/build/linux"
-    local lib_real="$lib_dir/libitscam_sdk.so.${SDK_LIB_VERSION}"
-    local staging="$DIST_ROOT/sdk-staging/itscam-sdk-${SDK_VERSION}-${SDK_RID}"
-    local archive="$DIST_ROOT/itscam-sdk-${SDK_VERSION}-${SDK_RID}.tar.gz"
+    local lib_real="$LINUX_LIB_DIR/libitscam_sdk.so.${SDK_LIB_VERSION}"
+    STAGING="$DIST_ROOT/sdk-staging/itscam-sdk-${SDK_VERSION}"
+    ARCHIVE="$DIST_ROOT/itscam-sdk-${SDK_VERSION}.tar.gz"
 
-    LIB_DIR="$lib_dir"
-    LIB_REAL="$lib_real"
-    STAGING="$staging"
-    ARCHIVE="$archive"
+    require_file "$lib_real"
+    require_file "$WIN_X64_DLL"
+    require_file "$WIN_X64_IMPLIB"
+    require_file "$WIN_X86_DLL"
+    require_file "$WIN_X86_IMPLIB"
 
-    require_file "$LIB_REAL"
-
-    echo "=== Staging SDK distribution ${SDK_VERSION} (${SDK_RID}) ==="
+    echo "=== Staging SDK distribution ${SDK_VERSION} (linux-x64 + win-x64 + win-x86) ==="
     rm -rf "$STAGING"
     mkdir -p "$STAGING"
 
-    stage_cpp_headers
-    stage_native_lib "$STAGING/cpp/lib"
-    stage_c_headers
-    stage_native_lib "$STAGING/c/lib"
-    stage_csharp_nupkg
-    stage_python_wheel
-    stage_go_module
+    stage_csharp_nupkg "$STAGING"
+    stage_linux_platform
+    stage_windows_x64_platform
+    stage_windows_x86_platform
     cp "$ROOT/VERSION.json" "$STAGING/VERSION.json"
     write_readme
 
     mkdir -p "$DIST_ROOT"
     rm -f "$ARCHIVE"
-    tar -C "$DIST_ROOT/sdk-staging" -czf "$ARCHIVE" "itscam-sdk-${SDK_VERSION}-${SDK_RID}"
+    tar -C "$DIST_ROOT/sdk-staging" -czf "$ARCHIVE" "itscam-sdk-${SDK_VERSION}"
 
     echo "=== SDK archive ready ==="
     echo "$ARCHIVE"
     tar -tzf "$ARCHIVE" >"$DIST_ROOT/.sdk-dist-list"
-    sed -n '1,20p' "$DIST_ROOT/.sdk-dist-list"
+    sed -n '1,24p' "$DIST_ROOT/.sdk-dist-list"
     echo "... ($(wc -l <"$DIST_ROOT/.sdk-dist-list") entries total)"
     rm -f "$DIST_ROOT/.sdk-dist-list"
 }

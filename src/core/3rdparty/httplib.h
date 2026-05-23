@@ -299,7 +299,9 @@ using socket_t = int;
 #include <cctype>
 #include <chrono>
 #include <climits>
+#if !defined(ITSCAM_MINGW_WIN32_THREADS)
 #include <condition_variable>
+#endif
 #include <cstdlib>
 #include <cstring>
 #include <errno.h>
@@ -311,7 +313,12 @@ using socket_t = int;
 #include <list>
 #include <map>
 #include <memory>
+#if defined(ITSCAM_MINGW_WIN32_THREADS)
+#include "../impl/itscam_mingw_stl_sync.hpp"
+#include <mutex> // lock_guard, unique_lock templates only
+#else
 #include <mutex>
+#endif
 #include <random>
 #include <regex>
 #include <set>
@@ -319,7 +326,9 @@ using socket_t = int;
 #include <string>
 #include <sys/stat.h>
 #include <system_error>
+#if !defined(ITSCAM_MINGW_WIN32_THREADS)
 #include <thread>
+#endif
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>

@@ -54,17 +54,23 @@
   -->
   <ItemGroup>
     <None Include="..\..\..\core\build\linux\libitscam_sdk.so.$(ItscamLibVersion)"
-          Pack="true" PackagePath="runtimes\linux-x64\native\libitscam_sdk.so"
+          Link="libitscam_sdk.so"
+          Pack="true" PackagePath="runtimes/linux-x64/native/"
           Condition="Exists('..\..\..\core\build\linux\libitscam_sdk.so.$(ItscamLibVersion)')" />
     <None Include="..\..\..\core\build\linux-arm\libitscam_sdk.so.$(ItscamLibVersion)"
-          Pack="true" PackagePath="runtimes\linux-arm\native\libitscam_sdk.so"
+          Link="libitscam_sdk.so"
+          Pack="true" PackagePath="runtimes/linux-arm/native/"
           Condition="Exists('..\..\..\core\build\linux-arm\libitscam_sdk.so.$(ItscamLibVersion)')" />
     <None Include="..\..\..\core\build\linux-arm64\libitscam_sdk.so.$(ItscamLibVersion)"
-          Pack="true" PackagePath="runtimes\linux-arm64\native\libitscam_sdk.so"
+          Link="libitscam_sdk.so"
+          Pack="true" PackagePath="runtimes/linux-arm64/native/"
           Condition="Exists('..\..\..\core\build\linux-arm64\libitscam_sdk.so.$(ItscamLibVersion)')" />
-    <None Include="..\..\..\core\build\windows\itscam_sdk.dll"
-          Pack="true" PackagePath="runtimes\win-x64\native\itscam_sdk.dll"
-          Condition="Exists('..\..\..\core\build\windows\itscam_sdk.dll')" />
+    <None Include="..\..\..\core\build\win-x64\itscam_sdk.dll"
+          Pack="true" PackagePath="runtimes/win-x64/native/"
+          Condition="Exists('..\..\..\core\build\win-x64\itscam_sdk.dll')" />
+    <None Include="..\..\..\core\build\win-x86\itscam_sdk.dll"
+          Pack="true" PackagePath="runtimes/win-x86/native/"
+          Condition="Exists('..\..\..\core\build\win-x86\itscam_sdk.dll')" />
   </ItemGroup>
 
   <!--

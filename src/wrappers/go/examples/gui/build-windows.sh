@@ -56,7 +56,7 @@ if ! command -v x86_64-w64-mingw32-gcc &> /dev/null; then
 fi
 
 # Check for ITSCAM SDK Windows library
-SDK_LIB_PATH="$SDK_ROOT/src/core/build/windows"
+SDK_LIB_PATH="$SDK_ROOT/src/core/build/win-x64"
 if [ ! -f "$SDK_LIB_PATH/itscam_sdk.dll" ]; then
     echo "Warning: ITSCAM SDK Windows library not found at $SDK_LIB_PATH"
     echo "Building SDK for Windows first..."

@@ -244,6 +244,7 @@ version_json.write_text(
             "buildDate": info["build_date"],
             "commitsSinceTag": info["commits_since_tag"],
             "dirty": bool(int(info["dirty"])),
+            "platforms": ["linux-x64", "win-x64", "win-x86"],
         },
         indent=2,
     )

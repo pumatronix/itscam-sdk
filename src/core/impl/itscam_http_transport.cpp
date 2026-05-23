@@ -26,7 +26,6 @@
 #include <stdio.h>
 
 #include <atomic>
-#include <mutex>
 
 // cpp-httplib (header-only).  When the SDK is compiled with TLS support,
 // CPPHTTPLIB_MBEDTLS_SUPPORT is defined externally by the build system so
@@ -67,7 +66,7 @@ struct HttpTransport::Impl {
 
     // --- Active client (for streaming cancel) ------------------------------
 
-    std::mutex          clientMtx;
+    Mutex               clientMtx;
     httplib::Client*    activeClient = nullptr;
     std::atomic<bool>   cancelRequested{false};
 
@@ -386,7 +385,7 @@ Result<HttpResponse> HttpTransport::streamGet(
 
     // Register as the active client so cancelStream() can find it.
     {
-        std::lock_guard<std::mutex> lk(mImpl->clientMtx);
+        LockGuard<Mutex> lk(mImpl->clientMtx);
         mImpl->activeClient = cli.get();
         mImpl->cancelRequested = false;
     }
@@ -410,7 +409,7 @@ Result<HttpResponse> HttpTransport::streamGet(
     httplib::Result res = cli->Get(path, headers, cb);
 
     {
-        std::lock_guard<std::mutex> lk(mImpl->clientMtx);
+        LockGuard<Mutex> lk(mImpl->clientMtx);
         mImpl->activeClient = nullptr;
     }
 
@@ -426,7 +425,7 @@ Result<HttpResponse> HttpTransport::streamGet(
 }
 
 void HttpTransport::cancelStream() {
-    std::lock_guard<std::mutex> lk(mImpl->clientMtx);
+    LockGuard<Mutex> lk(mImpl->clientMtx);
     mImpl->cancelRequested = true;
     if (mImpl->activeClient) {
         // cpp-httplib does not have a public Cancel() on Client, but stopping

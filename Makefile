@@ -143,9 +143,12 @@ csharp-pack: lib
 	@if ! command -v dotnet > /dev/null; then \
 		echo "dotnet not found. Install .NET 8 SDK first."; exit 1; \
 	fi
-	@if command -v x86_64-w64-mingw32-g++ > /dev/null; then \
+	@if command -v x86_64-w64-mingw32-g++ > /dev/null || \
+	    command -v i686-w64-mingw32-g++ > /dev/null; then \
 		$(MAKE) windows; \
 	fi
+	@rm -rf $(CURDIR)/$(SRC_DIR)/wrappers/csharp/nupkg
+	@mkdir -p $(CURDIR)/$(SRC_DIR)/wrappers/csharp/nupkg
 	cd $(SRC_DIR)/wrappers/csharp && \
 	dotnet pack -c Release Itscam.Sdk/Itscam.Sdk.csproj \
 	    -o $(CURDIR)/$(SRC_DIR)/wrappers/csharp/nupkg
@@ -383,15 +386,14 @@ all: linux windows examples wrappers
 	@echo "=== Build complete ==="
 
 # ============================================================================
-#  SDK distribution archive (consumer tar.gz)
+#  SDK distribution archive (consumer tar.gz, linux-x64 + win-x64 + win-x86)
 # ============================================================================
 
-SDK_RID ?= linux-x64
 SDK_DIST_SCRIPT := $(CURDIR)/tools/packaging/make-sdk-dist.sh
 
-sdk-dist: version lib csharp-pack-linux
-	@echo "=== Packaging SDK distribution ($(SDK_VERSION), $(SDK_RID)) ==="
-	@SDK_RID=$(SDK_RID) $(SDK_DIST_SCRIPT)
+sdk-dist: version lib windows csharp-pack
+	@echo "=== Packaging SDK distribution ($(SDK_VERSION), linux-x64 + win-x64 + win-x86) ==="
+	@$(SDK_DIST_SCRIPT)
 
 sdk-dist-clean:
 	@echo "=== Removing SDK distribution artefacts ==="
@@ -399,7 +401,7 @@ sdk-dist-clean:
 
 docker-sdk-dist: docker-build
 	@echo "=== Packaging SDK distribution inside Docker ==="
-	$(DOCKER_RUN) $(DOCKER_IMAGE) make sdk-dist SDK_RID=$(SDK_RID)
+	$(DOCKER_RUN) $(DOCKER_IMAGE) make sdk-dist
 
 # ============================================================================
 #  Installation
@@ -496,7 +498,7 @@ help:
 	@echo ""
 	@echo "Other targets:"
 	@echo "  version         Regenerate version metadata from git tag / commit / date"
-	@echo "  sdk-dist        Build consumer tar.gz (cpp/c/csharp/python/go)"
+	@echo "  sdk-dist        Build consumer tar.gz (linux-x64 + win-x64 + win-x86)"
 	@echo "  docker-sdk-dist Same, inside Docker"
 	@echo "  sdk-dist-clean  Remove dist/ archives and staging"
 	@echo "  all             Build everything"

@@ -66,8 +66,16 @@
         Include="$(_ItscamSdkRuntimesDir)win-x64\native\itscam_sdk.dll"
         Condition="Exists('$(_ItscamSdkRuntimesDir)win-x64\native\itscam_sdk.dll')" />
       <_ItscamSdkNativeWinX64
-        Include="$(_ItscamSdkCoreDir)windows\itscam_sdk.dll"
-        Condition="'@(_ItscamSdkNativeWinX64)' == '' and Exists('$(_ItscamSdkCoreDir)windows\itscam_sdk.dll')" />
+        Include="$(_ItscamSdkCoreDir)win-x64\itscam_sdk.dll"
+        Condition="'@(_ItscamSdkNativeWinX64)' == '' and Exists('$(_ItscamSdkCoreDir)win-x64\itscam_sdk.dll')" />
+
+      <!-- win-x86 -->
+      <_ItscamSdkNativeWinX86
+        Include="$(_ItscamSdkRuntimesDir)win-x86\native\itscam_sdk.dll"
+        Condition="Exists('$(_ItscamSdkRuntimesDir)win-x86\native\itscam_sdk.dll')" />
+      <_ItscamSdkNativeWinX86
+        Include="$(_ItscamSdkCoreDir)win-x86\itscam_sdk.dll"
+        Condition="'@(_ItscamSdkNativeWinX86)' == '' and Exists('$(_ItscamSdkCoreDir)win-x86\itscam_sdk.dll')" />
 
     </ItemGroup>
   </Target>
@@ -94,7 +102,11 @@
     <Copy SourceFiles="@(_ItscamSdkNativeWinX64)"
           DestinationFiles="$(OutDir)itscam_sdk.dll"
           SkipUnchangedFiles="true"
-          Condition="'@(_ItscamSdkNativeWinX64)' != ''" />
+          Condition="'@(_ItscamSdkNativeWinX64)' != '' and '$(RuntimeIdentifier)' != 'win-x86'" />
+    <Copy SourceFiles="@(_ItscamSdkNativeWinX86)"
+          DestinationFiles="$(OutDir)itscam_sdk.dll"
+          SkipUnchangedFiles="true"
+          Condition="'@(_ItscamSdkNativeWinX86)' != '' and '$(RuntimeIdentifier)' == 'win-x86'" />
   </Target>
 
   <!--
@@ -120,6 +132,13 @@
       <ResolvedFileToPublish
         Include="@(_ItscamSdkNativeWinX64)"
         Condition="'@(_ItscamSdkNativeWinX64)' != ''">
+        <RelativePath>itscam_sdk.dll</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+        <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+      </ResolvedFileToPublish>
+      <ResolvedFileToPublish
+        Include="@(_ItscamSdkNativeWinX86)"
+        Condition="'@(_ItscamSdkNativeWinX86)' != ''">
         <RelativePath>itscam_sdk.dll</RelativePath>
         <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
         <ExcludeFromSingleFile>true</ExcludeFromSingleFile>

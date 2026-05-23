@@ -82,6 +82,7 @@ The package ships native binaries for:
 - `linux-arm`    (32-bit ARMv7, ITSCAM450)
 - `linux-arm64`  (ITSCAM600)
 - `win-x64`
+- `win-x86`
 
 Add new RIDs by extending the `<ItemGroup>` in `Itscam.Sdk.csproj` and
 producing the matching build under `src/core/build/<rid>/`.

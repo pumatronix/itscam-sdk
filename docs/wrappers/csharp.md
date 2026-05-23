@@ -32,6 +32,7 @@ containing the managed assembly and a per-RID native binary under
 - `linux-arm`   (32-bit ARMv7, ITSCAM450)
 - `linux-arm64` (ITSCAM600)
 - `win-x64`
+- `win-x86`
 
 Detailed wrapper-specific notes (P/Invoke conventions, native binary
 layout, MSBuild target file) live in
