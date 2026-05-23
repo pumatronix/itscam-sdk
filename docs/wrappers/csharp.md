@@ -27,14 +27,26 @@ make csharp-pack         # gera native binaries + produz o NuGet
 
 `make csharp-pack` produz
 `src/wrappers/csharp/nupkg/Pumatronix.Itscam.Sdk.<version>.nupkg`
-contendo o managed assembly e um native binary por RID em
-`runtimes/<rid>/native/`. Runtime identifiers suportados:
+contendo o managed assembly e um native binary por **host RID** em
+`runtimes/<rid>/native/`. O RID descreve a máquina onde a aplicação
+.NET vai rodar (Linux x64, Windows x64, etc.) -- **não** a câmera
+ITSCAM, que recebe REST/CGI/binary pela rede e não roda o seu app.
 
-- `linux-x64`
-- `linux-arm`   (ARMv7 32-bit, ITSCAM450)
-- `linux-arm64` (ITSCAM600)
-- `win-x64`
-- `win-x86`
+Por default o pack inclui os RIDs que o `Makefile` realmente builda:
+
+- `linux-x64` -- gerado por `make lib`
+- `win-x64`, `win-x86` -- gerados por `make windows` (cross-compile MinGW)
+
+Slots adicionais existem no
+[`Itscam.Sdk.csproj`](../../src/wrappers/csharp/Itscam.Sdk/Itscam.Sdk.csproj)
+e são empacotados *somente se* você produzir os artefatos manualmente:
+
+- `linux-arm` -- precisa de `src/core/build/linux-arm/libitscam_sdk.so.*`
+- `linux-arm64` -- precisa de `src/core/build/linux-arm64/libitscam_sdk.so.*`
+
+A bundled toolchain ainda não compila essas variantes; veja o
+comentário "ARM toolchains may be wired in" no
+[`Makefile`](../../Makefile) caso precise adicioná-las.
 
 Notas específicas do wrapper (convenções de P/Invoke, layout dos
 native binaries, MSBuild target file) ficam em

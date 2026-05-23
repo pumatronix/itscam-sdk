@@ -76,13 +76,24 @@ the unmanaged handle promptly; a finalizer is provided as a safety net.
 
 ## Runtime identifiers
 
-The package ships native binaries for:
+A RID identifies the **host machine** where the .NET application runs
+(Linux x64, Windows x64, etc.) -- **not** the ITSCAM camera. The
+camera is reached over the network via REST / CGI / binary protocols
+and does not host the consuming app.
 
-- `linux-x64`
-- `linux-arm`    (32-bit ARMv7, ITSCAM450)
-- `linux-arm64`  (ITSCAM600)
-- `win-x64`
-- `win-x86`
+By default the NuGet ships the RIDs that the top-level `Makefile`
+actually builds:
 
-Add new RIDs by extending the `<ItemGroup>` in `Itscam.Sdk.csproj` and
-producing the matching build under `src/core/build/<rid>/`.
+- `linux-x64` -- produced by `make lib`
+- `win-x64`, `win-x86` -- produced by `make windows` (MinGW cross-compile)
+
+The `<ItemGroup>` in `Itscam.Sdk.csproj` also reserves slots for
+`linux-arm` (ARMv7 32-bit) and `linux-arm64`; both entries are
+gated by `Condition="Exists(...)"` and are packed **only if** the
+matching `.so` exists under `src/core/build/linux-arm{,64}/`. The
+bundled toolchain does not cross-compile those variants today --
+see the "ARM toolchains may be wired in by extending the lib-arm /
+lib-arm64 targets" comment in the top-level `Makefile`.
+
+Add new RIDs by extending the `<ItemGroup>` and producing the
+matching build under `src/core/build/<rid>/`.
