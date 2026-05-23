@@ -41,17 +41,92 @@ Reference docs by surface:
 | REST client (HTTP/HTTPS JSON) | [docs/api/rest-client.md](docs/api/rest-client.md) | [Python](docs/wrappers/python.md) -- [Go](docs/wrappers/go.md) -- [C#](docs/wrappers/csharp.md) |
 | CGI client (HTTP/HTTPS multipart) | [docs/api/cgi-client.md](docs/api/cgi-client.md) | [Python](docs/wrappers/python.md) -- [Go](docs/wrappers/go.md) -- [C#](docs/wrappers/csharp.md) |
 
+## Environment Setup (Ubuntu)
+
+Install the basics and clone the repository:
+
+```bash
+sudo apt update
+sudo apt install -y git make ca-certificates curl
+
+# Docker Engine (recommended — reproducible build flow)
+curl -fsSL https://get.docker.com | sudo sh
+sudo usermod -aG docker "$USER"   # log out and back in before the next step
+
+git clone https://github.com/pumatronix/itscam-sdk.git
+cd itscam-sdk
+```
+
+The Docker builder (`Dockerfile` at the repo root) ships GCC, MinGW,
+.NET, Go, Python, and Node — you do not need to install toolchains on
+the host to build the SDK.
+
 ## Quick Build
+
+Use the top-level `docker-*` targets. They build the `itscam-sdk-builder`
+image on first run and invoke `make` inside the container:
+
+```bash
+make docker-all     # everything: Linux + Windows cross + wrappers (recommended)
+make docker-linux   # libitscam_sdk.{so,a} for Linux only
+make docker-shell   # interactive shell with the full toolchain
+make help           # list every target (docker-* and native)
+```
+
+Optional native build on the host (when GCC/Clang is already installed):
 
 ```bash
 make lib            # build libitscam_sdk.{so,a} for Linux
 make examples       # build the four C++ example binaries
 make all            # build everything: Linux + Windows cross + wrappers
-make help           # list every available target
 ```
 
 All native code lives under [`src/`](src/). See
-[`docs/overview.md`](docs/overview.md) for the full repository layout.
+[`docs/overview.md`](docs/overview.md) for the full repository layout and
+[`docs/getting-started.md`](docs/getting-started.md) to build examples and
+link your app.
+
+## Using AI Agents
+
+This repository ships [`AGENTS.md`](AGENTS.md), a short, scannable briefing
+for coding agents (Cursor, Copilot, Claude Code, and similar tools). Read
+it **before** asking for SDK changes or integration work in apps that embed
+the library.
+
+**In this repository**
+
+- Tools that support [AGENTS.md](https://agents.md/) load the file
+  automatically from the workspace root.
+- In chat, reference `@AGENTS.md` or point the agent at the
+  [Quick Links](#quick-links) table and the example for your language.
+- Ask for reproducible builds with `make docker-all` or `make docker-linux`
+  instead of installing toolchains by hand.
+
+**In your app that consumes the SDK**
+
+- Add [`AGENTS.md`](AGENTS.md) to the agent context (reference,
+  `@`-mention, or project rule) to avoid picking the wrong client or auth
+  model.
+- State explicitly: language (C++ / C# / Python / Go), client
+  (`ItscamClient`, `ItscamRestClient`, or `ItscamCgiClient`), and whether
+  the task is real-time capture, REST configuration, or a CGI snapshot.
+
+**Rules agents should follow** (full detail in [`AGENTS.md`](AGENTS.md)):
+
+| Topic | Quick rule |
+| ----- | ---------- |
+| Three clients | Cougar **:60000** for pipeline/capture; REST for equipment; CGI for HTTP image endpoints. |
+| Auth | REST always requires `login`; CGI is anonymous by default — do not add `cgi.login()` without opt-in. |
+| New features | C++ core → C API → every wrapper; keep C# / Python / Go parity. |
+| REST types | Generated from `tools/codegen/spec/default.yaml` — run `make codegen`, do not hand-edit. |
+| Partial updates | Use `patchJson()` / `PatchJSON`; full profile PUT returns HTTP 500. |
+
+**Documentation assistant**
+
+The [docs site](docs-site/) (GitHub Pages) can embed an assistant powered by
+[Cloudflare AI Search](https://developers.cloudflare.com/ai-search/), with a
+corpus synced from `docs/`, examples, and `AGENTS.md`. See
+[`docs-site/README.md`](docs-site/README.md) for local setup and deployment.
 
 ## Documentation Map
 
@@ -69,7 +144,7 @@ under [`docs/`](docs/):
 - Wrappers:
   [C# / .NET](docs/wrappers/csharp.md) -- [Python](docs/wrappers/python.md) -- [Go](docs/wrappers/go.md).
 - [Migration from CougarClient](docs/migration-cougar.md).
-- [`AGENTS.md`](AGENTS.md) -- short briefing for AI coding agents.
+- [`AGENTS.md`](AGENTS.md) — briefing for coding agents; see [Using AI Agents](#using-ai-agents).
 - **[Documentation website](docs-site/)** -- VitePress site for GitHub Pages with an optional [Cloudflare AI Search](https://developers.cloudflare.com/ai-search/) assistant. See [`docs-site/README.md`](docs-site/README.md) for setup.
 
 ## Highlights
