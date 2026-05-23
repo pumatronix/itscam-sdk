@@ -7,22 +7,30 @@ Walkthrough do zero: criar um projeto Python, instalar o wrapper `itscam` e salv
 | Item | Versão mínima | Verificar com |
 | ---- | ------------- | ------------- |
 | Python | 3.7+ | `python3 --version` |
-| Compilador C++17 | só para `make lib` | `g++ --version` |
-| GNU make | qualquer | `make --version` |
-| Git | qualquer | `git --version` |
+| pip | qualquer | `pip --version` |
+| Pacote SDK | `itscam-sdk-<version>.tar.gz` | extrair e localizar `linux-x64/python/` |
 | Câmera ITSCAM | ITSCAM450 / ITSCAM600 alcançável na rede | `ping <ip-da-camera>` |
 
-## 2. Buildar a shared library nativa
-
-O wrapper Python é puro ctypes -- ele carrega `libitscam_sdk.so` em runtime, então você precisa buildar essa biblioteca uma vez:
+## 2. Extrair o SDK e instalar a wheel
 
 ```bash
-git clone https://github.com/pumatronix/itscam-sdk.git
-cd itscam-sdk
-make lib
+tar xzf itscam-sdk-<version>.tar.gz
+export SDK=$PWD/itscam-sdk-<version>
 ```
 
-O resultado fica em `src/core/build/linux/libitscam_sdk.so.1.0.0` (com symlinks).
+A wheel Python já embute a native lib (`libitscam_sdk.so`), então a instalação é um único comando:
+
+```bash
+pip install $SDK/linux-x64/python/itscam-*.whl
+```
+
+Confirme:
+
+```bash
+python -c "import itscam; print(itscam.get_version())"
+```
+
+> **Compilando o SDK do zero?** Se você precisa buildar a partir do source em vez de usar o pacote pré-compilado, veja a [seção avançada de build](../getting-started.md#build-do-sdk-a-partir-do-source). Após `make lib`, instale o wrapper via `pip install -e src/wrappers/python` e exporte `LD_LIBRARY_PATH` apontando para `src/core/build/linux/`.
 
 ## 3. Criar o projeto
 
@@ -30,26 +38,10 @@ O resultado fica em `src/core/build/linux/libitscam_sdk.so.1.0.0` (com symlinks)
 mkdir -p ~/projetos/meu-app && cd ~/projetos/meu-app
 python3 -m venv .venv
 source .venv/bin/activate
+pip install $SDK/linux-x64/python/itscam-*.whl
 ```
 
-## 4. Instalar o wrapper `itscam`
-
-Editable install a partir do checkout do SDK:
-
-```bash
-pip install -e /caminho/para/itscam-sdk/src/wrappers/python
-```
-
-Confirme que o pacote acha a shared library:
-
-```bash
-LD_LIBRARY_PATH=/caminho/para/itscam-sdk/src/core/build/linux \
-    python -c "import itscam; print(itscam.get_version())"
-```
-
-> Por que `LD_LIBRARY_PATH`? Se você instalou o SDK em `/usr/local/lib` (`sudo make install`) não é necessário. Caso contrário, exporte a variável para o terminal da sessão ou rode sempre prefixando.
-
-## 5. Escrever o código mínimo
+## 4. Escrever o código mínimo
 
 ```python
 # meu_app.py
@@ -88,11 +80,10 @@ if __name__ == "__main__":
     sys.exit(main())
 ```
 
-## 6. Executar
+## 5. Executar
 
 ```bash
-LD_LIBRARY_PATH=/caminho/para/itscam-sdk/src/core/build/linux \
-    python meu_app.py 192.168.254.254
+python meu_app.py 192.168.254.254
 ```
 
 Saída esperada:
@@ -108,16 +99,16 @@ file primeira-imagem.jpg
 # primeira-imagem.jpg: JPEG image data, JFIF standard 1.01, ...
 ```
 
-## 7. Troubleshooting
+## 6. Troubleshooting
 
 | Sintoma | Causa provável | Solução |
 | ------- | -------------- | ------- |
-| `OSError: libitscam_sdk.so: cannot open shared object file` | shared library não encontrada | Exporte `LD_LIBRARY_PATH=.../src/core/build/linux` ou rode `sudo make install` na raiz do SDK. |
+| `OSError: libitscam_sdk.so: cannot open shared object file` | Wheel instalada sem a native lib embutida (build manual) | Re-instale a wheel do pacote SDK, ou exporte `LD_LIBRARY_PATH` apontando para o diretório com `libitscam_sdk.so`. |
 | `ItscamConnectionError` | IP errado ou porta 80 bloqueada | `curl -v http://<ip>/api/lastframe.cgi -o /dev/null` |
 | `ItscamAuthError` em CGI | A câmera tem `configCgi.blockAPI=true` | Chame `cgi.login("user", "pass")` antes do `get_last_frame()`. |
 | `ItscamError: SSL` em HTTPS | CA bundle não configurado | `cgi.set_ca_cert_file("/etc/ssl/certs/ca-bundle.pem")` ou, só em dev, `cgi.set_verify_server_certificate(False)`. |
 
-## 8. Opcional: capture via `ItscamClient` (TCP :60000)
+## 7. Opcional: capture via `ItscamClient` (TCP :60000)
 
 O CGI é o caminho mais simples. Se você precisa de **trigger em real time** ou multi-exposure, use o binary client (porta 60000):
 

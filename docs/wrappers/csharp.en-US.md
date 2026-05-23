@@ -19,14 +19,30 @@ It wraps all three SDK surfaces:
 | `ItscamRestClient`| `src/core/itscam_rest_client.h`               |
 | `ItscamCgiClient` | `src/core/itscam_cgi_client.h`                |
 
-## Build
+## Install
+
+### From the pre-compiled SDK package (recommended)
+
+The distribution package (`itscam-sdk-<version>.tar.gz`) includes a multi-RID NuGet ready to consume:
+
+```bash
+tar xzf itscam-sdk-<version>.tar.gz
+dotnet add package Pumatronix.Itscam.Sdk \
+    --source $PWD/itscam-sdk-<version>/csharp
+```
+
+The NuGet already contains native binaries for linux-x64, win-x64, and win-x86. The MSBuild target file automatically copies the correct native binary to the build output.
+
+### Build from source (advanced)
+
+If you are developing inside the SDK source tree:
 
 ```bash
 make csharp              # builds Itscam.Sdk.dll for the host platform
 make csharp-pack         # builds native binaries + produces a NuGet
 ```
 
-`make csharp-pack` produces `src/wrappers/csharp/nupkg/Pumatronix.Itscam.Sdk.<version>.nupkg` containing the managed assembly and a per-**host RID** native binary under `runtimes/<rid>/native/`. The RID describes the machine where the .NET application runs (Linux x64, Windows x64, etc.) -- **not** the ITSCAM camera, which is reached over the network via REST/CGI/ binary and does not host your app.
+`make csharp-pack` produces `src/wrappers/csharp/nupkg/Pumatronix.Itscam.Sdk.<version>.nupkg` containing the managed assembly and a per-**host RID** native binary under `runtimes/<rid>/native/`. The RID describes the machine where the .NET application runs (Linux x64, Windows x64, etc.) -- **not** the ITSCAM camera, which is reached over the network via REST/CGI/binary and does not host your app.
 
 By default the pack ships the RIDs that the `Makefile` actually builds:
 
@@ -37,8 +53,6 @@ Additional slots exist in [`Itscam.Sdk.csproj`](../../src/wrappers/csharp/Itscam
 
 - `linux-arm` -- requires `src/core/build/linux-arm/libitscam_sdk.so.*`
 - `linux-arm64` -- requires `src/core/build/linux-arm64/libitscam_sdk.so.*`
-
-The bundled toolchain does not yet compile those variants; see the "ARM toolchains may be wired in" comment in the [`Makefile`](../../Makefile) if you need to add them.
 
 Detailed wrapper-specific notes (P/Invoke conventions, native binary layout, MSBuild target file) live in [`src/wrappers/csharp/README.md`](../../src/wrappers/csharp/README.md).
 

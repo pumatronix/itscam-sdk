@@ -35,32 +35,34 @@ Reference docs por client surface:
 
 Tutoriais passo a passo (criar projeto do zero e salvar a primeira imagem em disco): [C++](docs/tutorials/first-image-cpp.md) -- [C# / .NET](docs/tutorials/first-image-csharp.md) -- [Python](docs/tutorials/first-image-python.md) -- [Go](docs/tutorials/first-image-go.md).
 
-## Configurar ambiente (Ubuntu)
+## Começar a usar
 
-Instale as ferramentas básicas e clone o repositório:
+O SDK é distribuído como um pacote pré-compilado (`itscam-sdk-<version>.tar.gz`) que contém headers, shared libraries, NuGet, Python wheel e módulo Go para linux-x64, win-x64 e win-x86. Extraia o pacote e integre direto no seu projeto -- não é necessário compilar nada:
 
 ```bash
-sudo apt update
-sudo apt install -y git make ca-certificates curl
-
-# Docker Engine (recomendado — fluxo de build reproduzível)
-curl -fsSL https://get.docker.com | sudo sh
-sudo usermod -aG docker "$USER"   # faça logout/login antes do próximo passo
-
-git clone https://github.com/pumatronix/itscam-sdk.git
-cd itscam-sdk
+tar xzf itscam-sdk-<version>.tar.gz
+export SDK=$PWD/itscam-sdk-<version>
 ```
 
-O builder Docker (`Dockerfile` na raiz) já inclui GCC, MinGW, .NET, Go, Python e Node — você não precisa instalar toolchains localmente para compilar o SDK.
+| Linguagem | Integração rápida |
+| --------- | ----------------- |
+| **C++ / C** | `g++ -I$SDK/linux-x64/cpp/include ... -L$SDK/linux-x64/cpp/lib -litscam_sdk` |
+| **C# / .NET** | `dotnet add package Pumatronix.Itscam.Sdk --source $SDK/csharp` |
+| **Python** | `pip install $SDK/linux-x64/python/itscam-*.whl` |
+| **Go** | `go mod edit -replace=...=$SDK/linux-x64/go/itscam-sdk-go` |
 
-## Build rápido
+Guia completo de integração por linguagem em [`docs/getting-started.md`](docs/getting-started.md).
 
-Use os targets `docker-*` na raiz do repositório. Eles constroem a imagem `itscam-sdk-builder` na primeira execução e rodam `make` dentro dela:
+## Build a partir do source (avançado)
+
+Se você precisa compilar o SDK do zero (contribuidores, cross-compile, debug), use o builder Docker:
 
 ```bash
+git clone https://github.com/pumatronix/itscam-sdk.git && cd itscam-sdk
 make docker-all     # tudo: Linux + Windows cross + wrappers (recomendado)
 make docker-linux   # só libitscam_sdk.{so,a} para Linux
 make docker-shell   # shell interativo com o toolchain completo
+make sdk-dist       # gera o pacote itscam-sdk-<version>.tar.gz
 make help           # lista todos os targets (docker-* e nativos)
 ```
 
@@ -72,7 +74,7 @@ make examples       # build dos quatro C++ example binaries
 make all            # tudo: Linux + Windows cross + wrappers
 ```
 
-Todo código nativo fica em [`src/`](src/). Veja [`docs/overview.md`](docs/overview.md) para o layout completo do repository e [`docs/getting-started.md`](docs/getting-started.md) para compilar examples e linkar o seu app.
+Todo código nativo fica em [`src/`](src/). Veja [`docs/overview.md`](docs/overview.md) para o layout completo do repository e [`docs/getting-started.md`](docs/getting-started.md) para detalhes de build e integração.
 
 ## Uso com AI agents
 

@@ -7,39 +7,33 @@ Walkthrough do zero: criar um módulo Go, configurar cgo contra o ITSCAM SDK e s
 | Item | Versão mínima | Verificar com |
 | ---- | ------------- | ------------- |
 | Go | 1.21+ | `go version` |
-| Compilador C / C++17 | para cgo + `make lib` | `gcc --version`, `g++ --version` |
-| GNU make | qualquer | `make --version` |
-| Git | qualquer | `git --version` |
+| Compilador C / C++ | para cgo | `gcc --version` |
+| Pacote SDK | `itscam-sdk-<version>.tar.gz` | extrair e localizar `linux-x64/go/` |
 | Câmera ITSCAM | ITSCAM450 / ITSCAM600 alcançável na rede | `ping <ip-da-camera>` |
 
-## 2. Buildar a shared library nativa
-
-O wrapper Go usa cgo: dynamic linking precisa de `libitscam_sdk.so` em runtime; static linking precisa de `libitscam_sdk.a` em build time. Build dos dois com:
+## 2. Extrair o SDK pré-compilado
 
 ```bash
-git clone https://github.com/pumatronix/itscam-sdk.git
-cd itscam-sdk
-make lib
+tar xzf itscam-sdk-<version>.tar.gz
+export SDK=$PWD/itscam-sdk-<version>
 ```
 
-Output em `src/core/build/linux/`.
+O módulo Go do SDK fica em `$SDK/linux-x64/go/itscam-sdk-go/`, já com a native lib em `native/` e os headers em `include/`, com cgo directives pré-configurados.
+
+> **Compilando o SDK do zero?** Se você precisa buildar a partir do source, veja a [seção avançada de build](../getting-started.md#build-do-sdk-a-partir-do-source). Após `make lib`, o wrapper Go do source tree pode ser referenciado com `replace` apontando para `src/wrappers/go/`.
 
 ## 3. Criar o projeto
-
-A partir da raiz do checkout do SDK:
 
 ```bash
 mkdir -p meu-app && cd meu-app
 go mod init exemplo.com/meu-app
 ```
 
-## 4. Apontar para o módulo Go local do SDK
-
-O wrapper Go vive em [`src/wrappers/go/`](../../src/wrappers/go/) sob o module path `github.com/pumatronix/itscam-sdk-go`. Enquanto o módulo não estiver publicado, use um `replace` directive para apontar para o checkout local:
+## 4. Apontar para o módulo Go do SDK
 
 ```bash
 go mod edit -require=github.com/pumatronix/itscam-sdk-go@v0.0.0
-go mod edit -replace=github.com/pumatronix/itscam-sdk-go=../src/wrappers/go
+go mod edit -replace=github.com/pumatronix/itscam-sdk-go=$SDK/linux-x64/go/itscam-sdk-go
 ```
 
 Confirme o `go.mod`:
@@ -51,7 +45,7 @@ go 1.21
 
 require github.com/pumatronix/itscam-sdk-go v0.0.0
 
-replace github.com/pumatronix/itscam-sdk-go => ../src/wrappers/go
+replace github.com/pumatronix/itscam-sdk-go => /opt/itscam-sdk-1.0.0/linux-x64/go/itscam-sdk-go
 ```
 
 ## 5. Escrever o código mínimo
@@ -114,14 +108,14 @@ go mod tidy
 Dynamic linking (mais simples para começar):
 
 ```bash
-LD_LIBRARY_PATH=../src/core/build/linux \
+LD_LIBRARY_PATH=$SDK/linux-x64/go/itscam-sdk-go/native \
     go run main.go 192.168.254.254
 ```
 
 Static linking (binário sem dependência de runtime):
 
 ```bash
-CGO_CFLAGS="-I../src/core" \
+CGO_CFLAGS="-I$SDK/linux-x64/go/itscam-sdk-go/include" \
     go build -tags static -o meu-app main.go
 ./meu-app 192.168.254.254
 ```
@@ -143,8 +137,8 @@ file primeira-imagem.jpg
 
 | Sintoma | Causa provável | Solução |
 | ------- | -------------- | ------- |
-| `error while loading shared libraries: libitscam_sdk.so.1` | shared library não encontrada | Exporte `LD_LIBRARY_PATH=../src/core/build/linux` ou builde com `-tags static`. |
-| `# github.com/pumatronix/itscam-sdk-go/itscam ... fatal error: itscam_sdk_c.h: No such file or directory` | cgo não acha os headers | Static: passe `CGO_CFLAGS="-I../src/core"`. Dynamic: confirme o `replace` no `go.mod`. |
+| `error while loading shared libraries: libitscam_sdk.so.1` | shared library não encontrada | Exporte `LD_LIBRARY_PATH=$SDK/linux-x64/go/itscam-sdk-go/native` ou builde com `-tags static`. |
+| `# github.com/pumatronix/itscam-sdk-go/itscam ... fatal error: itscam_sdk_c.h: No such file or directory` | cgo não acha os headers | Static: passe `CGO_CFLAGS="-I$SDK/linux-x64/go/itscam-sdk-go/include"`. Dynamic: confirme o `replace` no `go.mod`. |
 | `ErrConn` / `ErrTimeout` | IP errado ou porta 80 bloqueada | `curl -v http://<ip>/api/lastframe.cgi -o /dev/null` |
 | `ErrAuth` em CGI | A câmera tem `configCgi.blockAPI=true` | Chame `cgi.Login("user", "pass", 10000)` antes do `GetLastFrame`. |
 | Erro de SSL/TLS em HTTPS | CA bundle não configurado | `cgi.SetCaCertFile("/etc/ssl/certs/ca-bundle.pem")` ou, só em dev, `cgi.SetVerifyServerCertificate(false)`. |

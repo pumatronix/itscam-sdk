@@ -25,28 +25,48 @@ The native API lives in [`src/core/`](../../src/core/) and is the starting point
 | [`src/core/3rdparty/`](../../src/core/3rdparty/) | Vendored dependencies (cpp-httplib, nlohmann/json, mbedTLS). |
 | [`src/examples/`](../../src/examples/) | Four standalone C++ programs. |
 
-## Build
+## Integration with the pre-compiled SDK (recommended)
+
+The distribution package (`itscam-sdk-<version>.tar.gz`) already includes headers and shared libraries ready to use:
 
 ```bash
+tar xzf itscam-sdk-<version>.tar.gz
+export SDK=$PWD/itscam-sdk-<version>
+
+g++ -std=c++17 \
+    -I$SDK/linux-x64/cpp/include \
+    -c your_app.cpp -o your_app.o
+
+g++ your_app.o \
+    -L$SDK/linux-x64/cpp/lib -litscam_sdk \
+    -lpthread \
+    -Wl,-rpath,'$ORIGIN' \
+    -o your_app
+
+# Copy the .so next to your binary:
+cp $SDK/linux-x64/cpp/lib/libitscam_sdk.so* ./
+```
+
+| File | Platform |
+| ---- | -------- |
+| `libitscam_sdk.so.1.0.0` (+ soname + symlink) | Linux shared |
+| `itscam_sdk.dll` + `libitscam_sdk.a` | Windows |
+
+Zero system dependencies for TLS: **mbedTLS 3.6 LTS** is statically linked. See [`docs/https-tls.md`](../https-tls.md).
+
+## Building from source (advanced)
+
+If you need to build the SDK from scratch (contributors, cross-compile, debug):
+
+```bash
+git clone https://github.com/pumatronix/itscam-sdk.git && cd itscam-sdk
 make lib            # libitscam_sdk.{so,a} -> src/core/build/linux/
 make windows        # itscam_sdk.dll (cross MinGW) -> src/core/build/windows/
 make examples       # C++ binaries under src/examples/build/
 make docker-all     # everything inside the builder image (recommended)
 ```
 
-Artefacts:
-
-| File | Platform |
-| ---- | -------- |
-| `libitscam_sdk.so.1.0.0` (+ soname + symlink) | Linux shared |
-| `libitscam_sdk.a` | Linux static |
-| `itscam_sdk.dll` + `libitscam_sdk_static.a` | Windows |
-
-Zero system dependencies for TLS: **mbedTLS 3.6 LTS** is statically linked. See [`docs/https-tls.md`](../https-tls.md).
-
-## Link
-
-### Against the shared library (recommended)
+To link against the source tree, use the headers under `src/core/` and artefacts under `src/core/build/linux/`:
 
 ```bash
 g++ -std=c++17 -Isrc/core/ -Isrc/core/3rdparty/ -c your_app.cpp -o your_app.o
@@ -58,25 +78,7 @@ g++ your_app.o \
     -o your_app
 ```
 
-`-Wl,-rpath,$ORIGIN` makes the binary locate `libitscam_sdk.so.1` at runtime without `LD_LIBRARY_PATH`.
-
-### Static, self-contained
-
-If you want a binary with no SDK runtime dependency, compile the core sources directly:
-
-```bash
-g++ -std=c++17 -Isrc/core/ -Isrc/core/3rdparty/ \
-    src/core/itscam_client.cpp \
-    src/core/itscam_rest_client.cpp \
-    src/core/itscam_cgi_client.cpp \
-    src/core/impl/*.cpp \
-    your_app.cpp \
-    -o your_app -lpthread
-```
-
-(For a static build you also need the vendored mbedTLS sources -- the top-level `make lib` already does that for you, so prefer the shared-library workflow above unless you have a specific reason to avoid it.)
-
-See [getting-started.md](../getting-started.md) for the full build / link / Docker walkthrough.
+See [getting-started.md](../getting-started.en-US.md) for the full build / link / Docker walkthrough.
 
 ## C++ idioms
 

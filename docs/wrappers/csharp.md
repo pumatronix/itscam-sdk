@@ -19,7 +19,23 @@ Ele cobre as três superfícies do SDK:
 | `ItscamRestClient`| `src/core/itscam_rest_client.h`               |
 | `ItscamCgiClient` | `src/core/itscam_cgi_client.h`                |
 
-## Build
+## Instalação
+
+### Via pacote SDK pré-compilado (recomendado)
+
+O pacote de distribuição (`itscam-sdk-<version>.tar.gz`) inclui um NuGet multi-RID pronto para consumo:
+
+```bash
+tar xzf itscam-sdk-<version>.tar.gz
+dotnet add package Pumatronix.Itscam.Sdk \
+    --source $PWD/itscam-sdk-<version>/csharp
+```
+
+O NuGet já contém native binaries para linux-x64, win-x64 e win-x86. O MSBuild target file copia o binário correto para o output de build automaticamente.
+
+### Build a partir do source (avançado)
+
+Se você está desenvolvendo dentro do source tree do SDK:
 
 ```bash
 make csharp              # gera Itscam.Sdk.dll para a host platform
@@ -37,8 +53,6 @@ Slots adicionais existem no [`Itscam.Sdk.csproj`](../../src/wrappers/csharp/Itsc
 
 - `linux-arm` -- precisa de `src/core/build/linux-arm/libitscam_sdk.so.*`
 - `linux-arm64` -- precisa de `src/core/build/linux-arm64/libitscam_sdk.so.*`
-
-A bundled toolchain ainda não compila essas variantes; veja o comentário "ARM toolchains may be wired in" no [`Makefile`](../../Makefile) caso precise adicioná-las.
 
 Notas específicas do wrapper (convenções de P/Invoke, layout dos native binaries, MSBuild target file) ficam em [`src/wrappers/csharp/README.md`](../../src/wrappers/csharp/README.md).
 

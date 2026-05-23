@@ -7,7 +7,7 @@ Referência organizada por chapters para o ITSCAM Client SDK. Comece pelo [Overv
 ## Fundamentos
 
 - [Overview](overview.md) -- o que é o SDK, platforms suportadas e layout do repository.
-- [Getting started](getting-started.md) -- build, execução de examples e link do seu app.
+- [Getting started](getting-started.md) -- integração com o SDK pré-compilado, examples e build avançado a partir do source.
 - [Error handling](error-handling.md) -- `Result<T>`, `Future<T>`, error codes e logging.
 - [HTTPS / TLS](https-tls.md) -- mbedTLS vendored, configuration e failure modes.
 

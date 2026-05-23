@@ -8,24 +8,21 @@ Walkthrough do zero: criar um projeto C++, linkar contra o ITSCAM SDK e salvar a
 | ---- | ------------- | ------------- |
 | Compilador C++17 | GCC 7+ / Clang 5+ / MinGW-w64 | `g++ --version` |
 | GNU make | qualquer | `make --version` |
-| Git | qualquer | `git --version` |
+| Pacote SDK | `itscam-sdk-<version>.tar.gz` | extrair e localizar `linux-x64/cpp/` |
 | Câmera ITSCAM | ITSCAM450 / ITSCAM600 alcançável na rede | `ping <ip-da-camera>` |
 
-Nada de mbedTLS, cpp-httplib ou nlohmann/json no sistema -- todas as dependências do SDK são vendoradas em [`src/core/3rdparty/`](../../src/core/3rdparty/).
-
-## 2. Obter e buildar o SDK
+## 2. Extrair o SDK pré-compilado
 
 ```bash
-git clone https://github.com/pumatronix/itscam-sdk.git
-cd itscam-sdk
-make lib
+tar xzf itscam-sdk-<version>.tar.gz
+export SDK=$PWD/itscam-sdk-<version>
 ```
 
-Depois desse passo você vai ter `libitscam_sdk.so.1.0.0` (e os symlinks `libitscam_sdk.so` / `.so.1`) em `src/core/build/linux/`.
+Depois desse passo você terá headers em `$SDK/linux-x64/cpp/include/` e `libitscam_sdk.so` em `$SDK/linux-x64/cpp/lib/`.
+
+> **Compilando o SDK do zero?** Se você precisa buildar a partir do source em vez de usar o pacote pré-compilado, veja a [seção avançada de build](../getting-started.md#build-do-sdk-a-partir-do-source). Os artefatos ficam em `src/core/build/linux/` e os headers em `src/core/`.
 
 ## 3. Criar o projeto
-
-A partir da raiz do checkout do SDK:
 
 ```bash
 mkdir -p meu-app
@@ -36,23 +33,25 @@ Crie um `Makefile` simples:
 
 ```make
 # meu-app/Makefile
-SDK_ROOT := ..
+SDK_DIR  ?= $(error Defina SDK_DIR=<caminho para itscam-sdk-<version>>)
+PLATFORM := linux-x64
+
 CXXFLAGS := -std=c++17 -O2 -Wall \
-            -I$(SDK_ROOT)/src/core \
-            -I$(SDK_ROOT)/src/core/3rdparty
-LDFLAGS  := -L$(SDK_ROOT)/src/core/build/linux \
+            -I$(SDK_DIR)/$(PLATFORM)/cpp/include
+LDFLAGS  := -L$(SDK_DIR)/$(PLATFORM)/cpp/lib \
             -litscam_sdk -lpthread \
-            -Wl,-rpath,'$$ORIGIN:$(SDK_ROOT)/src/core/build/linux'
+            -Wl,-rpath,'$$ORIGIN'
 
 meu_app: main.cpp
 	$(CXX) $(CXXFLAGS) main.cpp -o $@ $(LDFLAGS)
+	cp $(SDK_DIR)/$(PLATFORM)/cpp/lib/libitscam_sdk.so* .
 
 clean:
-	rm -f meu_app
+	rm -f meu_app libitscam_sdk.so*
 .PHONY: clean
 ```
 
-O `-Wl,-rpath,$ORIGIN` faz o binário encontrar a shared library em runtime sem precisar exportar `LD_LIBRARY_PATH`.
+O `-Wl,-rpath,$ORIGIN` faz o binário encontrar a shared library em runtime no mesmo diretório do executável.
 
 ## 4. Escrever o código mínimo
 
@@ -101,7 +100,7 @@ int main(int argc, char* argv[]) {
 ## 5. Compilar e rodar
 
 ```bash
-make
+make SDK_DIR=$SDK
 ./meu_app 192.168.254.254
 ```
 
@@ -122,7 +121,7 @@ file primeira-imagem.jpg
 
 | Sintoma | Causa provável | Solução |
 | ------- | -------------- | ------- |
-| `error while loading shared libraries: libitscam_sdk.so.1` | rpath não resolvido | Confirme o `-Wl,-rpath,...` no `Makefile`, ou exporte `LD_LIBRARY_PATH=$PWD/../src/core/build/linux`. |
+| `error while loading shared libraries: libitscam_sdk.so.1` | `.so` não copiada para junto do binário ou rpath não resolvido | Confirme que `libitscam_sdk.so*` está no mesmo diretório do executável, ou exporte `LD_LIBRARY_PATH=$SDK/linux-x64/cpp/lib`. |
 | `Connection refused` / `Timeout` | Porta 80 bloqueada ou IP errado | `curl -v http://<ip>/api/lastframe.cgi -o /dev/null` |
 | `HTTP 401` em CGI | A câmera tem `configCgi.blockAPI=true` | Passe `cgi.login("user", "pass")` antes do `getLastFrame()`. |
 | `SSL/TLS handshake failed` em HTTPS | CA bundle não configurado | `cgi.setCaCertFile("/etc/ssl/certs/ca-bundle.pem")` ou, só em dev, `cgi.setVerifyServerCertificate(false)`. |
@@ -166,6 +165,6 @@ Detalhe completo (auto-reconnect, exposure groups, eventos de trigger contínuos
 ## Próximos passos
 
 - [Guia do wrapper C++](../wrappers/cpp.md) -- padrões idiomáticos.
-- [Getting started](../getting-started.md) -- build, exemplos e Docker.
+- [Getting started](../getting-started.md) -- integração por linguagem e build avançado.
 - [Examples completos](../../src/examples/) -- [`itscam_cgi_example.cpp`](../../src/examples/itscam_cgi_example.cpp), [`itscam_sdk_example.cpp`](../../src/examples/itscam_sdk_example.cpp).
 - [HTTPS / TLS](../https-tls.md) -- configurar mbedTLS para produção.

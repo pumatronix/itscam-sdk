@@ -8,7 +8,21 @@ The Python wrapper lives at [`src/wrappers/python/`](../../src/wrappers/python/)
 
 ## Install
 
-The wrapper is a regular `setuptools` package. From a checkout of the repo:
+### From the pre-compiled SDK package (recommended)
+
+The distribution package (`itscam-sdk-<version>.tar.gz`) includes a Python wheel with the native lib bundled:
+
+```bash
+tar xzf itscam-sdk-<version>.tar.gz
+pip install itscam-sdk-<version>/linux-x64/python/itscam-*.whl
+python -c "import itscam; print(itscam.get_version())"
+```
+
+The wheel already bundles `libitscam_sdk.so` -- no `LD_LIBRARY_PATH` configuration is needed.
+
+### From source (advanced)
+
+If you are developing inside the SDK source tree:
 
 ```bash
 make lib                         # build libitscam_sdk.so first
@@ -16,7 +30,7 @@ cd src/wrappers/python
 pip install -e .                 # editable install
 ```
 
-ctypes locates the shared library by:
+In this case, ctypes locates the shared library by:
 
 1. The directory containing `bindings.py`, then its parent.
 2. `<parent>/build/` (handy when bundled with a build output).

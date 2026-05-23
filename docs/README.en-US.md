@@ -7,7 +7,7 @@ Chapter-style reference for the ITSCAM Client SDK. Start with [Overview](overvie
 ## Foundations
 
 - [Overview](overview.en-US.md) -- what the SDK is, supported platforms, and repository layout.
-- [Getting started](getting-started.en-US.md) -- build the SDK, run examples, and link your app.
+- [Getting started](getting-started.en-US.md) -- integrate with the pre-compiled SDK, run examples, and advanced build from source.
 - [Error handling](error-handling.en-US.md) -- `Result<T>`, `Future<T>`, error codes, and logging.
 - [HTTPS / TLS](https-tls.en-US.md) -- vendored mbedTLS, configuration, and failure modes.
 - [Typed REST helpers and codegen](codegen.en-US.md) -- bundled OpenAPI snapshot and regeneration workflows.

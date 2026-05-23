@@ -6,7 +6,13 @@ The **ITSCAM Client SDK** is a cross-platform C++17 library that talks to [Pumat
 
 > The short description of the three client classes and the supported-platform tables live in the [`README.en-US.md`](https://github.com/pumatronix/itscam-sdk/blob/main/README.en-US.md) (also the home of the [docs site](https://pumatronix.github.io/itscam-sdk/README.en-US)). This page focuses on the repository layout and where to go next.
 
-## Build artefacts
+## Pre-compiled package
+
+The SDK is distributed as `itscam-sdk-<version>.tar.gz`, containing pre-compiled binaries for linux-x64, win-x64, and win-x86, plus a NuGet (.NET), Python wheel, and Go module. This is the recommended integration path -- see [Getting started](getting-started.en-US.md).
+
+## Build artefacts (from source)
+
+When building the SDK from source (`make lib` / `make docker-all`), artefacts land under `src/core/build/<platform>/`:
 
 | File                            | Platform         |
 | ------------------------------- | ---------------- |

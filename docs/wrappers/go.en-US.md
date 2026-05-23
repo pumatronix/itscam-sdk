@@ -6,7 +6,32 @@ The Go wrapper lives at [`src/wrappers/go/`](../../src/wrappers/go/) and uses **
 
 > **Full reference of exported types and functions** (generated via gomarkdoc): [`itscam` package reference](/api-ref/go). This page covers build/link, idiomatic patterns, and examples.
 
-## Build & run
+## Install
+
+### From the pre-compiled SDK package (recommended)
+
+The distribution package (`itscam-sdk-<version>.tar.gz`) includes a Go module with native lib and pre-configured cgo directives:
+
+```bash
+tar xzf itscam-sdk-<version>.tar.gz
+export SDK=$PWD/itscam-sdk-<version>
+
+# In your project's go.mod:
+go mod edit -require=github.com/pumatronix/itscam-sdk-go@v0.0.0
+go mod edit -replace=github.com/pumatronix/itscam-sdk-go=$SDK/linux-x64/go/itscam-sdk-go
+
+# Dynamic linking:
+LD_LIBRARY_PATH=$SDK/linux-x64/go/itscam-sdk-go/native \
+    go run main.go 192.168.254.254
+
+# Static linking (no runtime dependency):
+CGO_CFLAGS="-I$SDK/linux-x64/go/itscam-sdk-go/include" \
+    go build -tags static -o my-app main.go
+```
+
+### Build from source (advanced)
+
+If you are developing inside the SDK source tree:
 
 ```bash
 make lib                                  # build libitscam_sdk.so / .a
@@ -19,7 +44,7 @@ LD_LIBRARY_PATH=$PWD/src/core/build/linux \
     ./src/wrappers/go/examples/cgi_snapshot_example 192.168.254.254
 ```
 
-Static linking:
+Static linking from the source tree:
 
 ```bash
 cd src/wrappers/go/examples

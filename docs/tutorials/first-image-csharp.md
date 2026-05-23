@@ -7,56 +7,40 @@ Walkthrough do zero: criar um projeto .NET console, referenciar o SDK e salvar a
 | Item | Versão mínima | Verificar com |
 | ---- | ------------- | ------------- |
 | .NET SDK | 6.0+ (ou Framework 4.6.1+) | `dotnet --version` |
-| Compilador C++17 | só para `make lib` / `make csharp` | `g++ --version` |
-| GNU make | qualquer | `make --version` |
-| Git | qualquer | `git --version` |
+| Pacote SDK | `itscam-sdk-<version>.tar.gz` | extrair e localizar `csharp/` |
 | Câmera ITSCAM | ITSCAM450 / ITSCAM600 alcançável na rede | `ping <ip-da-camera>` |
 
-## 2. Buildar o SDK e o managed assembly
+## 2. Extrair o SDK
 
 ```bash
-git clone https://github.com/pumatronix/itscam-sdk.git
-cd itscam-sdk
-make lib        # libitscam_sdk.so
-make csharp     # Itscam.Sdk.dll (netstandard2.0)
+tar xzf itscam-sdk-<version>.tar.gz
+export SDK=$PWD/itscam-sdk-<version>
 ```
 
-Para consumo via NuGet (multi-RID), rode `make csharp-pack`. O walkthrough abaixo usa o caminho mais simples para desenvolvimento: **`ProjectReference`** direto ao csproj do SDK.
+O NuGet `Pumatronix.Itscam.Sdk` fica em `$SDK/csharp/`. Ele já inclui native binaries para linux-x64, win-x64 e win-x86 -- o MSBuild target file copia o binário correto para o output de build automaticamente.
+
+> **Compilando o SDK do zero?** Se você precisa buildar a partir do source, veja a [seção avançada de build](../getting-started.md#build-do-sdk-a-partir-do-source). Após `make lib && make csharp`, você pode usar `ProjectReference` direto ao csproj ou rodar `make csharp-pack` para gerar o NuGet localmente.
 
 ## 3. Criar o projeto
-
-A partir da raiz do checkout do SDK:
 
 ```bash
 mkdir -p meu-app && cd meu-app
 dotnet new console -n MeuApp -o .
 ```
 
-## 4. Referenciar o `Itscam.Sdk`
-
-Adicione a referência ao csproj do wrapper:
+## 4. Referenciar o SDK via NuGet
 
 ```bash
-dotnet add reference \
-    ../src/wrappers/csharp/Itscam.Sdk/Itscam.Sdk.csproj
+dotnet add package Pumatronix.Itscam.Sdk \
+    --source $SDK/csharp
 ```
-
-Isso já cuida da cópia do `libitscam_sdk.so` para o output de build via [`Itscam.Sdk.targets`](../../src/wrappers/csharp/Itscam.Sdk/build/Itscam.Sdk.targets) quando o native binary está em `src/core/build/<rid>/`.
-
-> Consumindo via NuGet em vez de `ProjectReference`?
->
-> ```bash
-> make csharp-pack
-> dotnet add package Pumatronix.Itscam.Sdk \
->     --source ../src/wrappers/csharp/nupkg
-> ```
 
 ## 5. Escrever o código mínimo
 
-Substitua `MeuApp/Program.cs` por:
+Substitua `Program.cs` por:
 
 ```csharp
-// MeuApp/Program.cs
+// Program.cs
 using System;
 using System.IO;
 using System.Threading.Tasks;
@@ -115,7 +99,7 @@ file primeira-imagem.jpg
 
 | Sintoma | Causa provável | Solução |
 | ------- | -------------- | ------- |
-| `DllNotFoundException: itscam_sdk` | Native binary não foi copiado para `bin/Debug/.../` | Confirme `make lib` no SDK; o `Itscam.Sdk.targets` espera `src/core/build/linux/`. |
+| `DllNotFoundException: itscam_sdk` | Native binary não foi copiado para `bin/Debug/.../` | Confirme que o NuGet do pacote SDK foi referenciado corretamente (`dotnet list package`). |
 | `ItscamConnectionException` | IP errado ou porta 80 bloqueada | `curl -v http://<ip>/api/lastframe.cgi -o /dev/null` |
 | `ItscamAuthException` em CGI | A câmera tem `configCgi.blockAPI=true` | Chame `await cgi.LoginAsync("user", "pass")` antes do `GetLastFrameAsync()`. |
 | `ItscamException: SSL` em HTTPS | CA bundle não configurado | `cgi.SetCaCertFile("/etc/ssl/certs/ca-bundle.pem")` ou, só em dev, `cgi.SetVerifyServerCertificate(false)`. |
