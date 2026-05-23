@@ -17,8 +17,19 @@ npm run dev
 Open http://localhost:5173/itscam-sdk/ (the base path defaults to
 `/itscam-sdk/`).
 
-Content is synced from `../docs/`, `../README.md`, `../AGENTS.md`, and
-example sources on every `dev` / `build` via `scripts/sync-content.mjs`.
+Content is synced on every `dev` / `build` via `scripts/sync-content.mjs`:
+
+- `../README.md` -> `content/index.md` (site home, with link rewriting).
+- `../README.en-US.md` -> `content/README.en-US.md`.
+- `../docs/**/*.md` -> `content/**/*.md` (chapters, wrappers, tutorials,
+  and `*.en-US.md` companions).
+- `../AGENTS.md` -> `content/agents.md`.
+- `../docs/images/` -> `content/public/images/` (images referenced from
+  the README and the docs).
+
+Editing the README or the files under `docs/` is the only way to change
+the site. The script rewrites repo-relative links (`docs/foo.md`,
+`src/...`, `docs-site/`) to either site routes or GitHub URLs as needed.
 
 ### Enable the AI Assistant Locally
 

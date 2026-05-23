@@ -8,6 +8,10 @@ the SDK's C API.  A `static` build tag toggles between dynamic linking
 (default; relies on `libitscam_sdk.so` at runtime) and full static
 linking (drops in the static archive plus pthread / stdc++ / m).
 
+> **Full reference of exported types and functions** (generated via
+> gomarkdoc): [`itscam` package reference](/api-ref/go). This page
+> covers build/link, idiomatic patterns, and examples.
+
 ## Build & run
 
 ```bash

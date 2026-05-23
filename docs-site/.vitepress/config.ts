@@ -26,6 +26,12 @@ export default defineConfig({
     /^\.\.?\/(?:\.\.\/)*README(?:$|[#.])/,
     /^\.\.?\/(?:\.\.\/)*AGENTS(?:$|[#.])/,
     /^\.\.?\/(?:\.\.\/)*docs\//,
+    // The /api-ref/<lang>/ trees are produced by Doxygen / pdoc /
+    // DocFX / gomarkdoc into content/public/api-ref/ at build time
+    // (see Makefile docs-api targets). Skip dead-link checks for them
+    // so the docs site still builds locally when only some generators
+    // have run.
+    /^\/api-ref\//,
   ],
 
   themeConfig: {
@@ -38,7 +44,7 @@ export default defineConfig({
       { text: "Assistant", link: "/assistant" },
       {
         text: "English",
-        link: "https://github.com/pumatronix/itscam-sdk/blob/main/README.en-US.md",
+        link: "/README.en-US",
       },
       {
         text: "GitHub",
@@ -67,6 +73,21 @@ export default defineConfig({
           { text: "Binary client (TCP 60000)", link: "/api/binary-client" },
           { text: "REST client", link: "/api/rest-client" },
           { text: "CGI client", link: "/api/cgi-client" },
+        ],
+      },
+      {
+        text: "Referência gerada (API ref)",
+        items: [
+          // Doxygen / DocFX / pdoc HTML lives under
+          // content/public/api-ref/<lang>/ and is shipped verbatim by
+          // VitePress. Links use absolute .html paths so the router
+          // does not try to resolve them as markdown routes.
+          { text: "C / C++ (Doxygen)", link: "/api-ref/cpp/index.html" },
+          { text: "Python (pdoc)", link: "/api-ref/python/itscam.html" },
+          { text: "C# / .NET (DocFX)", link: "/api-ref/csharp/index.html" },
+          // gomarkdoc emits a single markdown page that VitePress
+          // routes natively at /api-ref/go.
+          { text: "Go (gomarkdoc)", link: "/api-ref/go" },
         ],
       },
       {

@@ -8,6 +8,10 @@ talk to the same binary through the C ABI in
 [`src/core/c_api/`](../../src/core/c_api/). If you are consuming the
 SDK directly from a C++17 application, this is the right guide.
 
+> **Full reference for classes, structs, and functions**:
+> [generated Doxygen reference](/api-ref/cpp/index.html). This page
+> covers integration, build, link, and idiomatic patterns.
+
 > This page covers **integration and idiomatic patterns** for the C++
 > code. The detailed reference for each client surface (tables of
 > endpoints, request/response types, etc.) lives in `docs/api/`:

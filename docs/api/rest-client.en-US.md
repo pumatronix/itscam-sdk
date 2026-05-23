@@ -2,46 +2,43 @@
 
 [Português (Brasil)](rest-client.md) | [English (US)](rest-client.en-US.md)
 
-O REST client encapsula o **ITSCAM webapp backend** -- o serviço
-Node.js que roda na câmera e faz proxy de admin endpoints para o
-camera-daemon. Autenticação é sempre obrigatória.
+The REST client wraps the **ITSCAM webapp backend** -- the Node.js
+service that runs on the camera and proxies admin endpoints to the
+camera-daemon.  Authentication is always required.
 
 Header: [`src/core/itscam_rest_client.h`](../../src/core/itscam_rest_client.h).
-Example C++: [`src/examples/itscam_rest_example.cpp`](../../src/examples/itscam_rest_example.cpp).
+C++ example: [`src/examples/itscam_rest_example.cpp`](../../src/examples/itscam_rest_example.cpp).
 
-> **Referência completa de cada método** (assinatura, typed structs,
-> overloads): veja a
-> [referência Doxygen do C++](/api-ref/cpp/classitscam_1_1ItscamRestClient.html).
-> Esta página foca em conceitos (typed surface vs escape hatch,
-> partial PUT, error handling) e exemplos.
+> **Full per-method reference** (signatures, typed structs, overloads):
+> see the [generated Doxygen reference](/api-ref/cpp/classitscam_1_1ItscamRestClient.html).
+> This page focuses on concepts (typed surface vs escape hatch,
+> partial PUT, error handling) and examples.
 
-O REST client expõe duas surfaces que coexistem:
+The REST client exposes two coexisting surfaces:
 
-* **Typed helpers** (preferido). `getOcrConfig()` devolve
-  `Result<OcrConfig>`, `setOcrConfig(OcrConfig)` aceita e devolve a
-  struct tipada. Os types vivem em
+* **Typed helpers** (preferred). `getOcrConfig()` returns
+  `Result<OcrConfig>`, `setOcrConfig(OcrConfig)` accepts and returns the
+  typed struct.  The types live in
   [`src/core/itscam_rest_types.hpp`](../../src/core/itscam_rest_types.hpp)
-  e são **gerados automaticamente** a partir do documento OpenAPI da
-  câmera. Veja [`docs/codegen.md`](../codegen.md) para o workflow de
-  refresh / regeneration.
-* **HTTP verbs genéricos** (escape hatch). `httpGet` / `httpPut` /
-  `httpPost` / `httpDelete` devolvem `Result<nlohmann::json>` para
-  endpoints que ainda não foram tipados, partial-update bodies, ou
-  fields fora do snapshot atual.
+  and are **auto-generated** from the camera's OpenAPI document.  See
+  [`docs/codegen.md`](../codegen.md) for the refresh / regeneration
+  workflow.
+* **Generic HTTP verbs** (escape hatch).  `httpGet` / `httpPut` /
+  `httpPost` / `httpDelete` return `Result<nlohmann::json>` for endpoints
+  that aren't typed yet, partial-update bodies, or fields outside the
+  current schema snapshot.
 
-> **Breaking change:** antes da typed surface, `getOcrConfig()` e
-> companhia devolviam `Result<nlohmann::json>`. Migre para os overloads
-> tipados (preferido) ou para o escape hatch genérico
-> `httpGet("/api/equipment/ocr")` quando você especificamente quiser
-> raw JSON.
+> **Breaking change:** prior to the typed surface, `getOcrConfig()` and
+> friends returned `Result<nlohmann::json>`.  Migrate to either the typed
+> overloads (preferred) or the generic `httpGet("/api/equipment/ocr")`
+> escape hatch when you specifically want raw JSON.
 
-JSON fields desconhecidos (firmware mais novo, extensões custom)
-sobrevivem em um `get` tipado porque
-`nlohmann::json`/`System.Text.Json`/`Python dataclasses`/`Go structs`
-toleram todos. Round-tripping através de um `set`, porém, descarta
-fields que o SDK não conhece -- nesse caso, caia para os verbos
-genéricos ou
-[regenere contra o spec da sua câmera](../codegen.md).
+Unknown JSON fields (newer firmware, custom extensions) survive a typed
+`get` because `nlohmann::json`/`System.Text.Json`/`Python dataclasses`/
+`Go structs` all tolerate them.  Round-tripping through a `set` strips
+fields the SDK does not know about, however -- in that case fall back to
+the generic verbs or
+[regenerate against your camera's spec](../codegen.md).
 
 ## Quick start
 
@@ -64,29 +61,28 @@ int main() {
 
     auto ocr = rest.getOcrConfig();
     if (ocr && ocr.value().ocr) {
-        ocr.value().ocr->enabled = true;            // mutação tipada
+        ocr.value().ocr->enabled = true;            // typed mutation
         rest.setOcrConfig(ocr.value());
     }
 }
 ```
 
-## Setup e autenticação
+## Setup & authentication
 
 ```cpp
 ItscamRestClient rest;
 rest.setBaseUrl("192.168.254.254", 80);
 rest.setApiPrefix("/api");                    // default
 
-// Login: POST /api/auth -> armazena JWT internamente
+// Login: POST /api/auth -> stores JWT internally
 auto loginResult = rest.login("admin", "1234");
 
-// Ou seta um token pré-existente
+// Or set a pre-existing token
 rest.setAuthToken("eyJ...");
 rest.clearAuthToken();
 ```
 
-Para a configuration de HTTPS veja
-[`docs/https-tls.md`](../https-tls.md).
+For HTTPS configuration see [`docs/https-tls.md`](../https-tls.md).
 
 ## Image profiles
 
@@ -101,13 +97,13 @@ p.trigger.emplace();                                  // Result<ProfileConfig>
 p.trigger->enabled = false;
 
 auto updated = rest.updateProfileById((int)p.id, p);  // PUT    /api/image/profiles/{id}
-// Aviso: PUT full-document falha em profiles -- use patchJson():
+// Warning: full-document PUT fails on profiles -- use patchJson() instead:
 // rest.patchJson("/api/image/profiles/0", {{"trigger", {{"enabled", false}}}});
 auto created = rest.createProfile(p);                 // POST   /api/image/profiles
 auto deleted = rest.deleteProfile(0);                 // DELETE /api/image/profiles?id=0
                                                        //         (raw JSON response)
 
-// Bulk update via o array endpoint do spec:
+// Bulk update via the spec's array endpoint:
 auto bulk    = rest.updateProfiles(all.value());      // PUT    /api/image/profiles
 ```
 
@@ -118,7 +114,7 @@ Phase 1 (typed):
 ```cpp
 using namespace pumatronix::itscam;
 
-// Volatile info (diagnósticos read-only)
+// Volatile info (read-only diagnostics)
 auto vol = rest.getVolatileInfo();             // -> Result<MiscVolatile>
 
 // Analytics
@@ -165,7 +161,7 @@ rest.setProtocolsConfig(proto.value());         // PUT /api/equipment/servers/pr
 auto tr        = rest.getProfileTransitioner();
 rest.setProfileTransitioner(tr.value());        // PUT /api/equipment/transitioner
 
-// I/O ports: bulk + por pin
+// I/O ports: bulk + per-pin
 auto ports     = rest.getIoPorts();             // -> Result<std::vector<IoConfig>>
 rest.setIoPorts(ports.value());
 auto pin0      = rest.getIoPort(0);             // -> Result<IoConfig>
@@ -173,7 +169,7 @@ rest.setIoPort(0, pin0.value());
 auto pinsMeta  = rest.getIoBasic();             // -> Result<std::vector<IoBasic>>
 rest.setIoBasic(pinsMeta.value());
 
-// REST API client (webhook) servers, endereçados por index
+// REST API client (webhook) servers, addressed by index
 auto webhook        = rest.getRestApiClientConfig(0);
 rest.setRestApiClientConfig(0, webhook.value());
 auto webhookStatus  = rest.getRestApiClientStatus(0);
@@ -182,18 +178,18 @@ auto status   = rest.getItscamproStatus();      // -> Result<ItscamproStatus>
 auto licenses = rest.getLicenses();             // -> Result<Licenses>
 ```
 
-Alguns endpoints ainda devolvem raw JSON porque os schemas deles ainda
-não fazem parte do snapshot:
+A handful of endpoints still surface raw JSON because their schemas
+aren't part of the snapshot yet:
 
 ```cpp
 auto gen = rest.getGeneralConfig();            // -> Result<nlohmann::json>
 rest.setGeneralConfig(json);                   // PUT /api/equipment/general
 ```
 
-## HTTP verbs genéricos (escape hatch)
+## Generic HTTP verbs (escape hatch)
 
-Para endpoints não cobertos por typed helpers (ou quando você precisa
-mandar um body de partial-update):
+For endpoints not covered by typed helpers (or when you need to send a
+partial-update body):
 
 ```cpp
 auto r1 = rest.httpGet("/api/some/endpoint");
@@ -202,35 +198,33 @@ auto r3 = rest.httpPost("/api/some/endpoint", json);
 auto r4 = rest.httpDelete("/api/some/endpoint");
 ```
 
-Os métodos genéricos usam o path **como está** -- nenhum API prefix é
-prepended, então inclua `/api/...` você mesmo. Use `rest.apiPrefix()`
-para pegar o prefix configurado se você quiser construir paths
-relativos a ele.
+The generic methods use the path **as-is** -- no API prefix is
+prepended, so include `/api/...` yourself.  Use `rest.apiPrefix()` to
+get the configured prefix if you want to build paths relative to it.
 
-> **Quando recorrer ao escape hatch:** schema gaps (por exemplo, um
-> endpoint que ainda não foi promovido para um typed wrapper), fields
-> mais novos que o snapshot do SDK, partial updates que omitem fields
-> de propósito (os setters tipados fazem round-trip do objeto inteiro)
-> ou chamadas diagnósticas one-off. Caso contrário, a typed surface é
-> preferível por compile-time safety, IDE completion e paridade entre
-> language bindings.
+> **When to reach for the escape hatch:** schema gaps (e.g. an endpoint
+> hasn't been promoted to a typed wrapper yet), fields newer than the
+> SDK snapshot, partial updates that intentionally omit fields (the
+> typed setters round-trip the whole object), or one-off diagnostic
+> calls.  Otherwise the typed surface is preferable for compile-time
+> safety, IDE completion, and parity across language bindings.
 
 ## Read-modify-write: use partial PUT (PatchJsonAsync)
 
-O ITSCAM daemon trata a maioria dos endpoints PUT como **partial
-updates**: mande só os fields que você quer mudar e o server faz merge
-na configuration existente. Dois padrões que **não funcionam** em
-vários endpoints (notavelmente `PUT /api/image/profiles/{id}`):
+The ITSCAM daemon treats most PUT endpoints as **partial updates**:
+send only the fields you want to change and the server merges them into
+the existing configuration.  Two patterns that **do not work** on
+several endpoints (notably `PUT /api/image/profiles/{id}`):
 
-* **Round-trip tipado** -- `SetProfilesAsync(await GetProfilesAsync())`
-  descarta fields JSON não documentados durante a deserialisation.
-* **Round-trip do documento inteiro** -- GET da config inteira,
-  edita um field, PUT do JSON inteiro de volta. O daemon rejeita com
-  HTTP 500 mesmo quando o body é uma response GET sem modificação
-  (limitação do webapp/daemon, não bug do SDK).
+* **Typed round-trip** -- `SetProfilesAsync(await GetProfilesAsync())`
+  drops undocumented JSON fields during deserialisation.
+* **Full-document round-trip** -- GET the entire config, edit one field,
+  PUT the whole JSON back.  The daemon rejects this with HTTP 500 even
+  when the body is an unmodified GET response (a webapp/daemon
+  limitation, not an SDK bug).
 
-O padrão correto é um **partial PUT** contendo apenas os fields que
-estão mudando:
+The correct pattern is a **partial PUT** containing only the fields
+being changed:
 
 ```csharp
 // C# -- ItscamRestClient.PatchJsonAsync
@@ -238,44 +232,43 @@ await rest.PatchJsonAsync("/api/image/profiles/0",
     new JsonObject { ["trigger"] = new JsonObject { ["enabled"] = false } });
 ```
 
-Equivalente em C++/Python/Go: monte um JSON object minimal e chame
-`patchJson` / `patch_json` / `PatchJSON`, ou o `httpPut` / `put` /
-`Put` genérico com o mesmo fragmento.
+Equivalent in C++/Python/Go: build a minimal JSON object and call
+`patchJson` / `patch_json` / `PatchJSON`, or the generic `httpPut` /
+`put` / `Put` with the same fragment.
 
 ```cpp
 rest.patchJson("/api/image/profiles/0",
                nlohmann::json{{"trigger", {{"enabled", false}}}});
 ```
 
-`UpdateJsonAsync` (GET + mutação + PUT do documento inteiro)
-permanece disponível em C# mas não deve ser usado contra image
-profiles.
+`UpdateJsonAsync` (GET + mutate + PUT full document) remains available
+in C# but must not be used against image profiles.
 
-Os exemplos C# `MjpegGrabberExample` e `SoftwareTriggerSnapshotExample`
-usam `GetProfilesAsync()` para encontrar profile ids (read-only) e
-`PatchJsonAsync()` para todo write.
+The C# `MjpegGrabberExample` and `SoftwareTriggerSnapshotExample`
+use `GetProfilesAsync()` to find profile ids (read-only) and
+`PatchJsonAsync()` for every write.
 
 ## Error handling
 
-O REST client compartilha a taxonomia `Result<T>` / `Error::Code` com
-o binary client; veja [`docs/error-handling.md`](../error-handling.md)
-para o mapping completo de HTTP-status. Padrão típico:
+The REST client shares the `Result<T>` / `Error::Code` taxonomy with the
+binary client; see [`docs/error-handling.md`](../error-handling.md) for
+the full HTTP-status mapping.  Typical pattern:
 
 ```cpp
 auto r = rest.getOcrConfig();
 if (!r) {
     std::cerr << "REST error: " << r.error().message << '\n';
     if (r.error().code == Error::NotAuthenticated)
-        rest.login("admin", "1234");      // re-autentica
+        rest.login("admin", "1234");      // re-authenticate
 }
 ```
 
-Um `get` tipado que devolve sucesso mas com um body que o SDK não
-conseguiu deserializar para o schema esperado expõe
-`Error::Code::InvalidParameter` com mensagem `schema mismatch: ...` --
-esse é o sinal para regerar os types
-([`docs/codegen.md`](../codegen.md)) ou cair temporariamente para os
-verbos genéricos.
+A typed `get` that returns successfully but with a body the SDK could
+not deserialise into the expected schema surfaces
+`Error::Code::InvalidParameter` with a `schema mismatch: ...` message --
+that's the signal to regenerate types
+([`docs/codegen.md`](../codegen.md)) or temporarily fall back to the
+generic verbs.
 
 ## Logging
 

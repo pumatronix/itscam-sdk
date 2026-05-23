@@ -2,17 +2,17 @@
 
 [Português (Brasil)](binary-client.md) | [English (US)](binary-client.en-US.md)
 
-O binary client fala o protocolo Cougar na porta TCP **60000**. É a
-superfície de menor latência e a única que expõe eventos em real time
-(triggers, GPIO, serial, multi-exposure groups).
+The binary client speaks the Cougar protocol on TCP port **60000**.  It
+is the lowest-latency surface and the only one that exposes real-time
+events (triggers, GPIO, serial, multi-exposure groups).
 
 Header: [`src/core/itscam_client.h`](../../src/core/itscam_client.h).
-Example C++: [`src/examples/itscam_sdk_example.cpp`](../../src/examples/itscam_sdk_example.cpp).
+C++ example: [`src/examples/itscam_sdk_example.cpp`](../../src/examples/itscam_sdk_example.cpp).
 
-> **Referência completa de cada método** (assinatura, parâmetros,
-> overloads): veja a [referência Doxygen do C++](/api-ref/cpp/classitscam_1_1ItscamClient.html).
-> Esta página foca em padrões de uso, fluxos típicos e gotchas; a
-> referência API é gerada do header e nunca fica fora de sincronia.
+> **Full per-method reference** (signatures, parameters, overloads):
+> see the [generated Doxygen reference](/api-ref/cpp/classitscam_1_1ItscamClient.html).
+> This page focuses on usage patterns, typical workflows, and gotchas;
+> the API reference is generated from the header and cannot drift.
 
 ## Quick start
 
@@ -31,14 +31,14 @@ int main() {
 
     auto result = camera.captureSnapshot();
     if (result) {
-        // result.value() é std::vector<CaptureResult>:
-        //   result.value()[i].jpeg  -- bytes do JPEG
-        //   result.value()[i].info  -- metadata do frame
+        // result.value() is std::vector<CaptureResult>:
+        //   result.value()[i].jpeg  -- JPEG bytes
+        //   result.value()[i].info  -- frame metadata
     }
 }
 ```
 
-## Conexão e autenticação
+## Connection & authentication
 
 ```cpp
 Result<void> connect(address, port = 60000, timeoutMs = 5000);
@@ -53,7 +53,7 @@ bool         isConnected();
 AutoReconnectConfig reconnect;
 reconnect.enabled    = true;
 reconnect.intervalMs = 3000;
-reconnect.maxRetries = 0;          // 0 = ilimitado
+reconnect.maxRetries = 0;          // 0 = unlimited
 camera.connect(address, 60000, 5000, reconnect);
 
 camera.onConnectionStateChanged(
@@ -62,8 +62,8 @@ camera.onConnectionStateChanged(
     });
 ```
 
-No reconnect, o SDK restaura totalmente a session anterior
-(re-autentica, re-aplica JPEG config, re-subscribe nos eventos).
+On reconnect the SDK fully restores the previous session
+(re-authenticate, re-apply JPEG config, re-subscribe to events).
 
 ## Event subscriptions
 
@@ -73,14 +73,14 @@ ev.gpio    = true;
 ev.serial1 = true;
 camera.subscribe(ev);
 
-// Atalho para o caso típico "trigger/snapshot images com metadata":
+// Shortcut for the typical "trigger/snapshot images plus metadata" case:
 camera.subscribeCaptures();
 ```
 
 ## Capture
 
-`captureSnapshot()` é *trigger + wait*. Devolve
-`Result<std::vector<CaptureResult>>`; um entry por exposure step.
+`captureSnapshot()` is *trigger + wait*.  It returns
+`Result<std::vector<CaptureResult>>`; one entry per exposure step.
 
 ```cpp
 SnapshotRequest req;
@@ -92,18 +92,18 @@ if (result) {
     for (size_t i = 0; i < frames.size(); ++i) {
         // frames[i].jpeg, frames[i].info.multiExpIndex, ...
     }
-    // Detecta partial groups em timeout:
+    // Detect partial groups on timeout:
     if (!frames.empty() &&
         (int)frames.size() < frames[0].info.multiExpLength) {
-        // Nem todas as exposures chegaram dentro do timeout
+        // Not all exposures arrived within the timeout
     }
 }
 
-// Pega só o último frame (sem trigger)
+// Just grab the latest frame (no trigger)
 auto frame = camera.getLastFrame(/*quality=*/80);
 ```
 
-## Configuration de multi-exposure
+## Multi-exposure configuration
 
 ```cpp
 auto meCfg = camera.getMultiExposureConfig();
@@ -115,10 +115,10 @@ MultiExpStep step1; step1.shutterPercent = 100; step1.gainPercent = 100;
 MultiExpStep step2; step2.shutterPercent =  50; step2.gainPercent = 100;
 multiExp.steps = {step1, step2};
 
-camera.setMultiExposureConfig(multiExp);          // profile ativo
+camera.setMultiExposureConfig(multiExp);          // active profile
 camera.setMultiExposureConfig(multiExp, 0);       // profile 0
 
-// Desabilita: um step no-op
+// Disable: one no-op step
 MultiExposureConfig disable;
 disable.enabled = false;
 disable.steps   = {MultiExpStep()};
@@ -127,13 +127,13 @@ camera.setMultiExposureConfig(disable);
 
 ### Exposure groups
 
-Quando multi-exposure está ativo, a câmera produz múltiplos frames por
-trigger, todos compartilhando o mesmo RID.
+When multi-exposure is active the camera produces multiple frames per
+trigger event, all sharing the same RID.
 
-- **Callbacks por frame** (`onTriggerImage`, `onSnapshotImage`)
-  disparam uma vez para cada frame individual.
-- **Callbacks por grupo** disparam uma vez por grupo completo;
-  partial groups são entregues após um timeout.
+- **Per-frame callbacks** (`onTriggerImage`, `onSnapshotImage`) fire
+  once for each individual frame.
+- **Group callbacks** fire once per complete group; partial groups are
+  delivered after a timeout.
 
 ```cpp
 camera.onTriggerImage([](const CaptureResult& cr) {
@@ -141,11 +141,11 @@ camera.onTriggerImage([](const CaptureResult& cr) {
 });
 
 camera.onTriggerExposureGroup([](const std::vector<CaptureResult>& group) {
-    // group.size() == multiExpLength (quando completo)
+    // group.size() == multiExpLength (when complete)
 });
 
 camera.onSnapshotExposureGroup([](const std::vector<CaptureResult>& group) {
-    // mesmo padrão para snapshot images
+    // same pattern for snapshot images
 });
 
 camera.setExposureGroupTimeout(3000);   // default: 5000 ms
@@ -160,13 +160,13 @@ cfg.imgpkg.embedSignature = 1;
 camera.setJpegConfig(cfg);
 ```
 
-`JpegConfig::imgpkgDefaults()` habilita EXIF e embedded comments por
-default; signature embedding é opt-in.
+`JpegConfig::imgpkgDefaults()` enables EXIF and embedded comments by
+default; signature embedding is opt-in.
 
 ## Profiles
 
-A câmera suporta até 4 profiles. Cada um carrega seus próprios
-trigger, exposure e color settings. O profile 0 é o default.
+The camera supports up to 4 profiles.  Each carries its own trigger,
+exposure and color settings.  Profile 0 is the default.
 
 ```cpp
 auto profiles = camera.listProfiles();
@@ -179,11 +179,10 @@ auto id = camera.getActiveProfileId();   // Result<uint32_t>
 camera.setActiveProfile(0);
 ```
 
-## Trigger e exposure
+## Trigger & exposure
 
-Todos os métodos de trigger / exposure aceitam um argumento opcional
-`profileId`. Use `CURRENT_PROFILE` (default) para mirar no profile
-ativo.
+All trigger / exposure methods take an optional `profileId` argument.
+Use `CURRENT_PROFILE` (default) to target the active profile.
 
 ```cpp
 auto trig  = camera.getTriggerConfig();
@@ -201,8 +200,7 @@ exp.gain.automatic    = 1; exp.gain.maxValue    = 800;
 camera.setExposureConfig(exp, 0);
 ```
 
-`-1` significa "deixa como está" -- só preenche os fields que você
-quer modificar.
+`-1` means "leave unchanged" -- only set the fields you want to modify.
 
 ## Serial I/O
 
@@ -217,7 +215,7 @@ camera.configureSerial(SerialPort::Serial1, cfg);
 camera.sendSerialAscii(SerialPort::Serial1, "AT\r\n");
 camera.onSerial([](const SerialData& sd) {
     if (sd.port == SerialPort::Serial1) {
-        // processa sd.data
+        // process sd.data
     }
 });
 ```
@@ -231,7 +229,7 @@ camera.setScenarioCrop(1, {0, 0, 799, 599});
 camera.setSnapshotCrop(true, {100, 100, 700, 500});
 ```
 
-## Config genérica (escape hatch)
+## Generic config (escape hatch)
 
 ```cpp
 auto cfg = camera.getConfig("equip.autofocus");
@@ -248,7 +246,7 @@ camera.onPreviewImage      ([](const CaptureResult& cr) { /* ... */ });
 camera.onTriggerExposureGroup ([](const std::vector<CaptureResult>& g) {});
 camera.onSnapshotExposureGroup([](const std::vector<CaptureResult>& g) {});
 
-camera.onTriggerMetadata   ([](const FrameInfo& fi) { /* só metadata */ });
+camera.onTriggerMetadata   ([](const FrameInfo& fi) { /* metadata only */ });
 camera.onGpio              ([](const GpioEvent& ev) { /* ... */ });
 camera.onSerial            ([](const SerialData& sd) { /* ... */ });
 camera.onDisconnect        ([](const std::string& reason) { /* ... */ });
@@ -256,22 +254,22 @@ camera.onConnectionStateChanged(
     [](ConnectionState s, const std::string& reason) { /* ... */ });
 ```
 
-Todos os callbacks rodam na worker thread do SDK; **não bloqueie**
-dentro deles.
+All callbacks run on the SDK's worker thread; **do not block** inside
+them.
 
 ## System
 
 ```cpp
 camera.reboot();
-camera.setPingInterval(10);             // segundos
-camera.setMaxPingFailures(10);          // 0 = desabilita
+camera.setPingInterval(10);             // seconds
+camera.setMaxPingFailures(10);          // 0 = disable
 camera.setExposureGroupTimeout(3000);   // ms (default: 5000)
 ```
 
 ## `captureSnapshot()` vs `onSnapshotImage`
 
-`captureSnapshot()` internamente registra um pending capture para o
-RID e devolve o exposure group completo como
-`Result<std::vector<CaptureResult>>`. `onSnapshotImage` continua
-disparando por frame e é útil quando os triggers vêm de fora do seu
-processo ou quando você precisa de uma lógica de acumulação custom.
+`captureSnapshot()` internally registers a pending capture for the RID
+and returns the full exposure group as
+`Result<std::vector<CaptureResult>>`.  `onSnapshotImage` still fires
+per-frame and is useful when triggers come from outside your process or
+when you need bespoke accumulation logic.

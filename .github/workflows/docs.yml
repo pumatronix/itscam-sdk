@@ -7,8 +7,12 @@ on:
       - "docs/**"
       - "docs-site/**"
       - "README.md"
+      - "README.en-US.md"
       - "AGENTS.md"
+      - "src/core/**"
+      - "src/wrappers/**"
       - "src/**/examples/**"
+      - "tools/docs/**"
       - ".github/workflows/docs.yml"
   workflow_dispatch:
 
@@ -31,16 +35,51 @@ jobs:
         with:
           node-version: 22
 
-      - name: Install dependencies
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Doxygen and Graphviz
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends doxygen graphviz
+
+      - name: Install pdoc, DocFX, gomarkdoc
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install pdoc
+          dotnet tool install -g docfx
+          echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
+          go install github.com/princjef/gomarkdoc/cmd/gomarkdoc@latest
+          echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
+
+      - name: Install npm dependencies
         working-directory: docs-site
         run: npm install
+
+      - name: Build core library (needed for pdoc Python imports)
+        run: make lib
+
+      - name: Sync content + verify mirror integrity
+        run: make docs-sync-check
+
+      - name: Generate API reference (Doxygen, pdoc, DocFX, gomarkdoc)
+        run: make docs-api
 
       - name: Build VitePress site
         working-directory: docs-site
         env:
           VITEPRESS_BASE: /${{ github.event.repository.name }}/
           VITE_AI_SEARCH_API_URL: ${{ vars.VITE_AI_SEARCH_API_URL }}
-        run: npm run build
+        run: node node_modules/.bin/vitepress build
 
       - uses: actions/upload-pages-artifact@v3
         with:

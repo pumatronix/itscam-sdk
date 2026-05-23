@@ -1,9 +1,13 @@
-# Error handling & async results
+# Error handling e async results
 
-Every SDK method returns one of two value-or-error types: `Result<T>`
-for synchronous calls and `Future<T>` for asynchronous ones.  Both are
-defined in [`src/core/itscam_types.h`](../src/core/itscam_types.h) and
-shared across `ItscamClient`, `ItscamRestClient` and `ItscamCgiClient`.
+[Português (Brasil)](error-handling.md) | [English (US)](error-handling.en-US.md)
+
+Todo método do SDK devolve um de dois tipos value-or-error: `Result<T>`
+para chamadas síncronas e `Future<T>` para assíncronas. Os dois estão
+definidos em
+[`src/core/itscam_types.h`](../src/core/itscam_types.h) e são
+compartilhados por `ItscamClient`, `ItscamRestClient` e
+`ItscamCgiClient`.
 
 ## `Result<T>`
 
@@ -15,54 +19,55 @@ if (!r) {
 }
 ```
 
-| Member            | Meaning                                                            |
+| Membro            | Significado                                                        |
 | ----------------- | ------------------------------------------------------------------ |
-| `operator bool()` | `true` on success, `false` on error.                               |
-| `.value()`        | The payload when successful (lvalue / rvalue overloads).           |
-| `.error()`        | An `Error` struct with `code` and `message`.                       |
-| `Result<void>`    | A specialization for setter-style methods that have no payload.    |
+| `operator bool()` | `true` em sucesso, `false` em erro.                                |
+| `.value()`        | O payload em sucesso (overloads lvalue / rvalue).                  |
+| `.error()`        | Struct `Error` com `code` e `message`.                             |
+| `Result<void>`    | Especialização para setters que não devolvem payload.              |
 
-`Error::Code` values:
+Valores de `Error::Code`:
 
-| Code                | Typical cause                                                |
+| Code                | Causa típica                                                |
 | ------------------- | ------------------------------------------------------------ |
-| `Timeout`           | The operation didn't complete within the deadline.           |
-| `ConnectionFailed`  | TCP / TLS connection could not be established.               |
-| `Disconnected`      | The link went away during the call.                          |
-| `NotAuthenticated`  | The server rejected the request (HTTP 401 or auth failure).  |
-| `InvalidParameter`  | Bad input or HTTP 400 / 404 / 422.                           |
-| `ServerError`       | HTTP 5xx (other than 503).                                   |
-| `Unknown`           | Anything else.                                                |
+| `Timeout`           | A operação não completou dentro do deadline.                |
+| `ConnectionFailed`  | Conexão TCP / TLS não pôde ser estabelecida.                |
+| `Disconnected`      | O link caiu durante a chamada.                               |
+| `NotAuthenticated`  | O server rejeitou a request (HTTP 401 ou auth failure).     |
+| `InvalidParameter`  | Input ruim ou HTTP 400 / 404 / 422.                         |
+| `ServerError`       | HTTP 5xx (exceto 503).                                       |
+| `Unknown`           | Qualquer outro caso.                                          |
 
 ## `Future<T>`
 
-Long-running calls have `*Async()` variants that return a `Future<T>`:
+Chamadas long-running têm variantes `*Async()` que devolvem um
+`Future<T>`:
 
 ```cpp
 auto f = camera.captureSnapshotAsync(req);
-// ... do other work ...
-auto r = f.get();          // block until ready
-auto r = f.get(5000);      // block up to 5 seconds
-bool ready = f.isReady();  // non-blocking probe
+// ... faça outras coisas ...
+auto r = f.get();          // bloqueia até estar pronto
+auto r = f.get(5000);      // bloqueia até 5 segundos
+bool ready = f.isReady();  // probe não-bloqueante
 ```
 
-Use `waitAll()` to wait on several futures at once:
+Use `waitAll()` para esperar várias futures de uma vez:
 
 ```cpp
 auto f1 = camera.captureSnapshotAsync(req1);
 auto f2 = camera.captureSnapshotAsync(req2);
 if (!waitAll(f1, f2)) {
-    // at least one failed -- inspect each via f1.get(), f2.get()
+    // pelo menos uma falhou -- inspecione cada via f1.get(), f2.get()
 }
 ```
 
-## HTTP status mapping
+## Mapeamento de HTTP status
 
-The REST and CGI clients translate HTTP status codes into the same
-`Error::Code` taxonomy so wrappers and applications can switch on a
-single enum:
+Os clients REST e CGI traduzem status codes HTTP para a mesma taxonomia
+`Error::Code`, então wrappers e applications podem fazer switch em um
+único enum:
 
-| HTTP status | `Error::Code`        |
+| Status HTTP | `Error::Code`        |
 | ----------- | -------------------- |
 | `401`       | `NotAuthenticated`   |
 | `400`, `422`| `InvalidParameter`   |
@@ -74,8 +79,8 @@ single enum:
 
 ## Logging
 
-Every client supports an optional log handler.  Set it once early in
-your program; the SDK never owns stdout/stderr.
+Cada client suporta um log handler opcional. Defina uma vez no início
+do programa; o SDK nunca toma posse do stdout/stderr.
 
 ```cpp
 rest.setLogHandler([](LogLevel lvl, const std::string& msg) {
@@ -86,17 +91,18 @@ rest.setLogHandler([](LogLevel lvl, const std::string& msg) {
 });
 ```
 
-`LogLevel` values: `Debug`, `Info`, `Warn`, `Error`.
+Valores de `LogLevel`: `Debug`, `Info`, `Warn`, `Error`.
 
 ## Wrappers
 
-Each language wrapper maps the table above into idiomatic constructs:
+Cada language wrapper mapeia a tabela acima para constructs idiomáticos:
 
-- **C# / .NET** raises an `ItscamException` hierarchy (`ItscamTimeoutException`,
-  `ItscamAuthException`, ...) and `Task<T>` propagates them.
-- **Python** raises `ItscamError` subclasses (`ItscamTimeoutError`,
+- **C# / .NET** levanta uma hierarquia `ItscamException`
+  (`ItscamTimeoutException`, `ItscamAuthException`, ...) e `Task<T>`
+  propaga as exceções.
+- **Python** levanta subclasses de `ItscamError` (`ItscamTimeoutError`,
   `ItscamAuthError`, `ItscamConnectionError`).
-- **Go** returns a typed `error` whose underlying type carries the
-  `Error::Code` value so callers can `errors.Is(err, itscam.ErrTimeout)`.
+- **Go** devolve um `error` tipado que carrega o valor de `Error::Code`,
+  então o caller pode usar `errors.Is(err, itscam.ErrTimeout)`.
 
-See the per-wrapper chapters for details.
+Veja os capítulos de cada wrapper para os detalhes.

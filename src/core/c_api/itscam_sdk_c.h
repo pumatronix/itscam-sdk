@@ -8,6 +8,16 @@
  *  C-compatible API for use with FFI bindings (Python/Go).
  *  All functions use opaque handles and basic C types.
  */
+
+/**
+ * @defgroup c_api C API (FFI bridge)
+ * @brief Stable C ABI used by the C# / Python / Go wrappers.
+ *
+ * Every wrapper talks to the SDK through this header. The C++ API lives
+ * in `src/core/itscam_*.h` and is the recommended surface for native
+ * C++17 applications.
+ */
+
 #ifndef ITSCAM_SDK_C_H
 #define ITSCAM_SDK_C_H
 

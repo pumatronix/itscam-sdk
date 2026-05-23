@@ -6,6 +6,11 @@ O wrapper C# fica em
 [`src/wrappers/csharp/`](../../src/wrappers/csharp/) e tem como target
 **netstandard2.0**, o que o torna consumível por:
 
+> **Referência completa de classes, métodos e XML docs**:
+> [DocFX do `Pumatronix.Itscam.Sdk`](/api-ref/csharp/index.html).
+> Esta página cobre instalação, padrões idiomáticos e exemplos.
+
+
 - .NET 6 / 7 / 8 / 9
 - .NET Framework 4.6.1+
 - Mono / Xamarin / Unity (qualquer runtime que fale netstandard2.0)

@@ -1,0 +1,40 @@
+{
+  "metadata": [
+    {
+      "src": [
+        {
+          "files": ["Itscam.Sdk.csproj"],
+          "src": "../../src/wrappers/csharp/Itscam.Sdk"
+        }
+      ],
+      "dest": "obj/api",
+      "memberLayout": "samePage",
+      "noRestore": false,
+      "filter": "docfx-filter.yml"
+    }
+  ],
+  "build": {
+    "content": [
+      {
+        "files": ["**/*.{md,yml}"],
+        "src": "obj/api",
+        "dest": "."
+      },
+      {
+        "files": ["index.md"],
+        "src": "docfx-content"
+      }
+    ],
+    "globalMetadata": {
+      "_appName": "ITSCAM SDK -- C#",
+      "_appTitle": "ITSCAM Client SDK -- C# / .NET API reference",
+      "_enableSearch": true,
+      "_disableContribution": true
+    },
+    "output": "../../docs-site/content/public/api-ref/csharp",
+    "template": ["default", "modern"],
+    "postProcessors": [],
+    "keepFileLink": false,
+    "disableGitFeatures": true
+  }
+}

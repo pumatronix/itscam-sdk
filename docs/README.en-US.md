@@ -3,20 +3,21 @@
 [Português (Brasil)](README.md) | [English (US)](README.en-US.md)
 
 Chapter-style reference for the ITSCAM Client SDK. Start with
-[Overview](overview.md) or jump straight to the topic you need.
+[Overview](overview.en-US.md) or jump straight to the topic you need.
 
 ## Foundations
 
-- [Overview](overview.md) -- what the SDK is, supported platforms, and repository layout.
-- [Getting started](getting-started.md) -- build the SDK, run examples, and link your app.
-- [Error handling](error-handling.md) -- `Result<T>`, `Future<T>`, error codes, and logging.
-- [HTTPS / TLS](https-tls.md) -- vendored mbedTLS, configuration, and failure modes.
+- [Overview](overview.en-US.md) -- what the SDK is, supported platforms, and repository layout.
+- [Getting started](getting-started.en-US.md) -- build the SDK, run examples, and link your app.
+- [Error handling](error-handling.en-US.md) -- `Result<T>`, `Future<T>`, error codes, and logging.
+- [HTTPS / TLS](https-tls.en-US.md) -- vendored mbedTLS, configuration, and failure modes.
+- [Typed REST helpers and codegen](codegen.en-US.md) -- bundled OpenAPI snapshot and regeneration workflows.
 
 ## Camera Surfaces (C++)
 
-- [`ItscamClient` (binary TCP)](api/binary-client.md)
-- [`ItscamRestClient` (HTTP / JSON)](api/rest-client.md)
-- [`ItscamCgiClient` (CGI / multipart)](api/cgi-client.md)
+- [`ItscamClient` (binary TCP)](api/binary-client.en-US.md)
+- [`ItscamRestClient` (HTTP / JSON)](api/rest-client.en-US.md)
+- [`ItscamCgiClient` (CGI / multipart)](api/cgi-client.en-US.md)
 
 ## Language Wrappers
 
@@ -37,7 +38,11 @@ dependency and save the first camera image to disk:
 
 ## History
 
-- [Migration from CougarClient](migration-cougar.md)
+- [Migration from CougarClient](migration-cougar.en-US.md)
+
+PT-BR is the primary language for every page; the `*.en-US.md`
+companions track the current translation pass. Tutorials are PT-BR-only
+for now.
 
 For the project entry point with quick-link tables, see
-[../README.md](../README.md).
+[../README.en-US.md](../README.en-US.md).

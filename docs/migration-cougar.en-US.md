@@ -1,12 +1,12 @@
-# Migração do CougarClient
+# Migration from CougarClient
 
 [Português (Brasil)](migration-cougar.md) | [English (US)](migration-cougar.en-US.md)
 
-O legacy `CougarClient` é substituído pelo `ItscamClient`. A nova API
-mantém o mesmo on-wire protocol mas expõe métodos tipados em vez de
-envelopes JSON genéricos.
+The legacy `CougarClient` is replaced by `ItscamClient`.  The new API
+keeps the same on-wire protocol but exposes typed methods instead of
+generic JSON envelopes.
 
-| Antigo (`CougarClient`)                             | Novo (`ItscamClient`)                             |
+| Old (`CougarClient`)                                | New (`ItscamClient`)                              |
 | --------------------------------------------------- | ------------------------------------------------- |
 | `cougar.start("ip")`                                | `camera.connect("ip")`                            |
 | `genericSyncCall(GC_AUTHENTICATE, {{"pass","x"}})`  | `camera.authenticate("x")`                        |
@@ -16,19 +16,19 @@ envelopes JSON genéricos.
 | `setMixedCallback(CBMX_IMGPKG_SNAPSHOT, fn)`        | `camera.onSnapshotImage(fn)`                      |
 | `genericSyncCall(GC_SET_SERIAL_CFGS, json)`         | `camera.configureSerial(SerialPort::Serial1, ...)`|
 | `genericSyncCall(GC_SEND_SERIAL_DATA, json)`        | `camera.sendSerialAscii(SerialPort::Serial1, ...)`|
-| `genericSyncCall(GC_SET_EQUIP_CFGS, json)`          | `camera.setConfig(path, data)` ou typed helper    |
+| `genericSyncCall(GC_SET_EQUIP_CFGS, json)`          | `camera.setConfig(path, data)` or typed helper    |
 | `genericSyncCall(GC_CMD_REBOOT, {})`                | `camera.reboot()`                                 |
 
-O que você ganha em cima da API legacy:
+What you get on top of the legacy API:
 
-- `Result<T>` / `Future<T>` para error handling explícito e tipado.
-- Callback de lifecycle `ConnectionState` (`Connected`, `Disconnected`,
+- `Result<T>` / `Future<T>` for explicit, typed error handling.
+- A `ConnectionState` lifecycle callback (`Connected`, `Disconnected`,
   `Reconnecting`, `Reconnected`).
-- Auto-reconnect com restore completo da session.
-- Acumulador de exposure-group com callbacks por grupo.
-- Helpers de trigger / exposure cientes do profile ativo.
-- Escape hatch genérico `setConfig(path, data)` quando ainda não existe
-  typed helper.
+- Auto-reconnect with full session restore.
+- Exposure-group accumulator with per-group callbacks.
+- Profile-aware trigger / exposure helpers.
+- Generic `setConfig(path, data)` escape hatch when no typed helper
+  exists yet.
 
-Veja a [referência do binary client](api/binary-client.md) para a
-superfície completa.
+See the [binary client reference](api/binary-client.md) for the full
+surface.

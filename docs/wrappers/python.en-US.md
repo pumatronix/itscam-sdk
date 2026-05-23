@@ -7,6 +7,10 @@ The Python wrapper lives at
 on top of the SDK's C API.  It supports Python 3.7+ on Linux and
 Windows.
 
+> **Full class and method reference** (generated from source):
+> [pdoc for the `itscam` module](/api-ref/python/itscam.html). This
+> page covers installation, usage patterns, and examples.
+
 ## Install
 
 The wrapper is a regular `setuptools` package.  From a checkout of the

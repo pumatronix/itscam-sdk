@@ -39,5 +39,10 @@ SDK e salvar a primeira imagem da câmera em disco:
 
 - [Migration from CougarClient](migration-cougar.md)
 
+Cada chapter PT-BR tem uma versão em inglês com sufixo `*.en-US.md`
+(por exemplo, [`overview.en-US.md`](overview.en-US.md)). O switcher
+no topo de cada arquivo aponta para o par correspondente. O
+[índice em inglês](README.en-US.md) lista o mapping completo.
+
 Para o ponto de entrada do projeto, com quick-link tables, veja
 [../README.md](../README.md).

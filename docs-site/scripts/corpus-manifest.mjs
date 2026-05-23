@@ -3,14 +3,17 @@
  * Keys use forward-slash paths relative to the repository root.
  */
 import { readdirSync, statSync } from "node:fs";
-import { join, relative, extname } from "node:path";
+import { dirname, join, relative, extname } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const REPO_ROOT = join(import.meta.dirname, "../..");
+const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = join(SCRIPT_DIR, "../..");
 
 const STATIC_ENTRIES = [
   "README.md",
   "README.en-US.md",
   "docs/README.md",
+  "docs/README.en-US.md",
   "AGENTS.md",
 ];
 
@@ -43,7 +46,11 @@ function walkDocs() {
           entries.push(relative(REPO_ROOT, join(full, file)));
         }
       }
-    } else if (name.endsWith(".md") && name !== "README.md") {
+    } else if (
+      name.endsWith(".md") &&
+      name !== "README.md" &&
+      name !== "README.en-US.md"
+    ) {
       entries.push(relative(REPO_ROOT, full));
     }
   }

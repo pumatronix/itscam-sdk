@@ -52,6 +52,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gpg \
     ca-certificates \
     libicu66 \
+    # Documentation generators (Doxygen for C/C++ API ref).
+    # DocFX (C#), pdoc (Python), and gomarkdoc (Go) are installed below
+    # alongside their respective toolchains.
+    doxygen \
+    graphviz \
     && rm -rf /var/lib/apt/lists/*
 
 # =============================================================================
@@ -69,6 +74,15 @@ RUN set -eux; \
 
 ENV DOTNET_CLI_TELEMETRY_OPTOUT=1
 ENV DOTNET_NOLOGO=1
+
+# DocFX is the C# / .NET API reference generator. Installed under a
+# shared tool path so the builder user (created below) can run it too.
+RUN dotnet tool install --tool-path /usr/local/dotnet-tools docfx
+ENV PATH=/usr/local/dotnet-tools:$PATH
+
+# pdoc generates the Python wrapper's API reference. The package is
+# installed system-wide so any user can run it inside the container.
+RUN python3 -m pip install --no-cache-dir pdoc
 
 # =============================================================================
 #  Install Go 1.25.6 (required for Wails)
@@ -105,6 +119,10 @@ ENV PATH=/usr/local/go/bin:/go/bin:/opt/node/bin:$PATH
 
 # Install Wails CLI for Go GUI builds (install to shared /go/bin)
 RUN GOBIN=/go/bin go install github.com/wailsapp/wails/v2/cmd/wails@${WAILS_VERSION}
+
+# gomarkdoc renders the Go wrapper's package documentation as markdown
+# so VitePress can serve it natively under /api-ref/go.
+RUN GOBIN=/go/bin go install github.com/princjef/gomarkdoc/cmd/gomarkdoc@latest
 
 # =============================================================================
 #  Non-root user setup

@@ -6,6 +6,10 @@ O wrapper Python fica em
 [`src/wrappers/python/`](../../src/wrappers/python/) e usa **ctypes**
 sobre a C API do SDK. Suporta Python 3.7+ no Linux e no Windows.
 
+> **Referência completa de classes e métodos** (gerada do código):
+> [pdoc do módulo `itscam`](/api-ref/python/itscam.html). Esta página
+> cobre instalação, padrões de uso e exemplos.
+
 ## Instalação
 
 O wrapper é um pacote `setuptools` comum. A partir de um checkout do

@@ -26,6 +26,9 @@
 .PHONY: docker-build docker-all docker-linux docker-windows docker-shell docker-go-gui
 .PHONY: docker-csharp docker-csharp-examples docker-csharp-examples-publish
 .PHONY: regression-examples docker-regression-examples
+.PHONY: docs-api docs-api-cpp docs-api-python docs-api-csharp docs-api-go
+.PHONY: docs-api-clean docs-sync docs-sync-check
+.PHONY: docs-site docker-docs-api docker-docs-api-cpp docker-docs-site
 
 # Source-tree root.  Every subordinate path below is relative to $(SRC_DIR).
 SRC_DIR := src
@@ -322,6 +325,138 @@ codegen-check: codegen-install
 	cd $(CODEGEN_DIR) && $(NODE) codegen.mjs --check $(CODEGEN_ARGS)
 
 # ============================================================================
+#  Documentation site (VitePress) and API reference (Doxygen, ...)
+# ============================================================================
+#
+# `make docs-api-cpp` runs Doxygen on the public C/C++ headers under
+# src/core/ and writes HTML to docs-site/content/public/api-ref/cpp/.
+# VitePress copies that directory verbatim into the deployed site, so
+# the generated reference is reachable at /api-ref/cpp/.
+#
+# Wrapper API references (Python via pdoc, C# via DocFX, Go via
+# gomarkdoc) hang off `docs-api` and are added in their own targets.
+#
+# `make docs-sync` runs the VitePress content sync script standalone;
+# `docs-sync-check` re-runs it and verifies that no source change was
+# accidentally made to README.md, AGENTS.md, or docs/ that would alter
+# the synced site output.
+
+DOCS_SITE_DIR    := docs-site
+DOXYGEN          ?= doxygen
+DOXYFILE         := tools/docs/Doxyfile
+DOCS_API_OUT     := $(DOCS_SITE_DIR)/content/public/api-ref
+
+docs-api-cpp:
+	@echo "=== Generating C/C++ API reference (Doxygen) ==="
+	@command -v $(DOXYGEN) >/dev/null 2>&1 || { \
+		echo "doxygen not found in PATH. Use 'make docker-docs-api-cpp' or 'apt install doxygen'." >&2; \
+		exit 1; \
+	}
+	@mkdir -p $(DOCS_API_OUT)/cpp
+	$(DOXYGEN) $(DOXYFILE)
+
+# Python wrapper documentation. pdoc imports the package, which loads
+# libitscam_sdk via ctypes -- so we depend on `lib` and prepend the
+# build directory to LD_LIBRARY_PATH for the duration of the run.
+PYTHON_WRAPPER_DIR := $(SRC_DIR)/wrappers/python
+docs-api-python: lib
+	@echo "=== Generating Python API reference (pdoc) ==="
+	@command -v pdoc >/dev/null 2>&1 || { \
+		echo "pdoc not found in PATH. 'pip install pdoc' or use 'make docker-docs-api-python'." >&2; \
+		exit 1; \
+	}
+	@mkdir -p $(DOCS_API_OUT)/python
+	@LD_LIBRARY_PATH=$(CURDIR)/$(SRC_DIR)/core/build/linux:$$LD_LIBRARY_PATH \
+		PYTHONPATH=$(CURDIR)/$(PYTHON_WRAPPER_DIR):$$PYTHONPATH \
+		pdoc itscam --output-directory $(DOCS_API_OUT)/python
+
+# C# / .NET wrapper documentation. DocFX consumes the XML docs that the
+# csproj already emits via <GenerateDocumentationFile>true</...>.
+DOCFX ?= docfx
+docs-api-csharp:
+	@echo "=== Generating C# / .NET API reference (DocFX) ==="
+	@command -v $(DOCFX) >/dev/null 2>&1 || { \
+		echo "docfx not found in PATH. 'dotnet tool install -g docfx' or use 'make docker-docs-api-csharp'." >&2; \
+		exit 1; \
+	}
+	@mkdir -p $(DOCS_API_OUT)/csharp
+	$(DOCFX) tools/docs/docfx.json
+
+# Go wrapper documentation. gomarkdoc emits a single markdown file that
+# VitePress renders natively (no separate HTML site).
+GOMARKDOC ?= gomarkdoc
+docs-api-go:
+	@echo "=== Generating Go API reference (gomarkdoc) ==="
+	@command -v $(GOMARKDOC) >/dev/null 2>&1 || { \
+		echo "gomarkdoc not found in PATH. 'go install github.com/princjef/gomarkdoc/cmd/gomarkdoc@latest' or use 'make docker-docs-api-go'." >&2; \
+		exit 1; \
+	}
+	@mkdir -p $(DOCS_SITE_DIR)/content/api-ref
+	$(GOMARKDOC) --output $(DOCS_SITE_DIR)/content/api-ref/go.md ./$(SRC_DIR)/wrappers/go/itscam
+
+docs-api: docs-api-cpp docs-api-python docs-api-csharp docs-api-go
+	@echo "=== API reference generated under $(DOCS_API_OUT)/ ==="
+
+docs-api-clean:
+	@rm -rf $(DOCS_API_OUT)
+	@rm -f $(DOCS_SITE_DIR)/content/api-ref/go.md
+
+docs-sync:
+	@echo "=== Syncing VitePress content from README + docs/ ==="
+	cd $(DOCS_SITE_DIR) && $(NODE) scripts/sync-content.mjs
+
+# Smoke test for the README -> docs-site mirror. The synced content/
+# folder is gitignored, so we cannot diff against a committed copy;
+# instead, the check runs sync-content and asserts that the home
+# routes (PT-BR + EN) carry recognisable content from the README. This
+# catches breakage in the link rewriter or sync script before it ships.
+docs-sync-check: docs-sync
+	@echo "=== Verifying VitePress home pages mirror README content ==="
+	@for f in $(DOCS_SITE_DIR)/content/index.md $(DOCS_SITE_DIR)/content/README.en-US.md; do \
+		if [ ! -s "$$f" ]; then \
+			echo "Sync check failed: $$f missing or empty." >&2; \
+			exit 1; \
+		fi; \
+	done
+	@grep -q "ITSCAM Client SDK" $(DOCS_SITE_DIR)/content/index.md || { \
+		echo "Sync check failed: PT-BR home page does not contain 'ITSCAM Client SDK'." >&2; \
+		exit 1; \
+	}
+	@grep -q "ITSCAM Client SDK" $(DOCS_SITE_DIR)/content/README.en-US.md || { \
+		echo "Sync check failed: EN home page does not contain 'ITSCAM Client SDK'." >&2; \
+		exit 1; \
+	}
+	@echo "Sync check OK."
+
+docs-site: docs-api
+	@echo "=== Building VitePress site ==="
+	cd $(DOCS_SITE_DIR) && $(NPM) install --no-audit --no-fund && $(NPM) run build
+
+docker-docs-api-cpp: docker-build
+	@echo "=== Generating C/C++ API reference inside Docker ==="
+	$(DOCKER_RUN) $(DOCKER_IMAGE) make docs-api-cpp
+
+docker-docs-api-python: docker-build
+	@echo "=== Generating Python API reference inside Docker ==="
+	$(DOCKER_RUN) $(DOCKER_IMAGE) make docs-api-python
+
+docker-docs-api-csharp: docker-build
+	@echo "=== Generating C# API reference inside Docker ==="
+	$(DOCKER_RUN) $(DOCKER_IMAGE) make docs-api-csharp
+
+docker-docs-api-go: docker-build
+	@echo "=== Generating Go API reference inside Docker ==="
+	$(DOCKER_RUN) $(DOCKER_IMAGE) make docs-api-go
+
+docker-docs-api: docker-build
+	@echo "=== Generating all API references inside Docker ==="
+	$(DOCKER_RUN) $(DOCKER_IMAGE) make docs-api
+
+docker-docs-site: docker-build
+	@echo "=== Building docs site inside Docker ==="
+	$(DOCKER_RUN) $(DOCKER_IMAGE) make docs-site
+
+# ============================================================================
 #  Docker Build
 # ============================================================================
 
@@ -435,6 +570,7 @@ clean:
 	@rm -rf $(SRC_DIR)/wrappers/csharp/nupkg
 	@rm -rf $(CODEGEN_DIR)/build
 	@rm -rf dist/
+	@rm -rf $(DOCS_API_OUT) $(DOCS_SITE_DIR)/content $(DOCS_SITE_DIR)/.vitepress/dist tools/docs/obj
 	@echo "Clean complete."
 
 # ============================================================================
@@ -495,6 +631,18 @@ help:
 	@echo "  codegen-check   Verify checked-in REST types match the spec (CI gate)"
 	@echo "  Override SPEC=/path/to/itscam.yaml to use a custom OpenAPI document"
 	@echo "  Override OUT_DIR=... to write generated files to a different tree"
+	@echo ""
+	@echo "Documentation targets:"
+	@echo "  docs-sync           Run README -> docs-site mirror sync only"
+	@echo "  docs-sync-check     CI guard: sync + verify mirror integrity"
+	@echo "  docs-api-cpp        Generate Doxygen reference (C/C++)"
+	@echo "  docs-api-python     Generate pdoc reference (Python wrapper)"
+	@echo "  docs-api-csharp     Generate DocFX reference (C# wrapper)"
+	@echo "  docs-api-go         Generate gomarkdoc reference (Go wrapper)"
+	@echo "  docs-api            All language API references at once"
+	@echo "  docs-site           Sync + docs-api + VitePress production build"
+	@echo "  docker-docs-api[-LANG]   Same docs-api targets inside Docker"
+	@echo "  docker-docs-site         docs-site inside Docker"
 	@echo ""
 	@echo "Other targets:"
 	@echo "  version         Regenerate version metadata from git tag / commit / date"
