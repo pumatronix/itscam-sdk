@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project>
+  <Import Project="Version.props" Condition="Exists('Version.props')" />
+  <PropertyGroup Condition="'$(ItscamLibVersion)' == ''">
+    <ItscamLibVersion>0.0.0</ItscamLibVersion>
+  </PropertyGroup>
+</Project>

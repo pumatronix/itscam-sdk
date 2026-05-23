@@ -83,7 +83,21 @@ from .utils import (
     get_version,
 )
 
-__version__ = "1.0.0"
+try:
+    from ._version import (
+        __version__,
+        __version_full__,
+        __git_sha__,
+        __git_sha_short__,
+        __build_date__,
+    )
+except ImportError:
+    __version__ = "0.0.0"
+    __version_full__ = __version__
+    __git_sha__ = "unknown"
+    __git_sha_short__ = "unknown"
+    __build_date__ = "unknown"
+
 __all__ = [
     # Clients
     "ItscamClient",

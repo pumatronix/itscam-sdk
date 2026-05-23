@@ -124,6 +124,7 @@ Reference: [`docs/https-tls.md`](docs/https-tls.md).
 ## 8. Build commands you'll actually run
 
 ```bash
+make version                # regenerate version metadata (git tag + sha + date)
 make lib                  # build libitscam_sdk.{so,a}
 make examples             # build the four C++ examples
 make csharp               # build Itscam.Sdk.dll

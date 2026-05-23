@@ -22,7 +22,7 @@
 .PHONY: csharp csharp-pack csharp-examples csharp-examples-publish
 .PHONY: csharp-mjpeg-grabber-example csharp-software-trigger-example
 .PHONY: install
-.PHONY: sdk-dist sdk-dist-clean docker-sdk-dist
+.PHONY: version sdk-dist sdk-dist-clean docker-sdk-dist
 .PHONY: docker-build docker-all docker-linux docker-windows docker-shell docker-go-gui
 .PHONY: docker-csharp docker-csharp-examples docker-csharp-examples-publish
 .PHONY: regression-examples docker-regression-examples
@@ -30,14 +30,25 @@
 # Source-tree root.  Every subordinate path below is relative to $(SRC_DIR).
 SRC_DIR := src
 
+VERSION_SCRIPT := tools/version/gen-version.sh
+VERSION_MK := tools/version/sdk-version.mk
+-include $(VERSION_MK)
+
 # Default target - build library and C++ examples
 default: lib examples
+
+# ============================================================================
+#  Version metadata (git tag + commit + build date)
+# ============================================================================
+
+version:
+	@$(VERSION_SCRIPT)
 
 # ============================================================================
 #  Core Library
 # ============================================================================
 
-lib:
+lib: version
 	@echo "=== Building core library (Linux) ==="
 	$(MAKE) -C $(SRC_DIR)/core linux
 
@@ -145,6 +156,8 @@ csharp-pack-linux: lib
 	@if ! command -v dotnet > /dev/null; then \
 		echo "dotnet not found. Install .NET 8 SDK first."; exit 1; \
 	fi
+	@rm -rf $(CURDIR)/$(SRC_DIR)/wrappers/csharp/nupkg
+	@mkdir -p $(CURDIR)/$(SRC_DIR)/wrappers/csharp/nupkg
 	cd $(SRC_DIR)/wrappers/csharp && \
 	dotnet pack -c Release Itscam.Sdk/Itscam.Sdk.csproj \
 	    -o $(CURDIR)/$(SRC_DIR)/wrappers/csharp/nupkg
@@ -373,13 +386,12 @@ all: linux windows examples wrappers
 #  SDK distribution archive (consumer tar.gz)
 # ============================================================================
 
-SDK_VERSION := $(shell awk -F'"' '/ITSCAM_SDK_VERSION_STRING/ {print $$2; exit}' $(SRC_DIR)/core/itscam_sdk.h)
 SDK_RID ?= linux-x64
 SDK_DIST_SCRIPT := $(CURDIR)/tools/packaging/make-sdk-dist.sh
 
-sdk-dist: lib csharp-pack-linux
+sdk-dist: version lib csharp-pack-linux
 	@echo "=== Packaging SDK distribution ($(SDK_VERSION), $(SDK_RID)) ==="
-	@SDK_RID=$(SDK_RID) SDK_VERSION=$(SDK_VERSION) $(SDK_DIST_SCRIPT)
+	@SDK_RID=$(SDK_RID) $(SDK_DIST_SCRIPT)
 
 sdk-dist-clean:
 	@echo "=== Removing SDK distribution artefacts ==="
@@ -483,6 +495,7 @@ help:
 	@echo "  Override OUT_DIR=... to write generated files to a different tree"
 	@echo ""
 	@echo "Other targets:"
+	@echo "  version         Regenerate version metadata from git tag / commit / date"
 	@echo "  sdk-dist        Build consumer tar.gz (cpp/c/csharp/python/go)"
 	@echo "  docker-sdk-dist Same, inside Docker"
 	@echo "  sdk-dist-clean  Remove dist/ archives and staging"

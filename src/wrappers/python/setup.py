@@ -2,11 +2,23 @@
 ITSCAM SDK - Python Package Setup
 """
 
+from pathlib import Path
+
 from setuptools import setup, find_packages
+
+
+def _load_version() -> str:
+    version_file = Path(__file__).parent / "itscam" / "_version.py"
+    if version_file.exists():
+        namespace: dict[str, str] = {}
+        exec(version_file.read_text(encoding="utf-8"), namespace)
+        return namespace["__version__"]
+    return "0.0.0"
+
 
 setup(
     name="itscam",
-    version="1.0.0",
+    version=_load_version(),
     description="Pumatronix ITSCAM Camera Client SDK",
     long_description=open("README.md").read() if __import__("os").path.exists("README.md") else "",
     long_description_content_type="text/markdown",

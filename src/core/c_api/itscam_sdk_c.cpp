@@ -7,6 +7,7 @@
  */
 
 #include "itscam_sdk_c.h"
+#include "../itscam_sdk_version.h"
 #include "../itscam_client.h"
 #include "../itscam_sdk_utils.h"
 #include "impl/itscam_c_internal.h"
@@ -718,5 +719,5 @@ const char* ITSCAM_getLastError(void) {
 }
 
 const char* ITSCAM_getVersion(void) {
-    return "1.0.0";
+    return ITSCAM_SDK_VERSION_FULL;
 }

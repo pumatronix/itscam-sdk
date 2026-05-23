@@ -11,7 +11,6 @@
     <!-- NuGet metadata -->
     <IsPackable>true</IsPackable>
     <PackageId>Pumatronix.Itscam.Sdk</PackageId>
-    <Version>1.0.0</Version>
     <Authors>Pumatronix Equipamentos Eletronicos</Authors>
     <Company>Pumatronix</Company>
     <Product>ITSCAM Client SDK</Product>
@@ -54,15 +53,15 @@
     first to produce them.
   -->
   <ItemGroup>
-    <None Include="..\..\..\core\build\linux\libitscam_sdk.so.1.0.0"
+    <None Include="..\..\..\core\build\linux\libitscam_sdk.so.$(ItscamLibVersion)"
           Pack="true" PackagePath="runtimes\linux-x64\native\libitscam_sdk.so"
-          Condition="Exists('..\..\..\core\build\linux\libitscam_sdk.so.1.0.0')" />
-    <None Include="..\..\..\core\build\linux-arm\libitscam_sdk.so.1.0.0"
+          Condition="Exists('..\..\..\core\build\linux\libitscam_sdk.so.$(ItscamLibVersion)')" />
+    <None Include="..\..\..\core\build\linux-arm\libitscam_sdk.so.$(ItscamLibVersion)"
           Pack="true" PackagePath="runtimes\linux-arm\native\libitscam_sdk.so"
-          Condition="Exists('..\..\..\core\build\linux-arm\libitscam_sdk.so.1.0.0')" />
-    <None Include="..\..\..\core\build\linux-arm64\libitscam_sdk.so.1.0.0"
+          Condition="Exists('..\..\..\core\build\linux-arm\libitscam_sdk.so.$(ItscamLibVersion)')" />
+    <None Include="..\..\..\core\build\linux-arm64\libitscam_sdk.so.$(ItscamLibVersion)"
           Pack="true" PackagePath="runtimes\linux-arm64\native\libitscam_sdk.so"
-          Condition="Exists('..\..\..\core\build\linux-arm64\libitscam_sdk.so.1.0.0')" />
+          Condition="Exists('..\..\..\core\build\linux-arm64\libitscam_sdk.so.$(ItscamLibVersion)')" />
     <None Include="..\..\..\core\build\windows\itscam_sdk.dll"
           Pack="true" PackagePath="runtimes\win-x64\native\itscam_sdk.dll"
           Condition="Exists('..\..\..\core\build\windows\itscam_sdk.dll')" />

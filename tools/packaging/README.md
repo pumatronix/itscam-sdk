@@ -24,12 +24,13 @@ dist/itscam-sdk-<version>-<rid>.tar.gz
 
 | Variable | Default | Purpose |
 | -------- | ------- | ------- |
-| `SDK_VERSION` | from `itscam_sdk.h` | Archive version segment |
+| `SDK_VERSION` | from git tag + commit (see `tools/version/`) | Archive version segment |
+| `SDK_LIB_VERSION` | tag semver (`M.m.p`) | Native `.so` filename |
 | `SDK_RID` | `linux-x64` | Platform tag in the archive name |
 
 ## Prerequisites
 
-- `make lib` artefacts (`src/core/build/linux/libitscam_sdk.so.1.0.0`)
+- `make lib` artefacts (`src/core/build/linux/libitscam_sdk.so.<tag-version>`)
 - `dotnet` for `make csharp-pack`
 - `python3` (+ `build` module or setuptools) for the wheel
 

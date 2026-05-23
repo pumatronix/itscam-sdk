@@ -9,10 +9,7 @@
  */
 #pragma once
 
-#define ITSCAM_SDK_VERSION_MAJOR 1
-#define ITSCAM_SDK_VERSION_MINOR 0
-#define ITSCAM_SDK_VERSION_PATCH 0
-#define ITSCAM_SDK_VERSION_STRING "1.0.0"
+#include "itscam_sdk_version.h"
 
 #include "itscam_types.h"
 #include "itscam_client.h"

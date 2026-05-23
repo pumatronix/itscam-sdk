@@ -42,3 +42,11 @@ tools/codegen/build/
 
 # SDK consumer distribution (tools/packaging/make-sdk-dist.sh)
 dist/
+
+# Generated version metadata (tools/version/gen-version.sh)
+tools/version/sdk-version.mk
+src/core/itscam_sdk_version.h
+src/wrappers/python/itscam/_version.py
+src/wrappers/csharp/Version.props
+src/wrappers/go/itscam/version.go
+VERSION.json

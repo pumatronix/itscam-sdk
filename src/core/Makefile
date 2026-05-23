@@ -11,10 +11,18 @@
 #
 # Copyright (c) 2026 Pumatronix
 
-.PHONY: all linux windows clean install help
+.PHONY: all linux windows clean install help version
 
 # Default target
 all: linux
+
+REPO_ROOT     := $(abspath $(CURDIR)/../..)
+VERSION_SCRIPT := $(REPO_ROOT)/tools/version/gen-version.sh
+-include $(REPO_ROOT)/tools/version/sdk-version.mk
+SDK_LIB_VERSION ?= 0.0.0
+
+version:
+	@$(VERSION_SCRIPT)
 
 # Build directories
 BUILD_DIR        := build
@@ -111,8 +119,8 @@ OBJS_WINDOWS := $(OBJS_SDK_WINDOWS) $(OBJS_MBEDTLS_WIN)
 
 # Output files
 LIB_LINUX_SO     := $(BUILD_DIR_LINUX)/libitscam_sdk.so
-LIB_LINUX_SONAME := libitscam_sdk.so.1
-LIB_LINUX_REAL   := libitscam_sdk.so.1.0.0
+LIB_LINUX_SONAME := libitscam_sdk.so.$(word 1,$(subst ., ,$(SDK_LIB_VERSION)))
+LIB_LINUX_REAL   := $(BUILD_DIR_LINUX)/libitscam_sdk.so.$(SDK_LIB_VERSION)
 LIB_LINUX_A      := $(BUILD_DIR_LINUX)/libitscam_sdk.a
 LIB_WINDOWS      := $(BUILD_DIR_WINDOWS)/itscam_sdk.dll
 IMPLIB_WINDOWS   := $(BUILD_DIR_WINDOWS)/libitscam_sdk.a
@@ -122,13 +130,13 @@ LIB_WINDOWS_A    := $(BUILD_DIR_WINDOWS)/libitscam_sdk_static.a
 #  Linux build
 # ============================================================================
 
-linux: $(LIB_LINUX_SO) $(LIB_LINUX_A)
+linux: version $(LIB_LINUX_SO) $(LIB_LINUX_A)
 
 $(LIB_LINUX_SO): $(OBJS_LINUX)
 	@echo "Linking libitscam_sdk.so..."
-	@$(CXX_LINUX) $(LDFLAGS_LINUX) -Wl,-soname,$(LIB_LINUX_SONAME) -o $(BUILD_DIR_LINUX)/$(LIB_LINUX_REAL) $^
-	@ln -sf $(LIB_LINUX_REAL) $(BUILD_DIR_LINUX)/$(LIB_LINUX_SONAME)
-	@ln -sf $(LIB_LINUX_REAL) $(LIB_LINUX_SO)
+	@$(CXX_LINUX) $(LDFLAGS_LINUX) -Wl,-soname,$(LIB_LINUX_SONAME) -o $(LIB_LINUX_REAL) $^
+	@ln -sf libitscam_sdk.so.$(SDK_LIB_VERSION) $(BUILD_DIR_LINUX)/$(LIB_LINUX_SONAME)
+	@ln -sf libitscam_sdk.so.$(SDK_LIB_VERSION) $(LIB_LINUX_SO)
 
 $(LIB_LINUX_A): $(OBJS_LINUX)
 	@echo "Creating libitscam_sdk.a..."
@@ -181,13 +189,14 @@ install: linux
 	@echo "Installing to $(PREFIX)..."
 	@install -d $(PREFIX)/lib
 	@install -d $(PREFIX)/include/itscam
-	@install -m 644 $(BUILD_DIR_LINUX)/$(LIB_LINUX_REAL) $(PREFIX)/lib/
-	@ln -sf $(LIB_LINUX_REAL) $(PREFIX)/lib/$(LIB_LINUX_SONAME)
-	@ln -sf $(LIB_LINUX_REAL) $(PREFIX)/lib/libitscam_sdk.so
+	@install -m 644 $(LIB_LINUX_REAL) $(PREFIX)/lib/
+	@ln -sf libitscam_sdk.so.$(SDK_LIB_VERSION) $(PREFIX)/lib/$(LIB_LINUX_SONAME)
+	@ln -sf libitscam_sdk.so.$(SDK_LIB_VERSION) $(PREFIX)/lib/libitscam_sdk.so
 	@install -m 644 itscam_client.h $(PREFIX)/include/itscam/
 	@install -m 644 itscam_rest_client.h $(PREFIX)/include/itscam/
 	@install -m 644 itscam_cgi_client.h $(PREFIX)/include/itscam/
 	@install -m 644 itscam_sdk.h $(PREFIX)/include/itscam/
+	@install -m 644 itscam_sdk_version.h $(PREFIX)/include/itscam/
 	@install -m 644 c_api/itscam_sdk_c.h $(PREFIX)/include/itscam/
 	@install -m 644 c_api/itscam_rest_client_c.h $(PREFIX)/include/itscam/
 	@install -m 644 c_api/itscam_cgi_client_c.h $(PREFIX)/include/itscam/

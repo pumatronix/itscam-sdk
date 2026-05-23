@@ -18,17 +18,43 @@ CORE="$ROOT/src/core"
 PY="$ROOT/src/wrappers/python"
 CS="$ROOT/src/wrappers/csharp"
 GO="$ROOT/src/wrappers/go"
+VERSION_JSON="$ROOT/VERSION.json"
+VERSION_MK="$ROOT/tools/version/sdk-version.mk"
+
+load_version_metadata() {
+    if [ -f "$VERSION_JSON" ]; then
+        eval "$(python3 - "$VERSION_JSON" <<'PY'
+import json, shlex, sys
+data = json.load(open(sys.argv[1], encoding="utf-8"))
+fields = {
+    "SDK_VERSION": data["version"],
+    "SDK_VERSION_FULL": data["versionFull"],
+    "SDK_LIB_VERSION": data["libVersion"],
+    "SDK_GIT_SHA": data["gitSha"],
+    "SDK_GIT_SHA_SHORT": data["gitShaShort"],
+    "SDK_BUILD_DATE": data["buildDate"],
+}
+for key, value in fields.items():
+    print(f"{key}={shlex.quote(str(value))}")
+PY
+)"
+        return
+    fi
+    if [ -f "$VERSION_MK" ]; then
+        set -a
+        # shellcheck disable=SC1091
+        . "$VERSION_MK"
+        set +a
+        SDK_VERSION_FULL="${SDK_VERSION_FULL:-$SDK_VERSION}"
+        SDK_LIB_VERSION="${SDK_LIB_VERSION:-$SDK_VERSION}"
+        return
+    fi
+    die "missing VERSION.json (run 'make version' first)"
+}
 
 SDK_RID="${SDK_RID:-linux-x64}"
-SDK_VERSION="${SDK_VERSION:-$(sed -n 's/^#define ITSCAM_SDK_VERSION_STRING "\(.*\)"/\1/p' "$CORE/itscam_sdk.h")}"
-SDK_VERSION="${SDK_VERSION:-1.0.0}"
 
 DIST_ROOT="$ROOT/dist"
-STAGING="$DIST_ROOT/sdk-staging/itscam-sdk-${SDK_VERSION}-${SDK_RID}"
-ARCHIVE="$DIST_ROOT/itscam-sdk-${SDK_VERSION}-${SDK_RID}.tar.gz"
-
-LIB_DIR="$CORE/build/linux"
-LIB_REAL="$LIB_DIR/libitscam_sdk.so.1.0.0"
 
 die() { echo "make-sdk-dist: $*" >&2; exit 1; }
 
@@ -46,6 +72,7 @@ stage_cpp_headers() {
 
     local headers=(
         itscam_sdk.h
+        itscam_sdk_version.h
         itscam_client.h
         itscam_rest_client.h
         itscam_cgi_client.h
@@ -70,9 +97,9 @@ stage_cpp_headers() {
 stage_native_lib() {
     local dest="$1"
     mkdir -p "$dest"
-    cp "$LIB_REAL" "$dest/libitscam_sdk.so.1.0.0"
-    ln -sf libitscam_sdk.so.1.0.0 "$dest/libitscam_sdk.so.1"
-    ln -sf libitscam_sdk.so.1.0.0 "$dest/libitscam_sdk.so"
+    cp "$LIB_REAL" "$dest/libitscam_sdk.so.${SDK_LIB_VERSION}"
+    ln -sf "libitscam_sdk.so.${SDK_LIB_VERSION}" "$dest/libitscam_sdk.so.$(echo "$SDK_LIB_VERSION" | cut -d. -f1)"
+    ln -sf "libitscam_sdk.so.${SDK_LIB_VERSION}" "$dest/libitscam_sdk.so"
 }
 
 stage_c_headers() {
@@ -184,10 +211,14 @@ stage_go_module() {
 
 write_readme() {
     cat >"$STAGING/README.txt" <<EOF
-ITSCAM Client SDK ${SDK_VERSION} (${SDK_RID})
+ITSCAM Client SDK ${SDK_VERSION_FULL} (${SDK_RID})
 ============================================
 
 Consumer bundle produced by: make sdk-dist
+Git commit: ${SDK_GIT_SHA}
+Build date: ${SDK_BUILD_DATE}
+
+See VERSION.json for machine-readable metadata.
 
 C / C++
 -------
@@ -231,6 +262,18 @@ EOF
 }
 
 main() {
+    load_version_metadata
+
+    local lib_dir="$CORE/build/linux"
+    local lib_real="$lib_dir/libitscam_sdk.so.${SDK_LIB_VERSION}"
+    local staging="$DIST_ROOT/sdk-staging/itscam-sdk-${SDK_VERSION}-${SDK_RID}"
+    local archive="$DIST_ROOT/itscam-sdk-${SDK_VERSION}-${SDK_RID}.tar.gz"
+
+    LIB_DIR="$lib_dir"
+    LIB_REAL="$lib_real"
+    STAGING="$staging"
+    ARCHIVE="$archive"
+
     require_file "$LIB_REAL"
 
     echo "=== Staging SDK distribution ${SDK_VERSION} (${SDK_RID}) ==="
@@ -244,6 +287,7 @@ main() {
     stage_csharp_nupkg
     stage_python_wheel
     stage_go_module
+    cp "$ROOT/VERSION.json" "$STAGING/VERSION.json"
     write_readme
 
     mkdir -p "$DIST_ROOT"
