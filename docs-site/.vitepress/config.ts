@@ -82,9 +82,9 @@ export default defineConfig({
           // content/public/api-ref/<lang>/ and is shipped verbatim by
           // VitePress. Links use absolute .html paths so the router
           // does not try to resolve them as markdown routes.
-          { text: "C / C++ (Doxygen)", link: "/api-ref/cpp/index.html" },
-          { text: "Python (pdoc)", link: "/api-ref/python/itscam.html" },
-          { text: "C# / .NET (DocFX)", link: "/api-ref/csharp/index.html" },
+          { text: "C / C++ (Doxygen)", link: "/api-ref/cpp/index.html", target: "_self" },
+          { text: "Python (pdoc)", link: "/api-ref/python/itscam.html", target: "_self" },
+          { text: "C# / .NET (DocFX)", link: "/api-ref/csharp/index.html", target: "_self" },
           // gomarkdoc emits a single markdown page that VitePress
           // routes natively at /api-ref/go.
           { text: "Go (gomarkdoc)", link: "/api-ref/go" },
@@ -153,6 +153,11 @@ export default defineConfig({
       __AI_SEARCH_SNIPPET_VERSION__: JSON.stringify(
         process.env.VITE_AI_SEARCH_SNIPPET_VERSION ?? "v0.0.25",
       ),
+      // Generated API refs (Doxygen / pdoc / DocFX) ship as static HTML
+      // under content/public/api-ref/. Without this, VitePress intercepts
+      // in-site .html links and shows its 404 page instead of loading the
+      // files from public/ (Go works because it is a native markdown route).
+      "import.meta.env.VITE_EXTRA_EXTENSIONS": JSON.stringify("html"),
     },
   },
 });

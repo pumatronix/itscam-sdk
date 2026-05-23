@@ -37,6 +37,9 @@ src/wrappers/csharp/nupkg/
 tools/codegen/node_modules/
 tools/codegen/build/
 
+# Documentation tools (DocFX intermediate output for C# API ref)
+tools/docs/obj/
+
 # Live-camera regression runs (tools/regression/run-examples.sh)
 .regression/
 

@@ -394,7 +394,7 @@ docs-api-go:
 	@mkdir -p $(DOCS_SITE_DIR)/content/api-ref
 	$(GOMARKDOC) --output $(DOCS_SITE_DIR)/content/api-ref/go.md ./$(SRC_DIR)/wrappers/go/itscam
 
-docs-api: docs-api-cpp docs-api-python docs-api-csharp docs-api-go
+docs-api: docs-api-clean docs-api-cpp docs-api-python docs-api-csharp docs-api-go
 	@echo "=== API reference generated under $(DOCS_API_OUT)/ ==="
 
 docs-api-clean:
