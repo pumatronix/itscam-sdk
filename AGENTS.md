@@ -130,6 +130,8 @@ make csharp               # build Itscam.Sdk.dll
 make csharp-pack          # produce a multi-RID NuGet
 make go-cgi-example       # build the Go CGI example (needs `go` in PATH)
 make docker-all           # everything inside the reproducible builder image
+make sdk-dist             # consumer tar.gz (cpp/c/csharp/python/go)
+make docker-sdk-dist      # same, inside Docker
 ```
 
 After any C / C++ change run `make -C src/core linux` (fast incremental

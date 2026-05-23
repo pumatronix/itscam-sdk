@@ -22,6 +22,7 @@
 .PHONY: csharp csharp-pack csharp-examples csharp-examples-publish
 .PHONY: csharp-mjpeg-grabber-example csharp-software-trigger-example
 .PHONY: install
+.PHONY: sdk-dist sdk-dist-clean docker-sdk-dist
 .PHONY: docker-build docker-all docker-linux docker-windows docker-shell docker-go-gui
 .PHONY: docker-csharp docker-csharp-examples docker-csharp-examples-publish
 .PHONY: regression-examples docker-regression-examples
@@ -133,6 +134,16 @@ csharp-pack: lib
 	fi
 	@if command -v x86_64-w64-mingw32-g++ > /dev/null; then \
 		$(MAKE) windows; \
+	fi
+	cd $(SRC_DIR)/wrappers/csharp && \
+	dotnet pack -c Release Itscam.Sdk/Itscam.Sdk.csproj \
+	    -o $(CURDIR)/$(SRC_DIR)/wrappers/csharp/nupkg
+
+# NuGet with Linux native binary only (used by sdk-dist on linux-x64).
+csharp-pack-linux: lib
+	@echo "=== Packing C# wrapper (Linux native only) ==="
+	@if ! command -v dotnet > /dev/null; then \
+		echo "dotnet not found. Install .NET 8 SDK first."; exit 1; \
 	fi
 	cd $(SRC_DIR)/wrappers/csharp && \
 	dotnet pack -c Release Itscam.Sdk/Itscam.Sdk.csproj \
@@ -359,6 +370,26 @@ all: linux windows examples wrappers
 	@echo "=== Build complete ==="
 
 # ============================================================================
+#  SDK distribution archive (consumer tar.gz)
+# ============================================================================
+
+SDK_VERSION := $(shell awk -F'"' '/ITSCAM_SDK_VERSION_STRING/ {print $$2; exit}' $(SRC_DIR)/core/itscam_sdk.h)
+SDK_RID ?= linux-x64
+SDK_DIST_SCRIPT := $(CURDIR)/tools/packaging/make-sdk-dist.sh
+
+sdk-dist: lib csharp-pack-linux
+	@echo "=== Packaging SDK distribution ($(SDK_VERSION), $(SDK_RID)) ==="
+	@SDK_RID=$(SDK_RID) SDK_VERSION=$(SDK_VERSION) $(SDK_DIST_SCRIPT)
+
+sdk-dist-clean:
+	@echo "=== Removing SDK distribution artefacts ==="
+	@rm -rf dist/
+
+docker-sdk-dist: docker-build
+	@echo "=== Packaging SDK distribution inside Docker ==="
+	$(DOCKER_RUN) $(DOCKER_IMAGE) make sdk-dist SDK_RID=$(SDK_RID)
+
+# ============================================================================
 #  Installation
 # ============================================================================
 
@@ -389,6 +420,7 @@ clean:
 	        $(SRC_DIR)/wrappers/csharp/examples/BinaryCaptureExample/obj
 	@rm -rf $(SRC_DIR)/wrappers/csharp/nupkg
 	@rm -rf $(CODEGEN_DIR)/build
+	@rm -rf dist/
 	@echo "Clean complete."
 
 # ============================================================================
@@ -420,6 +452,7 @@ help:
 	@echo "  csharp-examples Build .NET wrapper + all C# examples"
 	@echo "  csharp-examples-publish  Self-contained single-file publish (no runtime needed)"
 	@echo "  csharp-pack     Build native artifacts and produce a NuGet"
+	@echo "  csharp-pack-linux  NuGet with Linux native binary only (sdk-dist)"
 	@echo "  csharp-mjpeg-grabber-example     Build + print run instructions"
 	@echo "  csharp-software-trigger-example  Build + print run instructions"
 	@echo ""
@@ -450,6 +483,9 @@ help:
 	@echo "  Override OUT_DIR=... to write generated files to a different tree"
 	@echo ""
 	@echo "Other targets:"
+	@echo "  sdk-dist        Build consumer tar.gz (cpp/c/csharp/python/go)"
+	@echo "  docker-sdk-dist Same, inside Docker"
+	@echo "  sdk-dist-clean  Remove dist/ archives and staging"
 	@echo "  all             Build everything"
 	@echo "  install         Install library to system"
 	@echo "  clean           Remove all build artifacts"

@@ -39,3 +39,6 @@ tools/codegen/build/
 
 # Live-camera regression runs (tools/regression/run-examples.sh)
 .regression/
+
+# SDK consumer distribution (tools/packaging/make-sdk-dist.sh)
+dist/
