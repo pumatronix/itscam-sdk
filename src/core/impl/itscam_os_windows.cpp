@@ -69,7 +69,7 @@ struct CondImpl {
 };
 
 // Thread-local error buffer
-static __declspec(thread) char s_errorBuffer[256] = {0};
+static thread_local char s_errorBuffer[256] = {0};
 
 // Winsock initialization tracking
 static volatile LONG s_winsockInitialized = 0;
@@ -508,7 +508,7 @@ int condBroadcast(CondHandle cond) {
 
 uint64_t monotonicMs() {
     // Use QueryPerformanceCounter for high precision
-    static LARGE_INTEGER frequency = {0};
+    static LARGE_INTEGER frequency = {};
     static BOOL hasFrequency = FALSE;
 
     if (!hasFrequency) {

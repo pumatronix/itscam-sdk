@@ -2068,7 +2068,7 @@ namespace Pumatronix.Itscam.RestTypes
 
         public override string Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
         {
-            var value = reader.GetString();
+            var value = reader.GetString()!;
             if (value.Length <= 256)
             {
                 return value;
@@ -2095,7 +2095,7 @@ namespace Pumatronix.Itscam.RestTypes
 
         public override Mode Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
         {
-            var value = reader.GetString();
+            var value = reader.GetString()!;
             switch (value)
             {
                 case "disabled":
@@ -2139,7 +2139,7 @@ namespace Pumatronix.Itscam.RestTypes
 
         public override string Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
         {
-            var value = reader.GetString();
+            var value = reader.GetString()!;
             if (value.Length >= 3 && value.Length <= 32)
             {
                 return value;
@@ -2166,7 +2166,7 @@ namespace Pumatronix.Itscam.RestTypes
 
         public override string Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
         {
-            var value = reader.GetString();
+            var value = reader.GetString()!;
             if (value.Length >= 4 && value.Length <= 32)
             {
                 return value;
@@ -2193,7 +2193,7 @@ namespace Pumatronix.Itscam.RestTypes
 
         public override TypeEnum Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
         {
-            var value = reader.GetString();
+            var value = reader.GetString()!;
             if (value == "json")
             {
                 return TypeEnum.Json;
@@ -2220,7 +2220,7 @@ namespace Pumatronix.Itscam.RestTypes
 
         public override Variant Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
         {
-            var value = reader.GetString();
+            var value = reader.GetString()!;
             switch (value)
             {
                 case "multipart":
@@ -2254,7 +2254,7 @@ namespace Pumatronix.Itscam.RestTypes
 
         public override Method Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
         {
-            var value = reader.GetString();
+            var value = reader.GetString()!;
             switch (value)
             {
                 case "get":
@@ -2293,7 +2293,7 @@ namespace Pumatronix.Itscam.RestTypes
 
         public override Scheme Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
         {
-            var value = reader.GetString();
+            var value = reader.GetString()!;
             switch (value)
             {
                 case "http":

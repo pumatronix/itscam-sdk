@@ -112,6 +112,7 @@ const TARGETS = [
     },
     outRel: "src/core/itscam_rest_types.hpp",
     notice: NOTICE_HEAD,
+    postProcess: fixCppOptionalInit,
   },
   {
     name: "C#",
@@ -130,7 +131,7 @@ const TARGETS = [
     // that target net6+.  None of our schemas have `format: date` or
     // `format: time`, so the converters are dead code.  Strip them so the
     // assembly stays compatible with netstandard2.0.
-    postProcess: stripCSharpNet6Converters,
+    postProcess: (text) => stripCSharpNet6Converters(fixCSharpNullableGetString(text)),
   },
   {
     name: "Python",
@@ -156,6 +157,22 @@ const TARGETS = [
 
 function info(message) {
   console.log(`[codegen] ${message}`)
+}
+
+/// Replace `std::optional<T>()` with `std::nullopt` to avoid GCC's
+/// -Wmaybe-uninitialized false positive on template instantiation in
+/// from_json array helpers.
+function fixCppOptionalInit(text) {
+  return text.replace(/return std::optional<T>\(\);/g, "return std::nullopt;")
+}
+
+/// Fix CS8602 (possible null dereference) in quicktype-emitted converters:
+/// `reader.GetString()` returns `string?`; add null-forgiving `!`.
+function fixCSharpNullableGetString(text) {
+  return text.replace(
+    /var value = reader\.GetString\(\);/g,
+    "var value = reader.GetString()!;"
+  )
 }
 
 /// Drop the `DateOnlyConverter` and `TimeOnlyConverter` classes that quicktype
