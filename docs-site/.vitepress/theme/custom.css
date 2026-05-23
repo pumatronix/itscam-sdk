@@ -1,0 +1,11 @@
+/* Cloudflare AI Search snippets render as fixed overlays; keep them above VitePress chrome. */
+.itscam-ai-search search-modal-snippet,
+.itscam-ai-search chat-bubble-snippet {
+  z-index: 100;
+}
+
+.assistant-page chat-full-page-snippet {
+  display: block;
+  min-height: 520px;
+  margin-top: 1.5rem;
+}
