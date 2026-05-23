@@ -9,3 +9,12 @@
   min-height: 520px;
   margin-top: 1.5rem;
 }
+
+/* Justified paragraphs; hyphenation reduces uneven word gaps (pt-BR / en-US). */
+.vp-doc p {
+  text-align: justify;
+  text-wrap: pretty;
+  hyphens: auto;
+  -webkit-hyphens: auto;
+  hyphenate-limit-chars: 6 3 3;
+}

@@ -1,9 +1,18 @@
 import { defineConfig } from "vitepress";
+import { withMermaid } from "vitepress-plugin-mermaid";
 
 const base = process.env.VITEPRESS_BASE ?? "/itscam-sdk/";
 const aiSearchUrl = process.env.VITE_AI_SEARCH_API_URL ?? "";
 
-export default defineConfig({
+/** Prefix a path under content/public/ with the VitePress base URL.
+ *  Required for sidebar links to static .html API refs: VITE_EXTRA_EXTENSIONS
+ *  treats .html as a static asset, so client-side normalizeLink() skips withBase(). */
+function publicAsset(path: string): string {
+  return `${base}${path.replace(/^\//, "")}`.replace(/(?<!:)\/\/+/g, "/");
+}
+
+export default withMermaid(
+  defineConfig({
   title: "ITSCAM SDK",
   description:
     "SDK cross-platform para câmeras Pumatronix ITSCAM: binary TCP, REST e CGI clients.",
@@ -82,9 +91,9 @@ export default defineConfig({
           // content/public/api-ref/<lang>/ and is shipped verbatim by
           // VitePress. Links use absolute .html paths so the router
           // does not try to resolve them as markdown routes.
-          { text: "C / C++ (Doxygen)", link: "/api-ref/cpp/index.html", target: "_self" },
-          { text: "Python (pdoc)", link: "/api-ref/python/itscam.html", target: "_self" },
-          { text: "C# / .NET (DocFX)", link: "/api-ref/csharp/index.html", target: "_self" },
+          { text: "C / C++ (Doxygen)", link: publicAsset("api-ref/cpp/index.html"), target: "_self" },
+          { text: "Python (pdoc)", link: publicAsset("api-ref/python/itscam.html"), target: "_self" },
+          { text: "C# / .NET (DocFX)", link: publicAsset("api-ref/csharp/index.html"), target: "_self" },
           // gomarkdoc emits a single markdown page that VitePress
           // routes natively at /api-ref/go.
           { text: "Go (gomarkdoc)", link: "/api-ref/go" },
@@ -160,4 +169,9 @@ export default defineConfig({
       "import.meta.env.VITE_EXTRA_EXTENSIONS": JSON.stringify("html"),
     },
   },
-});
+
+  mermaid: {
+    theme: "neutral",
+  },
+  }),
+);

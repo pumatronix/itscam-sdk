@@ -2,17 +2,6 @@
 
 Walkthrough do zero: criar um módulo Go, configurar cgo contra o ITSCAM SDK e salvar a primeira imagem JPEG da câmera em disco. Caminho principal usa o **`ItscamCgiClient`** (HTTP, anônimo por default) e há uma seção opcional no final usando o **`ItscamClient`** (Cougar TCP :60000).
 
-```mermaid
-flowchart TD
-  prereq[Pre-requisitos] --> sdk[Build do SDK]
-  sdk --> project[go mod init]
-  project --> replace[Substituir modulo local]
-  replace --> code[Escrever main.go]
-  code --> run[go run]
-  run --> verify[Verificar primeira-imagem.jpg]
-  verify --> binary[Opcional: binary TCP :60000]
-```
-
 ## 1. Pré-requisitos
 
 | Item | Versão mínima | Verificar com |

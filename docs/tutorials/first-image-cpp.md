@@ -2,17 +2,6 @@
 
 Walkthrough do zero: criar um projeto C++, linkar contra o ITSCAM SDK e salvar a primeira imagem JPEG da câmera em disco. Caminho principal usa o **`ItscamCgiClient`** (HTTP, anônimo por default) e há uma seção opcional no final usando o **`ItscamClient`** (Cougar TCP :60000).
 
-```mermaid
-flowchart TD
-  prereq[Pre-requisitos] --> sdk[Build do SDK]
-  sdk --> project[Criar projeto]
-  project --> code[Escrever main.cpp]
-  code --> build[Compilar e linkar]
-  build --> run[Executar contra a camera]
-  run --> verify[Verificar primeira-imagem.jpg]
-  verify --> binary[Opcional: binary TCP :60000]
-```
-
 ## 1. Pré-requisitos
 
 | Item | Versão mínima | Verificar com |

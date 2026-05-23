@@ -2,17 +2,6 @@
 
 Walkthrough do zero: criar um projeto Python, instalar o wrapper `itscam` e salvar a primeira imagem JPEG da câmera em disco. Caminho principal usa o **`ItscamCgiClient`** (HTTP, anônimo por default) e há uma seção opcional no final usando o **`ItscamClient`** (Cougar TCP :60000).
 
-```mermaid
-flowchart TD
-  prereq[Pre-requisitos] --> sdk[Build da libitscam_sdk]
-  sdk --> project[Criar venv e projeto]
-  project --> install[Instalar wrapper itscam]
-  install --> code[Escrever meu_app.py]
-  code --> run[Executar contra a camera]
-  run --> verify[Verificar primeira-imagem.jpg]
-  verify --> binary[Opcional: binary TCP :60000]
-```
-
 ## 1. Pré-requisitos
 
 | Item | Versão mínima | Verificar com |
