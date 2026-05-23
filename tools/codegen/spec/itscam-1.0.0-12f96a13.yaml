@@ -1,0 +1,4533 @@
+openapi: 3.0.0
+info:
+  version: 1.0.0
+  title: ITSCAM API
+  description: REST API for ITSCAM
+  license:
+    name: Pumatronix
+  contact:
+    email: suporte@pumatronix.com.br
+servers:
+  - url: 'http://{cameraIp}/api'
+    variables:
+      cameraIp:
+        default: 192.168.254.254
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: Bearer <token>
+  responses:
+    BadRequest:
+      description: The request is malformed or invalid
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+                example: Bad request
+    Unauthorized:
+      description: Access token is missing or invalid
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: Unauthorized
+    Forbidden:
+      description: This action cannot be executed
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: Forbidden
+    PayloadTooLarge:
+      description: The attached file is too large
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: Payload too larg
+    NotFound:
+      description: The targeted resource does not exists
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+                example: Resource not found
+    ServerError:
+      description: Unexpected error occured in the server
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+                example: Internal server error
+  schemas:
+    ApiResponse:
+      type: object
+      description: Common API response structure
+      properties:
+        code:
+          type: integer
+          format: int32
+        message:
+          type: string
+    RGBColorF:
+      type: object
+      description: Single RGB value in float format
+      properties:
+        red:
+          type: number
+          format: float
+        green:
+          type: number
+          format: float
+        blue:
+          type: number
+          format: float
+    ControlValue:
+      type: object
+      description: Single control algorithm parameter
+      properties:
+        minValue:
+          type: integer
+          format: int32
+        maxValue:
+          type: integer
+          format: int32
+          default: -1
+        optimalValue:
+          type: integer
+          format: int32
+        fixedValue:
+          type: integer
+          format: int32
+        isFixed:
+          type: boolean
+    MinMaxFixedValue:
+      type: object
+      description: Shutter attributes
+      properties:
+        minValue:
+          type: integer
+          format: int32
+        maxValue:
+          type: integer
+          format: int32
+        fixedValue:
+          type: integer
+          format: int32
+        automatic:
+          type: boolean
+    ControlAlgorithmConfig:
+      type: object
+      description: Control algorithm general rules
+      properties:
+        mode:
+          type: string
+          enum:
+            - fast
+            - slow
+            - normal
+            - disabled
+          default: normal
+        updateRate:
+          type: integer
+          format: int32
+          default: 100
+        targetValue:
+          type: number
+          format: float
+          default: 0
+        holdTime:
+          type: integer
+          format: int32
+          default: 0
+    Ipv4Config:
+      type: string
+      description: 'IPv4 address (ex: 192.168.0.1)'
+      pattern: '^\d{1,3}\.\d{1,3}.\d{1,3}.\d{1,3}$'
+    Ipv6Config:
+      type: string
+      description: 'IPv6 address (ex: 2001:0db8:85a3:0000:0000:8a2e:0370:7334)'
+      pattern: '[0-9a-fA-F:]+'
+    NetworkPort:
+      type: integer
+      description: Network port (0-65535)
+      minimum: 0
+      maximum: 65535
+    TuplePercent:
+      type: object
+      description: >-
+        Pair of points (x,y). Each coordinate is within the range of [0.0,
+        100.0]
+      properties:
+        x:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 100
+        'y':
+          type: number
+          format: float
+          minimum: 0
+          maximum: 100
+    RoiWithEnable:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+        x0:
+          type: integer
+        x1:
+          type: integer
+        x2:
+          type: integer
+        x3:
+          type: integer
+        y0:
+          type: integer
+        y1:
+          type: integer
+        y2:
+          type: integer
+        y3:
+          type: integer
+    H26xSingleStreamConfig:
+      type: object
+      description: Single h26x stream configuration
+      properties:
+        available:
+          type: boolean
+          readOnly: true
+        running:
+          type: boolean
+          readOnly: true
+        enabled:
+          type: boolean
+        controlRate:
+          type: string
+        bitrate:
+          type: integer
+        profile:
+          type: string
+        gop:
+          type: integer
+        source:
+          type: string
+    MJPEGSingleStreamConfig:
+      type: object
+      description: Single MJPEG stream configuration
+      properties:
+        available:
+          type: boolean
+          readOnly: true
+        enabled:
+          type: boolean
+          default: true
+        framerate:
+          type: number
+          format: float
+          default: 5
+        quality:
+          type: integer
+          default: 85
+    StreamConfig:
+      type: object
+      description: Stream(s) configuration of device
+      properties:
+        h264:
+          type: object
+          properties:
+            available:
+              type: boolean
+              readOnly: true
+            encoder_type:
+              type: string
+            main:
+              $ref: '#/components/schemas/H26xSingleStreamConfig'
+        mjpeg:
+          type: object
+          properties:
+            available:
+              type: boolean
+              readOnly: true
+            main:
+              $ref: '#/components/schemas/MJPEGSingleStreamConfig'
+    OcrConfig:
+      type: object
+      description: Ocr service configuration
+      properties:
+        ocr:
+          type: object
+          properties:
+            enabled:
+              type: boolean
+            licensed:
+              type: boolean
+            processingThreads:
+              type: integer
+            processingQueue:
+              type: integer
+            processingMode:
+              type: integer
+            processingTimeout:
+              type: integer
+            maxPlates:
+              type: integer
+            vehicleType:
+              type: integer
+            countryCode:
+              type: integer
+            minProbPerChar:
+              type: number
+              format: float
+            maxLowProbChars:
+              type: integer
+            avgPlateAngle:
+              type: number
+              format: float
+            avgPlateSlant:
+              type: number
+              format: float
+            minCharHeight:
+              type: integer
+            maxCharHeight:
+              type: integer
+            avgCharHeight:
+              type: integer
+            useClassifierResult:
+              type: boolean
+            classifierExpansion:
+              type: number
+              format: float
+            roi:
+              $ref: '#/components/schemas/RoiWithEnable'
+    ImageSignConfig:
+      type: object
+      description: ImageSign service configuration
+      properties:
+        sign:
+          type: object
+          properties:
+            enabled:
+              type: boolean
+            loaded:
+              type: boolean
+            update:
+              type: boolean
+            appendMode:
+              type: string
+    ClassifierTriggerRegion:
+      type: object
+      description: 'Classifier based trigger region; * dir: top-bottom, bottom-top, disabled'
+      properties:
+        x0:
+          type: integer
+        y0:
+          type: integer
+        x1:
+          type: integer
+        y1:
+          type: integer
+        dir:
+          type: string
+    ClassifierSpeedCalibrationRegion:
+      type: object
+      description: Classifier based speed calibration region;
+      properties:
+        x0:
+          type: integer
+        y0:
+          type: integer
+        x1:
+          type: integer
+        y1:
+          type: integer
+        x2:
+          type: integer
+        y2:
+          type: integer
+        p0top1sz:
+          type: number
+          format: float
+    ClassifierConfig:
+      type: object
+      description: Vehicle Classifier service configuration
+      properties:
+        classifier:
+          type: object
+          properties:
+            enabled:
+              type: boolean
+            licensed:
+              type: boolean
+            processingThreads:
+              type: integer
+            processingQueue:
+              type: integer
+            modelType:
+              type: integer
+            sceneType:
+              type: integer
+            minProbability:
+              type: number
+              format: float
+            enableCharacteristics:
+              type: boolean
+            enableSpeed:
+              type: boolean
+            speedCalibrationRegion1:
+              $ref: '#/components/schemas/ClassifierSpeedCalibrationRegion'
+            speedCalibrationRegion2:
+              $ref: '#/components/schemas/ClassifierSpeedCalibrationRegion'
+            firstOnly:
+              type: boolean
+            triggerEnabled:
+              type: boolean
+            triggerRegion0:
+              $ref: '#/components/schemas/ClassifierTriggerRegion'
+            triggerRegion1:
+              $ref: '#/components/schemas/ClassifierTriggerRegion'
+            triggerRegion2:
+              $ref: '#/components/schemas/ClassifierTriggerRegion'
+            triggerRegion3:
+              $ref: '#/components/schemas/ClassifierTriggerRegion'
+    AnalyticsConfig:
+      type: object
+      description: Plate Analytics service configuration
+      properties:
+        voting:
+          type: object
+          properties:
+            enabled:
+              type: boolean
+            maxDiffChars:
+              type: integer
+            samePlateDebounce:
+              type: integer
+            keepBestOnly:
+              type: boolean
+            useClassifier:
+              type: boolean
+            forwardWithoutPlateIfTracker:
+              type: boolean
+            roi1:
+              $ref: '#/components/schemas/RoiWithEnable'
+            roi2:
+              $ref: '#/components/schemas/RoiWithEnable'
+    VehicleIndicatorConfig:
+      type: object
+      description: VehicleIndicator service configuration
+      properties:
+        vehicleIndicator:
+          type: object
+          properties:
+            vehicleCounterEnabled:
+              type: boolean
+            vehicleCounterType:
+              type: integer
+            vehicleCounterGpio:
+              type: integer
+            vehicleCounterPulseWidthMs:
+              type: integer
+            vehicleCounterActiveHigh:
+              type: boolean
+            vehicleCounterUdpServer:
+              type: string
+            vehicleCounterUdpPort:
+              type: integer
+            vehicleCounterUdpSampleTimeMs:
+              type: integer
+    FtpConfig:
+      type: object
+      description: FTP service configuration
+      properties:
+        ftp:
+          type: object
+          properties:
+            enable:
+              type: boolean
+            protocol:
+              type: string
+            address:
+              type: string
+            port:
+              type: integer
+            anonymous:
+              type: boolean
+            username:
+              type: string
+            password:
+              type: string
+            quality:
+              type: integer
+            filename:
+              type: string
+            local:
+              type: object
+              properties:
+                ttl:
+                  type: integer
+                bufferSizeKb:
+                  type: integer
+            transfer:
+              type: object
+              properties:
+                timeout:
+                  type: integer
+                pollInterval:
+                  type: integer
+    LinceConfig:
+      type: object
+      description: Lince service configuration
+      properties:
+        enabled:
+          type: boolean
+        environment:
+          type: string
+        clientId:
+          type: string
+        clientEndpoint:
+          type: string
+        authCode:
+          type: string
+        timeoutResponse:
+          type: integer
+        sendRecsNone:
+          type: boolean
+    LinceStatus:
+      type: object
+      description: Lince service status
+      properties:
+        linceStatus:
+          type: string
+    RestApiClientConfig:
+      description: REST API Client service configuration
+      type: object
+      required:
+        - enabled
+        - method
+        - url
+        - headers
+        - body
+        - jpeg
+        - timeout
+        - retries
+        - sendIndividualRequests
+        - sendWithoutOcr
+        - persistency
+      properties:
+        enabled:
+          type: boolean
+        method:
+          type: string
+          enum:
+            - get
+            - post
+            - put
+        url:
+          type: object
+          required:
+            - scheme
+            - host
+            - path
+            - query
+          properties:
+            scheme:
+              type: string
+              enum:
+                - http
+                - https
+            host:
+              type: string
+            path:
+              type: string
+            query:
+              type: array
+              items:
+                type: string
+        headers:
+          type: array
+          items:
+            type: object
+            required:
+              - name
+              - value
+            properties:
+              name:
+                type: string
+              value:
+                type: string
+        body:
+          type: object
+          required:
+            - variant
+            - parts
+          properties:
+            variant:
+              type: string
+              enum:
+                - singlepart
+                - multipart
+            parts:
+              type: array
+              items:
+                type: object
+                required:
+                  - name
+                  - type
+                  - content
+                properties:
+                  name:
+                    type: string
+                  type:
+                    type: string
+                    enum:
+                      - json
+                  content:
+                    type: string
+        jpeg:
+          type: object
+          required:
+            - quality
+            - resolution
+          properties:
+            quality:
+              type: integer
+              minimum: 0
+            resolution:
+              type: object
+              required:
+                - width
+                - height
+              properties:
+                width:
+                  type: integer
+                  minimum: 0
+                height:
+                  type: integer
+                  minimum: 0
+        timeout:
+          type: integer
+          minimum: 0
+        retries:
+          type: integer
+          minimum: 0
+        sendIndividualRequests:
+          type: boolean
+        sendWithoutOcr:
+          type: boolean
+        persistency:
+          type: object
+          required:
+            - enabled
+            - maxDiskUsage
+            - maxFileAge
+            - newestFirst
+          properties:
+            enabled:
+              type: boolean
+            maxDiskUsage:
+              type: integer
+              minimum: 0
+            maxFileAge:
+              type: integer
+              minimum: 0
+            newestFirst:
+              type: boolean
+    RestApiClientStatus:
+      description: REST API Client service status
+      type: object
+      required:
+        - code
+        - message
+        - fileCount
+        - diskUsage
+      properties:
+        code:
+          type: integer
+        message:
+          type: string
+        fileCount:
+          type: integer
+        diskUsage:
+          type: integer
+    ItscamproConfig:
+      type: object
+      description: ITSCAMPRO service configuration
+      properties:
+        itscampro:
+          type: object
+          properties:
+            enable:
+              type: boolean
+            address:
+              type: string
+            port:
+              type: integer
+            debug:
+              type: boolean
+    ItscamproStatus:
+      type: object
+      description: ITSCAMPRO service status
+      properties:
+        status:
+          type: string
+    ProtocolsConfig:
+      type: object
+      description: Protocols configurations
+      properties:
+        configCgi:
+          type: object
+          properties:
+            blockAPI:
+              type: boolean
+        cougar:
+          type: object
+          properties:
+            auth:
+              type: object
+              properties:
+                require:
+                  type: boolean
+                password:
+                  type: string
+        itscamprotocol:
+          type: object
+          properties:
+            legacyMode:
+              type: boolean
+    ProfileTransitioner:
+      type: object
+      description: Profile Transitioner configs
+      properties:
+        automatic:
+          type: boolean
+        levelSmoothing:
+          type: string
+        smoothingTime:
+          type: integer
+        resetProfiles:
+          type: string
+    Misc:
+      type: object
+      description: Miscellaneous configs
+      properties:
+        cameraOrientation:
+          type: boolean
+        jpegQuality:
+          type: integer
+        irisHint:
+          type: string
+        snapshotCrop:
+          type: object
+          properties:
+            enable:
+              type: boolean
+            mode:
+              type: string
+            x0:
+              type: integer
+            x1:
+              type: integer
+            y0:
+              type: integer
+            y1:
+              type: integer
+        scenarioOverlayColor:
+          type: string
+          scenarioOverlayPos:
+            type: string
+        scenario1Overlay:
+          type: string
+        scenario1OverlayTextSize:
+          type: int
+        scenario1Crop:
+          type: object
+          properties:
+            x0:
+              type: integer
+            x1:
+              type: integer
+            y0:
+              type: integer
+            y1:
+              type: integer
+        scenario2Overlay:
+          type: string
+        scenario2OverlayTextSize:
+          type: int
+        scenario2Crop:
+          type: object
+          properties:
+            x0:
+              type: integer
+            x1:
+              type: integer
+            y0:
+              type: integer
+            y1:
+              type: integer
+        legacyTsyncGpio:
+          type: integer
+    MiscReadOnly:
+      type: object
+      description: Miscellaneous Read-Only configs
+      readOnly: true
+      properties:
+        imageWidth:
+          type: integer
+        imageHeight:
+          type: integer
+        sensorType:
+          type: integer
+        relativeSensitivity:
+          type: integer
+        pixelType:
+          type: integer
+        framePeriodUs:
+          type: integer
+        lensModel:
+          type: integer
+        hdrAvailable:
+          type: boolean
+        maxExps:
+          type: integer
+    MiscVolatile:
+      type: object
+      description: Current Miscellaneous Read-Only configs
+      readOnly: true
+      properties:
+        profile:
+          type: object
+          properties:
+            id:
+              type: integer
+              format: int64
+              default: -1
+            name:
+              type: string
+              minLength: 4
+              maxLength: 32
+        isp:
+          type: object
+          properties:
+            shutter:
+              type: integer
+            gain:
+              type: integer
+            iris:
+              type: integer
+            freeBuffers:
+              type: integer
+            irisModel:
+              type: string
+        whitebalance:
+          $ref: '#/components/schemas/RGBColorF'
+        lens:
+          type: object
+          properties:
+            zoom:
+              type: integer
+            focus:
+              type: integer
+        ae:
+          type: object
+          properties:
+            level:
+              type: number
+              format: float
+            ctrlMode:
+              type: string
+            lastRun:
+              type: integer
+        gps:
+          type: object
+          properties:
+            available:
+              type: boolean
+            fix:
+              type: string
+            latitude:
+              type: number
+              format: double
+            longitude:
+              type: number
+              format: double
+            altitude:
+              type: number
+              format: float
+            dop:
+              type: number
+              format: float
+            speed:
+              type: number
+              format: float
+            bearing:
+              type: number
+              format: float
+            time:
+              type: integer
+              format: int64
+            secondsSinceLastFix:
+              type: integer
+            numSatellites:
+              type: integer
+        fps:
+          type: object
+          properties:
+            mjpeg:
+              type: number
+              format: float
+    Licenses:
+      type: object
+      description: License service information
+      properties:
+        deviceId:
+          type: object
+          properties:
+            serial:
+              type: string
+        analytics:
+          type: object
+          properties:
+            ocr:
+              $ref: '#/components/schemas/OcrLicense'
+            classifier:
+              $ref: '#/components/schemas/ClassifierLicense'
+    OcrLicense:
+      type: object
+      properties:
+        version:
+          type: string
+        sha1:
+          type: string
+        serial:
+          type: string
+        customer:
+          type: string
+        maxThreads:
+          type: integer
+        maxConnections:
+          type: integer
+        state:
+          type: integer
+        ttl:
+          type: integer
+    ClassifierLicense:
+      type: object
+      properties:
+        version:
+          type: string
+        sha1:
+          type: string
+        serial:
+          type: string
+        customer:
+          type: string
+        maxThreads:
+          type: integer
+        maxConnections:
+          type: integer
+        state:
+          type: integer
+        ttl:
+          type: integer
+    IoConfig:
+      type: object
+      description: Configuration for a specific IO
+      required:
+        - port
+      properties:
+        port:
+          type: integer
+          format: int64
+          default: 0
+          readOnly: true
+        isInput:
+          type: boolean
+        isOn:
+          type: boolean
+        type:
+          type: string
+        protection:
+          type: string
+        earlyUs:
+          type: integer
+          format: int32
+        canFlash:
+          type: boolean
+        canTrigger:
+          type: boolean
+        group:
+          type: string
+        identifier:
+          type: string
+    IoBasic:
+      type: object
+      description: Simplified information for a specific IO
+      required:
+        - port
+      properties:
+        port:
+          type: integer
+          format: int64
+          default: 0
+          readOnly: true
+        isInput:
+          type: boolean
+        isOn:
+          type: boolean
+    ProfileConfig:
+      type: object
+      description: Camera profile configuration
+      required:
+        - id
+      properties:
+        id:
+          type: integer
+          format: int64
+          default: -1
+          readOnly: true
+        active:
+          type: boolean
+        name:
+          type: string
+          minLength: 3
+          maxLength: 32
+          pattern: '/^[a-zA-Z\d]*$/'
+        description:
+          type: string
+          maxLength: 256
+        exposure:
+          $ref: '#/components/schemas/ExposureConfig'
+        whitebalance:
+          $ref: '#/components/schemas/WhiteBalanceConfig'
+        lens:
+          $ref: '#/components/schemas/LensConfig'
+        color:
+          $ref: '#/components/schemas/ColorConfig'
+        transitions:
+          $ref: '#/components/schemas/TransitionConfig'
+        multipleExposures:
+          type: object
+          properties:
+            enabled:
+              type: boolean
+            settings:
+              type: array
+              items:
+                $ref: '#/components/schemas/MultipleExposuresConfig'
+        trigger:
+          type: object
+          properties:
+            enabled:
+              type: boolean
+            event:
+              type: string
+            minimumInterval:
+              type: integer
+              format: int32
+            port:
+              type: integer
+              format: int32
+            threshold:
+              type: number
+              format: float
+            roi:
+              $ref: '#/components/schemas/RoiWithEnable'
+        movFilter:
+          type: object
+          properties:
+            enabled:
+              type: boolean
+            onlyCheck:
+              type: boolean
+            threshold:
+              type: number
+              format: float
+            roi:
+              $ref: '#/components/schemas/RoiWithEnable'
+        overlay:
+          type: object
+          properties:
+            enable:
+              type: boolean
+            text:
+              type: string
+        hdr:
+          type: object
+          properties:
+            enable:
+              type: boolean
+        advanced:
+          type: object
+          properties:
+            exposition:
+              type: object
+              properties:
+                updateRate:
+                  type: integer
+                updateFactor:
+                  type: number
+                  format: float
+                preferredShutter:
+                  type: integer
+            iris:
+              type: object
+              properties:
+                updateRate:
+                  type: integer
+            whitebalance:
+              type: object
+              properties:
+                updateRate:
+                  type: integer
+    ExposureConfig:
+      type: object
+      description: Camera exposure configuration fields
+      properties:
+        level:
+          type: object
+          properties:
+            targetValue:
+              type: integer
+              format: int32
+            roi:
+              $ref: '#/components/schemas/RoiWithEnable'
+        shutter:
+          $ref: '#/components/schemas/MinMaxFixedValue'
+        gain:
+          $ref: '#/components/schemas/MinMaxFixedValue'
+        iris:
+          type: object
+          properties:
+            automatic:
+              type: boolean
+            fixedValue:
+              type: integer
+              format: int32
+    WhiteBalanceConfig:
+      type: object
+      description: Camera white balance configuration fields
+      properties:
+        automatic:
+          type: boolean
+        weights:
+          $ref: '#/components/schemas/RGBColorF'
+    LensConfig:
+      type: object
+      description: Camera lens configuration fields
+      properties:
+        zoom:
+          type: integer
+          format: int32
+        focus:
+          type: integer
+          format: int32
+        exchanger:
+          type: boolean
+          default: false
+        zfMirrorProfile0:
+          type: boolean
+          default: true
+    FlashConfig:
+      type: object
+      description: Camera flash configuration
+      properties:
+        power:
+          type: array
+          items:
+            type: object
+            properties:
+              out:
+                type: integer
+                minimum: 1
+                maximum: 4
+              percent:
+                type: integer
+                minimum: 0
+                maximum: 100
+                default: 0
+    ColorConfig:
+      type: object
+      description: Camera color configuration fields
+      properties:
+        gamma:
+          type: integer
+          format: int32
+        contrast:
+          type: integer
+          format: int32
+        brightness:
+          type: integer
+          format: int32
+        saturation:
+          type: integer
+          format: int32
+        blacklevel:
+          type: integer
+          format: int32
+        gain:
+          $ref: '#/components/schemas/RGBColorF'
+    TransitionConfig:
+      type: object
+      description: Camera profile transition configuration
+      properties:
+        upper:
+          $ref: '#/components/schemas/TransitionStepConfig'
+        lower:
+          $ref: '#/components/schemas/TransitionStepConfig'
+    TransitionStepConfig:
+      type: object
+      properties:
+        level:
+          type: integer
+          format: int32
+        startTime:
+          type: string
+        endTime:
+          type: string
+        holdTime:
+          type: integer
+          format: int32
+          minimum: 10000
+          maximum: 100000
+          default: 10000
+        profile:
+          type: integer
+          format: int32
+    MultipleExposuresConfig:
+      type: object
+      description: Multiple exposures configuration
+      properties:
+        shutter:
+          type: object
+          properties:
+            value:
+              type: number
+            percentageOfCurrent:
+              type: boolean
+        gain:
+          type: object
+          properties:
+            value:
+              type: number
+            percentageOfCurrent:
+              type: boolean
+        flash:
+          $ref: '#/components/schemas/FlashConfig'
+    AutoFocus:
+      type: object
+      description: AutoFocus configs
+      properties:
+        run:
+          type: boolean
+        roi:
+          type: object
+          properties:
+            centerX:
+              type: integer
+            centerY:
+              type: integer
+            width:
+              type: integer
+            height:
+              type: integer
+        updateRate:
+          type: integer
+        contrastThreshold:
+          type: number
+          format: float
+        coarseStep:
+          type: integer
+    dataAndTimeInfo:
+      required:
+        - timezone
+        - useNTPServer
+        - serverNtp
+      type: object
+      properties:
+        timezone:
+          type: array
+          items:
+            type: string
+          example:
+            - America
+            - Sao_Paulo
+        useNTPServer:
+          type: boolean
+          example: true
+        ntpServerAddress:
+          type: array
+          items:
+            type: string
+          example:
+            - a.ntp.br
+        serveNtp:
+          type: boolean
+          example: true
+        currentDateAndTime:
+          type: string
+          example: '2020-01-01T06:00:00.000Z'
+        timezoneOffset:
+          type: string
+          example: '-0300'
+    GeneralData:
+      required:
+        - language
+        - equipmentName
+        - equipmentModel
+      type: object
+      properties:
+        language:
+          type: string
+          example: pt-BR
+        equipmentName:
+          type: string
+          example: ITSCAM600
+        equipmentModel:
+          type: string
+          example: ITSCAM 600 LM
+    Ipv4Data:
+      type: object
+      properties:
+        mode:
+          type: string
+          example: manual
+        address:
+          type: string
+          example: 10.0.0.2
+        mask:
+          type: string
+          example: 255.255.0.0
+        gateway:
+          type: string
+          example: 10.0.0.1
+        dns:
+          type: string
+          example: 8.8.8.8
+    EthernetData:
+      required:
+        - hostname
+        - ipv4Primary
+        - ipv4Secondary
+      type: object
+      properties:
+        hostname:
+          type: string
+          example: cpu_x6
+        ipv4Primary:
+          $ref: '#/components/schemas/Ipv4Data'
+        ipv4Secondary:
+          $ref: '#/components/schemas/Ipv4Data'
+    ApData:
+      type: object
+      properties:
+        ssid:
+          type: string
+          example: mySsid
+        password:
+          type: string
+          example: myPassword
+        authentication:
+          type: string
+          example: wpa-wpa2
+        country:
+          type: string
+          example: BR
+        channel:
+          type: integer
+          format: int32
+          example: 1
+        dhcpServer:
+          type: object
+          properties:
+            address:
+              type: string
+              example: 10.0.0.1
+            mask:
+              type: string
+              example: 255.255.255.0
+    StaData:
+      type: object
+      properties:
+        ssid:
+          type: string
+          example: mySsid
+        password:
+          type: string
+          example: myPassword
+    WifiData:
+      required:
+        - enabled
+        - hwSupport
+        - hwPresent
+      type: object
+      properties:
+        enabled:
+          type: boolean
+          example: true
+        workMode:
+          type: string
+          example: ap
+        ap:
+          $ref: '#/components/schemas/ApData'
+        sta:
+          $ref: '#/components/schemas/StaData'
+        hwSupport:
+          type: boolean
+          example: true
+        hwPresent:
+          type: boolean
+          example: true
+    GsmData:
+      required:
+        - enabled
+        - apn
+        - hwSupport
+        - hwPresent
+      type: object
+      properties:
+        enabled:
+          type: boolean
+          example: false
+        apn:
+          type: string
+          example: tim
+        port:
+          type: integer
+          format: int32
+          example: 1920
+        hwSupport:
+          type: boolean
+          example: true
+        hwPresent:
+          type: boolean
+          example: true
+    PortData:
+      required:
+        - port
+        - interface
+      type: object
+      properties:
+        port:
+          type: integer
+          format: uint16
+          example: 8080
+        interface:
+          type: array
+          items:
+            type: string
+          example:
+            - eth0
+            - eth1
+        protocol:
+          type: array
+          items:
+            type: string
+          example:
+            - tcp
+            - udp
+    PortforwardData:
+      required:
+        - port
+        - interface
+        - to_port
+      type: object
+      properties:
+        port:
+          type: integer
+          format: uint16
+          example: 50000
+        interface:
+          type: array
+          items:
+            type: string
+          example:
+            - eth0
+            - eth1
+        protocol:
+          type: array
+          items:
+            type: string
+          example:
+            - tcp
+            - udp
+        to_port:
+          type: integer
+          example: 100
+    FirewallData:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+          example: true
+        allow:
+          type: array
+          items:
+            $ref: '#/components/schemas/PortData'
+        redirect:
+          type: array
+          items:
+            $ref: '#/components/schemas/PortforwardData'
+        fail2ban:
+          type: object
+          properties:
+            enabled:
+              type: boolean
+              example: true
+    RoutesData:
+      type: object
+      properties:
+        routes:
+          type: array
+          items:
+            type: object
+            properties:
+              address:
+                type: string
+                example: 10.10.0.0
+              mask:
+                type: string
+                example: 255.255.255.0
+              gateway:
+                type: string
+                example: 10.0.0.10
+              interface:
+                type: string
+                example: eth0
+              key:
+                type: integer
+                example: 0
+    WifiRequest:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+          example: true
+        workMode:
+          type: string
+          example: ap
+        ap:
+          $ref: '#/components/schemas/ApData'
+        sta:
+          $ref: '#/components/schemas/StaData'
+    GsmRequest:
+      required:
+        - enabled
+        - apn
+      type: object
+      properties:
+        enabled:
+          type: boolean
+          example: false
+        apn:
+          type: string
+          example: tim
+        port:
+          type: integer
+          format: int32
+          example: 1920
+    UserData:
+      required:
+        - id
+        - username
+        - isAdmin
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int32
+          example: 0
+        username:
+          type: string
+          example: admin
+        isAdmin:
+          type: boolean
+          example: true
+        lastLoggedIn:
+          type: integer
+          format: int64
+          example: 1609459200000
+    UserRequest:
+      required:
+        - id
+        - username
+        - isAdmin
+      type: object
+      properties:
+        username:
+          type: string
+          example: admin
+        password:
+          type: string
+          example: '1234'
+        isAdmin:
+          type: boolean
+          example: true
+tags:
+  - name: Authentication
+  - name: Boards
+  - name: DateAndTime
+  - name: Firmware
+  - name: General
+  - name: Info
+  - name: Maintenance
+  - name: Network
+  - name: Users
+  - name: Streams
+  - name: Recognition
+  - name: Services
+  - name: Camera
+  - name: IOs
+  - name: Profiles
+security:
+  - bearerAuth: []
+paths:
+  /system/audit:
+    get:
+      description: Gets audit log entries with pagination
+      tags:
+        - System
+      parameters:
+        - name: limit
+          in: query
+          description: 'Maximum number of entries to return (default 100, max 1000)'
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+        - name: offset
+          in: query
+          description: Number of entries to skip for pagination (default 0)
+          schema:
+            type: integer
+            minimum: 0
+      responses:
+        '200':
+          description: successful request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  entries:
+                    type: array
+                    description: Array of audit log entries (most recent first)
+                  total:
+                    type: integer
+                    description: Total number of audit entries in the database
+                  limit:
+                    type: integer
+                    description: Limit used for this query
+                  offset:
+                    type: integer
+                    description: Offset used for this query
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+    delete:
+      description: Clears all audit log entries (requires admin privileges)
+      tags:
+        - System
+      responses:
+        '200':
+          description: successful request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+  /system/audit/stats:
+    get:
+      description: Gets audit log statistics
+      tags:
+        - System
+      responses:
+        '200':
+          description: successful request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  totalEntries:
+                    type: integer
+                    description: Current number of audit entries stored
+                  maxEntries:
+                    type: integer
+                    description: Maximum number of entries that will be kept
+                  percentFull:
+                    type: integer
+                    description: Percentage of storage used (0-100)
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+  /system/audit/settings:
+    get:
+      description: Gets audit log settings
+      tags:
+        - System
+      responses:
+        '200':
+          description: successful request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  enabled:
+                    type: boolean
+    put:
+      description: Updates audit log settings (requires admin privileges)
+      tags:
+        - System
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                enabled:
+                  type: boolean
+      responses:
+        '200':
+          description: successful request
+  /auth:
+    post:
+      security: []
+      description: Performs Bearer Authentication
+      tags:
+        - Authentication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                params:
+                  required:
+                    - username
+                    - password
+                  type: object
+                  properties:
+                    username:
+                      type: string
+                      example: admin
+                    password:
+                      type: string
+                      example: '1234'
+      responses:
+        '200':
+          description: Successful authentication
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                    example: 1
+                  username:
+                    type: string
+                    example: admin
+                  isAdmin:
+                    type: boolean
+                  lastLoggedIn:
+                    type: integer
+                    example: 1602774749550
+                  token:
+                    type: string
+                    example: >-
+                      eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJhZG1pbiIsImlkIjoxLCJzY29wZSI6ImFkbWluIiwianRpIjoiMDExNzEzOGQtOTMyNi00N2Q5LWJmYzctZTFlOTNkZDQzZWU3IiwiaWF0IjoxNjAyNzc0NzQ5LCJleHAiOjE2MDI3NzgzNDl9.62u4VuZnmdJTZzMHwvo_b-TyuqH5otJsChT60zpWGKM
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /equipment/cameraLevelHistory:
+    get:
+      description: Returns camera level history data
+      tags:
+        - Equipment
+      responses:
+        '200':
+          description: Camera level history
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /equipment/ocr/schema:
+    get:
+      description: Gets schema used by ocr service
+      tags:
+        - Recognition
+      responses:
+        '200':
+          description: successful request
+          content:
+            application/json:
+              schema:
+                type: object
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+  /equipment/ocr:
+    get:
+      description: Gets information about OCR service of camera
+      tags:
+        - Recognition
+      responses:
+        '200':
+          description: successful request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OcrConfig'
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+    put:
+      description: Updates information about OCR service
+      tags:
+        - Recognition
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OcrConfig'
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OcrConfig'
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+  /equipment/imageSign/schema:
+    get:
+      description: Gets schema used by ImageSign service
+      tags:
+        - Recognition
+      responses:
+        '200':
+          description: successful request
+          content:
+            application/json:
+              schema:
+                type: object
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+  /equipment/imageSign:
+    get:
+      description: Gets information about ImageSign service of camera
+      tags:
+        - Recognition
+      responses:
+        '200':
+          description: successful request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImageSignConfig'
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+    post:
+      description: Updates information about ImageSign service
+      tags:
+        - Recognition
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ImageSignConfig'
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImageSignConfig'
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+  /equipment/classifier/schema:
+    get:
+      description: Gets schema used by Vehicle Classifier service
+      tags:
+        - Recognition
+      responses:
+        '200':
+          description: successful request
+          content:
+            application/json:
+              schema:
+                type: object
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+  /equipment/classifier:
+    get:
+      description: Gets information about Vehicle Classifier service of camera
+      tags:
+        - Recognition
+      responses:
+        '200':
+          description: successful request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassifierConfig'
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+    put:
+      description: Updates information about Vehicle Classifier service
+      tags:
+        - Recognition
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClassifierConfig'
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassifierConfig'
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+  /equipment/lanes:
+    get:
+      description: Gets information about Vehicle Lanes service of camera
+      tags:
+        - Recognition
+      responses:
+        '200':
+          description: successful request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LanesConfig'
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+    put:
+      description: Updates information about Vehicle Lanes service
+      tags:
+        - Recognition
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LanesConfig'
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassifierConfig'
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+  /equipment/analytics/schema:
+    get:
+      description: Gets schema used by Plate Analytics service
+      tags:
+        - Recognition
+      responses:
+        '200':
+          description: successful request
+          content:
+            application/json:
+              schema:
+                type: object
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+  /equipment/analytics:
+    get:
+      description: Gets information about Plate Analytics service of camera
+      tags:
+        - Recognition
+      responses:
+        '200':
+          description: successful request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalyticsConfig'
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+    put:
+      description: Updates information about Plate Analytics service
+      tags:
+        - Recognition
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnalyticsConfig'
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalyticsConfig'
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+  /equipment/vehicleIndicator/schema:
+    get:
+      description: Gets schema used by Vehicle Indicator service
+      tags:
+        - Recognition
+      responses:
+        '200':
+          description: successful request
+          content:
+            application/json:
+              schema:
+                type: object
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+  /equipment/vehicleIndicator:
+    get:
+      description: Gets information about Vehicle Indicator service of camera
+      tags:
+        - Recognition
+      responses:
+        '200':
+          description: successful request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VehicleIndicatorConfig'
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+    put:
+      description: Updates information about VehicleIndicator service
+      tags:
+        - Recognition
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VehicleIndicatorConfig'
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VehicleIndicatorConfig'
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+  /system/licenses:
+    get:
+      description: Gets information about licenses
+      tags:
+        - Recognition
+      responses:
+        '200':
+          description: successful request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Licenses'
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+  /equipment/servers/ftp/schema:
+    get:
+      description: Gets schema used by FTP service
+      tags:
+        - Services
+      responses:
+        '200':
+          description: successful request
+          content:
+            application/json:
+              schema:
+                type: object
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+  /equipment/servers/ftp:
+    get:
+      description: Retrieve FTP service configuration
+      tags:
+        - Services
+      responses:
+        '200':
+          description: successful request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FtpConfig'
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+    put:
+      description: Update FTP service configuration
+      tags:
+        - Services
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FtpConfig'
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FtpConfig'
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+  /equipment/servers/lince/status:
+    get:
+      summary: Get information about lince status
+      tags:
+        - services
+      operationId: linceStatus
+      responses:
+        '200':
+          description: successful request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LinceStatus'
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: api_common.yaml#/components/schemas/ApiResponse
+  /equipment/servers/lince/schema:
+    get:
+      summary: Gets API schema
+      tags:
+        - services
+      operationId: getLinceServiceSchema
+      responses:
+        '200':
+          description: successful request
+          content:
+            application/json:
+              schema:
+                type: object
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: api_common.yaml#/components/schemas/ApiResponse
+  /equipment/servers/lince:
+    get:
+      summary: Get Lince CLient config
+      tags:
+        - services
+      operationId: getLinceConfig
+      responses:
+        '200':
+          description: successful request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LinceConfig'
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: api_common.yaml#/components/schemas/ApiResponse
+    put:
+      summary: Put Lince Client config
+      tags:
+        - services
+      operationId: updateLinceConfig
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LinceConfig'
+      responses:
+        '200':
+          description: successful request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LinceConfig'
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: api_common.yaml#/components/schemas/ApiResponse
+  /equipment/servers/restapiclient/presets:
+    get:
+      summary: Retrieve REST API Client service presets
+      description: >
+        Returns a list of available REST API Client presets, including the
+        default preset if available. If the backend daemon is unreachable or
+        returns an error, only the static presets will be returned.
+      tags:
+        - Services
+      operationId: getRestApiClientPresets
+      responses:
+        '200':
+          description: Successful request. Returns the available presets.
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  '/equipment/servers/restapiclient/{id}/status':
+    get:
+      summary: Retrieve REST API Client service status
+      operationId: getRestApiClientStatus
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+            format: int64
+          description: Rest API Client identifier
+      responses:
+        '200':
+          description: successful request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestApiClientStatus'
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: api_common.yaml#/components/schemas/ApiResponse
+  '/equipment/servers/restapiclient/{id}/config':
+    get:
+      summary: Retrieve REST API Client service configuration
+      operationId: getRestApiClientConfig
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+            format: int64
+          description: Rest API Client identifier
+      responses:
+        '200':
+          description: successful request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestApiClientConfig'
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+    put:
+      summary: Update REST API Client service configuration
+      operationId: putRestApiClientConfig
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+            format: int64
+          description: Rest API Client identifier
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RestApiClientConfig'
+      responses:
+        '200':
+          description: successful request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestApiClientConfig'
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+  /equipment/servers/itscampro/status:
+    get:
+      summary: Get information about ITSCAMPRO status
+      tags:
+        - services
+      operationId: itscamproStatus
+      responses:
+        '200':
+          description: successful request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItscamproStatus'
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: api_common.yaml#/components/schemas/ApiResponse
+  /equipment/servers/itscampro/schema:
+    get:
+      description: Gets schema used by ITSCAMPRO service
+      tags:
+        - Services
+      responses:
+        '200':
+          description: successful request
+          content:
+            application/json:
+              schema:
+                type: object
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+  /equipment/servers/itscampro:
+    get:
+      description: Retrieve ITSCAMPRO service configuration
+      tags:
+        - Services
+      responses:
+        '200':
+          description: successful request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItscamproConfig'
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+    put:
+      description: Update ITSCAMPRO service configuration
+      tags:
+        - Services
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ItscamproConfig'
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItscamproConfig'
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+  /equipment/servers/auxcamera/status:
+    get:
+      summary: Get Auxiliary Camera service status
+      tags:
+        - services
+      operationId: auxCameraStatus
+      responses:
+        '200':
+          description: successful request
+          content:
+            application/json:
+              schema:
+                type: object
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+  /equipment/servers/auxcamera/snapshot:
+    get:
+      summary: Request a JPEG snapshot from a named auxiliary camera
+      tags:
+        - services
+      operationId: auxCameraSnapshot
+      parameters:
+        - name: name
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: successful request
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+  /equipment/servers/auxcamera:
+    get:
+      description: Retrieve Auxiliary Camera service configuration
+      tags:
+        - Services
+      responses:
+        '200':
+          description: successful request
+          content:
+            application/json:
+              schema:
+                type: object
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+    put:
+      description: Update Auxiliary Camera service configuration
+      tags:
+        - Services
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                type: object
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+  /equipment/servers/protocols/schema:
+    get:
+      description: Gets schema used by Prococols configurations
+      tags:
+        - Services
+      responses:
+        '200':
+          description: successful request
+          content:
+            application/json:
+              schema:
+                type: object
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+  /equipment/servers/protocols:
+    get:
+      description: Gets information about Protocols
+      tags:
+        - Services
+      responses:
+        '200':
+          description: successful request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProtocolsConfig'
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+    put:
+      description: Updates information about Protocols
+      tags:
+        - Services
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProtocolsConfig'
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProtocolsConfig'
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+  /equipment/autofocus/schema:
+    get:
+      description: Gets schema used by AutoFocus
+      tags:
+        - Camera
+      responses:
+        '200':
+          description: successful request
+          content:
+            application/json:
+              schema:
+                type: object
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+  /equipment/autofocus:
+    get:
+      description: Gets information about AutoFocus status
+      tags:
+        - Camera
+      responses:
+        '200':
+          description: successful request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AutoFocus'
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+    put:
+      description: Updates information about AutoFocus
+      tags:
+        - Camera
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AutoFocus'
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AutoFocus'
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+  /equipment/transitioner/schema:
+    get:
+      description: Gets schema used by Profile Transitioner
+      tags:
+        - Camera
+      responses:
+        '200':
+          description: successful request
+          content:
+            application/json:
+              schema:
+                type: object
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+  /equipment/transitioner:
+    get:
+      description: Gets information about Profile Transitioner
+      tags:
+        - Camera
+      responses:
+        '200':
+          description: successful request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfileTransitioner'
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+    put:
+      description: Updates information about Profile Transitioner
+      tags:
+        - Camera
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProfileTransitioner'
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfileTransitioner'
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+  /equipment/misc/readonly/constants:
+    get:
+      description: Gets read-only information about the camera
+      tags:
+        - Camera
+      responses:
+        '200':
+          description: successful request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MiscReadOnly'
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+  /equipment/misc/readonly/volatile:
+    get:
+      description: Gets volatile read-only information about the camera
+      tags:
+        - Camera
+      responses:
+        '200':
+          description: successful request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MiscVolatile'
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+  /equipment/misc/schema:
+    get:
+      description: Gets schema used by Miscellaneous Global configs
+      tags:
+        - Camera
+      responses:
+        '200':
+          description: successful request
+          content:
+            application/json:
+              schema:
+                type: object
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+  /equipment/misc:
+    get:
+      description: Gets information about Miscellaneous Global configs
+      tags:
+        - Camera
+      responses:
+        '200':
+          description: successful request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Misc'
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+    put:
+      description: Updates information about Miscellaneous Global configs
+      tags:
+        - Camera
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Misc'
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Misc'
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+  '/equipment/ioPorts/{id}/schema':
+    get:
+      description: 'Get schema for said I, O, or IO'
+      tags:
+        - IOs
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+            format: int64
+          description: Port identifier
+      responses:
+        '200':
+          description: successful request
+          content:
+            application/json:
+              schema:
+                type: object
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+  '/equipment/ioPorts/{id}':
+    get:
+      description: Retrieve IO configuration for a specific port
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Port identifier
+          schema:
+            type: integer
+            format: int64
+      tags:
+        - IOs
+      responses:
+        '200':
+          description: successful request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IoConfig'
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+    put:
+      description: Update an io
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Port identifier
+          schema:
+            type: integer
+            format: int64
+      tags:
+        - IOs
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IoConfig'
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IoConfig'
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+  /equipment/ioPorts:
+    get:
+      description: Retrieve IO configuration
+      parameters:
+        - in: query
+          name: id
+          schema:
+            type: array
+            items:
+              type: integer
+              format: int64
+          description: 'IDs of the response, returns all IDs if empty'
+      tags:
+        - IOs
+      responses:
+        '200':
+          description: successful request
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/IoConfig'
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+    put:
+      description: Update ios
+      tags:
+        - IOs
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/IoConfig'
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/IoConfig'
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+  /equipment/ioBasic:
+    get:
+      description: Retrieve only basic IO configuration
+      tags:
+        - IOs
+      responses:
+        '200':
+          description: successful request
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/IoBasic'
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+    put:
+      description: Update only basic parameters for ios
+      tags:
+        - IOs
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/IoBasic'
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/IoBasic'
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+  '/image/profiles/{id}/schema':
+    get:
+      description: Describe the limits for profile parameters
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+            format: int64
+          description: Profile identifier
+      tags:
+        - Profiles
+      responses:
+        '200':
+          description: successful request
+          content:
+            application/json:
+              schema:
+                type: object
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+  '/image/profiles/{id}':
+    get:
+      description: Finds camera configuration profiles
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+            format: int64
+          description: Profile identifier
+      tags:
+        - Profiles
+      responses:
+        '200':
+          description: successful request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfileConfig'
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+    put:
+      description: Update an existing camera configuration profile
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+            format: int64
+          description: Profile identifier
+      tags:
+        - Profiles
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProfileConfig'
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfileConfig'
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+    delete:
+      description: Deletes a profile
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+            format: int64
+          description: Profile identifier
+      tags:
+        - Profiles
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  additionalProperties:
+                    type: object
+                    properties:
+                      code:
+                        type: integer
+                        format: int64
+                      text:
+                        type: boolean
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+  /image/profiles:
+    get:
+      description: Finds camera configuration profiles
+      parameters:
+        - in: query
+          name: id
+          schema:
+            type: array
+            items:
+              type: integer
+              format: int64
+          description: Id values that need to be considered for filter
+      tags:
+        - Profiles
+      responses:
+        '200':
+          description: successful request
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProfileConfig'
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+    put:
+      description: Update an existing camera configuration profile
+      tags:
+        - Profiles
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/ProfileConfig'
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfileConfig'
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+    post:
+      description: Add a new camera configuration profile
+      tags:
+        - Profiles
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProfileConfig'
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfileConfig'
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+    delete:
+      description: Deletes a profile
+      parameters:
+        - in: query
+          name: id
+          schema:
+            type: array
+            items:
+              type: integer
+              format: int64
+          description: Id values that need to be considered for filter
+      tags:
+        - Profiles
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  additionalProperties:
+                    type: object
+                    properties:
+                      code:
+                        type: integer
+                        format: int64
+                      text:
+                        type: boolean
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+  /equipment/boards:
+    get:
+      description: Returns information about installed boards
+      tags:
+        - Boards
+      responses:
+        '200':
+          description: Board list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  required:
+                    - model
+                    - serialNumber
+                    - version
+                  type: object
+                  properties:
+                    model:
+                      type: string
+                      example: CPU-X6
+                    serialNumber:
+                      type: string
+                      example: '999999000'
+                    version:
+                      type: string
+                      example: '1'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /equipment/dateAndTime:
+    get:
+      description: Returns time related information
+      tags:
+        - DateAndTime
+      responses:
+        '200':
+          description: Date and time
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/dataAndTimeInfo'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    put:
+      description: update time related information
+      tags:
+        - DateAndTime
+      requestBody:
+        description: Date and time to be applied
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                params:
+                  $ref: '#/components/schemas/dataAndTimeInfo'
+      responses:
+        '200':
+          description: Date and time
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/dataAndTimeInfo'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /equipment/general:
+    get:
+      description: Returns equipment general configuration
+      tags:
+        - General
+      responses:
+        '200':
+          description: General configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GeneralData'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    put:
+      description: Updates equipment general configuration
+      tags:
+        - General
+      requestBody:
+        description: General configuration to be applied
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                params:
+                  $ref: '#/components/schemas/GeneralData'
+      responses:
+        '200':
+          description: New general configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GeneralData'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /equipment/info:
+    get:
+      description: Returns information about the system
+      tags:
+        - Info
+      responses:
+        '200':
+          description: Information about the system
+          content:
+            application/json:
+              schema:
+                required:
+                  - equipmentModel
+                  - macAddress
+                type: object
+                properties:
+                  equipmentModel:
+                    type: string
+                    example: ITSCAM 600 LM
+                  macAddress:
+                    type: string
+                    example: '00:11:22:33:44:55'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /equipment/network/ethernet:
+    get:
+      description: Returns the current wired configuration
+      tags:
+        - Network
+      responses:
+        '200':
+          description: Wired coniguration
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ethernet:
+                    $ref: '#/components/schemas/EthernetData'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /equipment/network/wifi:
+    get:
+      description: Returns the current wireless configuration
+      tags:
+        - Network
+      responses:
+        '200':
+          description: Wireless coniguration
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  wifi:
+                    $ref: '#/components/schemas/WifiData'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /equipment/network/gsm:
+    get:
+      description: Returns the current mobile network configuration
+      tags:
+        - Network
+      responses:
+        '200':
+          description: GSM configuration
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  gsm:
+                    $ref: '#/components/schemas/GsmData'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /equipment/network/firewall:
+    get:
+      description: 'Returns the white list, portforward and fail2ban configuration'
+      tags:
+        - Network
+      responses:
+        '200':
+          description: Firewall configuration
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  firewall:
+                    $ref: '#/components/schemas/FirewallData'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /equipment/network/routes:
+    get:
+      description: Returns the configured routes
+      tags:
+        - Network
+      responses:
+        '200':
+          description: Routes configuration
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  routes:
+                    $ref: '#/components/schemas/RoutesData'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /equipment/network/wifiScan:
+    get:
+      description: Returns the current available wireless networks
+      tags:
+        - Network
+      responses:
+        '200':
+          description: List wireless networks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    ssid:
+                      type: string
+                      example: mySsid
+                    strength:
+                      type: integer
+                      example: 95
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /equipment/network:
+    get:
+      description: Returns the global network configuration
+      tags:
+        - Network
+      responses:
+        '200':
+          description: Network configuration
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ethernet:
+                    $ref: '#/components/schemas/EthernetData'
+                  wifi:
+                    $ref: '#/components/schemas/WifiData'
+                  gsm:
+                    $ref: '#/components/schemas/GsmData'
+                  firewall:
+                    $ref: '#/components/schemas/FirewallData'
+                  routes:
+                    $ref: '#/components/schemas/RoutesData'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    put:
+      description: Configure networks
+      tags:
+        - Network
+      requestBody:
+        description: Network configuration to be applied
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                params:
+                  type: object
+                  properties:
+                    ethernet:
+                      $ref: '#/components/schemas/EthernetData'
+                    wifi:
+                      $ref: '#/components/schemas/WifiRequest'
+                    gsm:
+                      $ref: '#/components/schemas/GsmRequest'
+                    firewall:
+                      $ref: '#/components/schemas/FirewallData'
+                    routes:
+                      $ref: '#/components/schemas/RoutesData'
+      responses:
+        '200':
+          description: Configure networks
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ethernet:
+                    $ref: '#/components/schemas/EthernetData'
+                  wifi:
+                    $ref: '#/components/schemas/WifiRequest'
+                  gsm:
+                    $ref: '#/components/schemas/GsmRequest'
+                  firewall:
+                    $ref: '#/components/schemas/FirewallData'
+                  routes:
+                    $ref: '#/components/schemas/RoutesData'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /system/firmware:
+    get:
+      description: Returns installed firmware version
+      tags:
+        - Firmware
+      responses:
+        '200':
+          description: Firmware version
+          content:
+            application/json:
+              schema:
+                required:
+                  - version
+                type: object
+                properties:
+                  version:
+                    type: string
+                    example: v1.1.0
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /video/streams/schema:
+    get:
+      description: Gets schema used by stream services
+      tags:
+        - Streams
+      responses:
+        '200':
+          description: successful request
+          content:
+            application/json:
+              schema:
+                type: object
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+  /video/streams:
+    get:
+      description: Gets information about streaming services of camera
+      tags:
+        - Streams
+      responses:
+        '200':
+          description: successful request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StreamConfig'
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+    put:
+      description: Updates information about streaming services
+      tags:
+        - Streams
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StreamConfig'
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StreamConfig'
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+  /system/logs/connection:
+    get:
+      description: Get logs of connections to various services
+      tags:
+        - Monitoring
+      responses:
+        '200':
+          description: successful request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  pumatronix:
+                    type: array
+                    items:
+                      type: string
+                      example: >-
+                        {"ip":"192.168.254.254","port":1000,"isConn":false,"timestamp":"2026-01-01T00:00:00.000Z"}
+                  cougar:
+                    type: array
+                    items:
+                      type: string
+                  trigger:
+                    type: array
+                    items:
+                      type: string
+                  snapshot:
+                    type: array
+                    items:
+                      type: string
+                  lastframe:
+                    type: array
+                    items:
+                      type: string
+                  mjpegvideo:
+                    type: array
+                    items:
+                      type: string
+                  rebootcgi:
+                    type: array
+                    items:
+                      type: string
+                  reboot:
+                    type: array
+                    items:
+                      type: string
+                      example: '2026-01-01T00:00:00.000Z'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /system/maintenance/backup:
+    post:
+      description: Backup configuration to file
+      tags:
+        - Maintenance
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                params:
+                  type: object
+                  properties:
+                    items:
+                      type: array
+                      items:
+                        type: string
+                      example:
+                        - profiles
+                        - streams
+                        - general
+                        - dateAndTime
+                        - network
+                        - recognition
+                        - servers
+                        - users
+      responses:
+        '200':
+          description: successful request
+          content:
+            application/json: {}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /system/maintenance/restore:
+    post:
+      description: Restore configuration from file
+      tags:
+        - Maintenance
+      requestBody:
+        content:
+          application/json: {}
+      responses:
+        '200':
+          description: successful request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Restoration finished successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /system/maintenance/factoryDefaults:
+    post:
+      description: Restore configuration to factory defaults
+      tags:
+        - Maintenance
+      responses:
+        '200':
+          description: successful request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Factory reset completed successfully
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /system/maintenance/storage/usage:
+    get:
+      description: Query storage usage data
+      tags:
+        - Maintenance
+      responses:
+        '200':
+          description: successful request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Factory reset completed successfully
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /system/maintenance/storage/capturedata:
+    delete:
+      description: Delete capture data from all services
+      tags:
+        - Maintenance
+      responses:
+        '200':
+          description: successful request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Service capture data deleted successfully
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /system/maintenance/storage/temporarydata:
+    delete:
+      description: Delete temporary data
+      tags:
+        - Maintenance
+      responses:
+        '200':
+          description: successful request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Temporary data deleted successfully
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /system/maintenance/sdcard:
+    get:
+      description: Get SD card configuration
+      tags:
+        - Maintenance
+      responses:
+        '200':
+          description: successful request
+          content:
+            application/json: {}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    post:
+      description: Update SD card configuration
+      tags:
+        - Maintenance
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                shouldUseInServices:
+                  type: boolean
+      responses:
+        '200':
+          description: successful request
+          content:
+            application/json: {}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /system/maintenance/automaticreboot:
+    get:
+      description: Get automatic reboot configuration
+      tags:
+        - Maintenance
+      responses:
+        '200':
+          description: successful request
+          content:
+            application/json: {}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    post:
+      description: Update automatic reboot configuration
+      tags:
+        - Maintenance
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                scheduled:
+                  type: object
+                  properties:
+                    enabled:
+                      type: boolean
+                    weekdays:
+                      type: array
+                      items:
+                        type: number
+                    hour:
+                      type: number
+                periodic:
+                  type: object
+                  properties:
+                    enabled:
+                      type: boolean
+                    hours:
+                      type: number
+      responses:
+        '200':
+          description: successful request
+          content:
+            application/json: {}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /system/maintenance/remoteaccess:
+    get:
+      description: Get remote access configuration
+      tags:
+        - Maintenance
+      responses:
+        '200':
+          description: successful request
+          content:
+            application/json: {}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    post:
+      description: Update remote access configuration
+      tags:
+        - Maintenance
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                enabled:
+                  type: boolean
+      responses:
+        '200':
+          description: successful request
+          content:
+            application/json: {}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /system/maintenance/pingScan:
+    put:
+      description: Returns if the ping is sucessfull and the time it took
+      tags:
+        - Network
+      requestBody:
+        description: Address and interface
+        content:
+          application/json:
+            schema:
+              type: object
+              properties: null
+              nameAddress:
+                type: string
+                example: address.com
+              iface:
+                type: string
+                example: eth1
+      responses:
+        '200':
+          description: successful request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: 'OK [time] ms'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /system/maintenance/dnsLookUp:
+    put:
+      description: Returns the current available wireless networks
+      tags:
+        - Network
+      requestBody:
+        description: Address and interface
+        content:
+          application/json:
+            schema:
+              type: object
+              properties: null
+              nameAddress:
+                type: string
+                example: address.com
+              iface:
+                type: string
+                example: eth1
+      responses:
+        '200':
+          description: successful request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: google.com.    258 IN  A 172.217.172.142
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /system/maintenance/traceroute:
+    put:
+      description: Returns the current available wireless networks
+      tags:
+        - Network
+      requestBody:
+        description: Address and interface
+        content:
+          application/json:
+            schema:
+              type: object
+              properties: null
+              nameAddress:
+                type: string
+                example: address.com
+              iface:
+                type: string
+                example: eth1
+      responses:
+        '200':
+          description: successful request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /system/maintenance/speedtest:
+    put:
+      description: Returns the speedtes download and upload result
+      tags:
+        - Network
+      requestBody:
+        description: 'Address, port and interface'
+        content:
+          application/json:
+            schema:
+              type: object
+              properties: null
+              nameAddress:
+                type: string
+                example: address.com
+              portAddress:
+                type: string
+                example: '9999'
+              iface:
+                type: string
+                example: eth1
+      responses:
+        '200':
+          description: successful request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: 'Upload:  xx Mbits/sec Download:  xx Mbits/sec'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /system/maintenance/nmap:
+    put:
+      description: Returns a port scan by nmap
+      tags:
+        - Network
+      requestBody:
+        description: 'Address, port and interface'
+        content:
+          application/json:
+            schema:
+              type: object
+              properties: null
+              nameAddress:
+                type: string
+                example: address.com
+              portAddress:
+                type: string
+                example: '9999'
+              iface:
+                type: string
+                example: eth1
+      responses:
+        '200':
+          description: successful request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: 80/tcp  open  http
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /system/monitoring/snmp:
+    get:
+      description: Get SNMP configuration
+      tags:
+        - Monitoring
+      responses:
+        '200':
+          description: successful request
+          content:
+            application/json: {}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    post:
+      description: Update SNMP configuration
+      tags:
+        - Monitoring
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                enabled:
+                  type: boolean
+                v2:
+                  type: object
+                  properties:
+                    enabled:
+                      type: boolean
+                    community:
+                      type: string
+                v3:
+                  type: object
+                  properties:
+                    enabled:
+                      type: boolean
+                    securityName:
+                      type: string
+                    authenticationPassphrase:
+                      type: string
+                    privacyPassphrase:
+                      type: string
+      responses:
+        '200':
+          description: successful request
+          content:
+            application/json: {}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /equipment/tls/trustedCerts:
+    get:
+      description: List all user trusted certificates found in USER_TRUSTED_CERTS_PATH
+      tags:
+        - Certificates
+      responses:
+        '200':
+          description: List of user trusted certificates
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  certificates:
+                    type: array
+                    items:
+                      type: string
+                    example:
+                      - cert1.crt
+                      - cert2.crt
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    post:
+      description: Store a new user trusted certificate
+      tags:
+        - Certificates
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                filename:
+                  type: string
+                  example: new_cert.crt
+                content:
+                  type: string
+                  example: >-
+                    data:application/x-x509-ca-cert;base64,LS0tLS1CRUdJTiBDRVJUSU...0tCg==
+      required: true
+      responses:
+        '201':
+          description: Trusted certificate stored successfully
+          content:
+            application/json: {}
+        '400':
+          description: Invalid input or certificate format
+          content:
+            application/json: {}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    delete:
+      description: Delete all user trusted certificates
+      tags:
+        - Certificates
+      responses:
+        '200':
+          description: All trusted certificates deleted successfully
+          content:
+            application/json: {}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  '/equipment/tls/trustedCerts/{filename}':
+    delete:
+      description: Delete a single user trusted certificate
+      tags:
+        - Certificates
+      parameters:
+        - name: filename
+          in: path
+          required: true
+          schema:
+            type: string
+          example: cert1.crt
+      responses:
+        '200':
+          description: Trusted certificate deleted successfully
+          content:
+            application/json: {}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Trusted certificate not found
+          content:
+            application/json: {}
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /equipment/tls/privateKeys:
+    get:
+      description: List all user keys and certificates found in USER_PROVIDED_CERT_KEY_PATH
+      tags:
+        - Certificates
+      responses:
+        '200':
+          description: List of user keys and certificates
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  certificates:
+                    type: array
+                    items:
+                      type: string
+                    example:
+                      - cert1.crt
+                      - cert2.crt
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    post:
+      description: Store a new user key and certificate
+      tags:
+        - Certificates
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  example: cert_for_server1
+                password:
+                  type: string
+                  example: myKeyPassword
+              oneOf:
+                - required:
+                    - p12
+                  properties:
+                    p12:
+                      type: string
+                      example: 'MIIQ7wIBAzCCEKUGCSq[...]lAgIIAA=='
+                - required:
+                    - certificate
+                    - key
+                  properties:
+                    certificate:
+                      type: string
+                      example: |-
+                        -----BEGIN CERTIFICATE-----
+                        MIID...
+                    key:
+                      type: string
+                      example: |-
+                        -----BEGIN PRIVATE KEY-----
+                        MIID...
+      responses:
+        '201':
+          description: User key and certificate stored successfully
+          content:
+            application/json: {}
+        '400':
+          description: Invalid input or certificate format
+          content:
+            application/json: {}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    delete:
+      description: Delete all user keys and certificates
+      tags:
+        - Certificates
+      responses:
+        '200':
+          description: All certificates deleted successfully
+          content:
+            application/json: {}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  '/equipment/tls/privateKeys/{filename}':
+    delete:
+      description: Delete a single user key and certificate pair
+      tags:
+        - Certificates
+      parameters:
+        - name: Certificate/key name without extension
+          in: path
+          required: true
+          schema:
+            type: string
+          example: myCert
+      responses:
+        '200':
+          description: Key and certificate deleted successfully
+          content:
+            application/json: {}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Key and certificate not found
+          content:
+            application/json: {}
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /system/users:
+    get:
+      description: Returns a list with all users registered in the system
+      tags:
+        - Users
+      responses:
+        '200':
+          description: User data list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserData'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    post:
+      description: Returns all users info
+      tags:
+        - Users
+      requestBody:
+        description: User to be created
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserRequest'
+      responses:
+        '200':
+          description: User data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserData'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  '/system/users/{userId}':
+    get:
+      description: Returns a user info by ID
+      parameters:
+        - in: path
+          name: userId
+          schema:
+            type: integer
+          required: true
+          description: Numeric ID of the user
+      tags:
+        - Users
+      responses:
+        '200':
+          description: User data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserData'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    put:
+      description: Updates a user using its ID
+      parameters:
+        - in: path
+          name: userId
+          schema:
+            type: integer
+          required: true
+          description: Numeric ID of the user
+      tags:
+        - Users
+      requestBody:
+        description: User to be created
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserRequest'
+      responses:
+        '200':
+          description: User data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserData'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    delete:
+      description: Deletes a user by its ID
+      parameters:
+        - in: path
+          name: userId
+          schema:
+            type: integer
+          required: true
+          description: Numeric ID of the user
+      tags:
+        - Users
+      responses:
+        '200':
+          description: User data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserData'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'

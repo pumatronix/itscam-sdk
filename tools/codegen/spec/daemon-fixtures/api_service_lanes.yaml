@@ -1,0 +1,83 @@
+swagger: 3.0
+
+paths:
+  get:
+    summary: Retrieve Lanes configuration
+    tags:
+      - services
+    operationId: getLanesConfig
+    responses:
+      "200":
+        description: sucessful request
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LanesConfig"
+      default:
+        description: unexpected error
+        content:
+          application/json:
+            schema:
+              $ref: "api_common.yaml#/components/schemas/ApiResponse"
+  put:
+    summary: Update Lanes configuration
+    tags:
+      - services
+    operationId: updateLanesConfig
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/LanesConfig"
+    responses:
+      "200":
+        description: successful request
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LanesConfig"
+    default:
+      description: unexpected error
+      content:
+        application/json:
+          schema:
+            $ref: "api_common.yaml#/components/schemas/ApiResponse"
+
+components:
+  schemas:
+    LaneRegion:
+      type: object
+      description: Lane region
+      properties:
+        name:
+          type: string
+        x0:
+          type: integer
+        y0:
+          type: integer
+        x1:
+          type: integer
+        y1:
+          type: integer
+        x2:
+          type: integer
+        y2:
+          type: integer
+        x3:
+          type: integer
+        y3:
+          type: integer
+    LanesConfig:
+      type: object
+      description: Lanes configuration
+      properties:
+        enabled:
+          type: boolean
+        region0:
+          $ref: "#/components/schemas/LaneRegion"
+        region1:
+          $ref: "#/components/schemas/LaneRegion"
+        region2:
+          $ref: "#/components/schemas/LaneRegion"
+

@@ -1,7 +1,15 @@
 # Build artifacts
-core/build/
-examples/build/
-wrappers/go/examples/capture_example
+src/core/build/
+src/examples/build/
+src/wrappers/go/examples/capture_example
+src/wrappers/go/examples/rest_example
+src/wrappers/go/examples/cgi_snapshot_example
+src/wrappers/go/examples/gui/build/
+src/wrappers/csharp/Itscam.Sdk/bin/
+src/wrappers/csharp/Itscam.Sdk/obj/
+src/wrappers/csharp/examples/CaptureExample/bin/
+src/wrappers/csharp/examples/CaptureExample/obj/
+src/wrappers/csharp/nupkg/
 
 # IDE and editor files
 .vscode/

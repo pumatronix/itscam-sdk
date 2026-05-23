@@ -1,6 +1,9 @@
 # ITSCAM SDK Top-Level Makefile
 #
-# Orchestrates building the core library, C++ examples, and wrapper examples.
+# Orchestrates building the core library, C++ examples, and wrapper
+# examples.  All source code lives under src/ -- this Makefile delegates
+# to src/core/Makefile and src/examples/Makefile and drives the wrapper
+# build tools (dotnet, go, python).
 #
 # Usage:
 #   make                Build core library and C++ examples (Linux)
@@ -14,9 +17,17 @@
 # Copyright (c) 2026 Pumatronix
 
 .PHONY: all linux windows lib examples wrappers clean help
-.PHONY: python-example go-example go-gui
+.PHONY: python-example python-rest-example python-cgi-example
+.PHONY: go-example go-rest-example go-cgi-example go-gui
+.PHONY: csharp csharp-pack csharp-examples csharp-examples-publish
+.PHONY: csharp-mjpeg-grabber-example csharp-software-trigger-example
 .PHONY: install
 .PHONY: docker-build docker-all docker-linux docker-windows docker-shell docker-go-gui
+.PHONY: docker-csharp docker-csharp-examples docker-csharp-examples-publish
+.PHONY: regression-examples docker-regression-examples
+
+# Source-tree root.  Every subordinate path below is relative to $(SRC_DIR).
+SRC_DIR := src
 
 # Default target - build library and C++ examples
 default: lib examples
@@ -27,13 +38,13 @@ default: lib examples
 
 lib:
 	@echo "=== Building core library (Linux) ==="
-	$(MAKE) -C core linux
+	$(MAKE) -C $(SRC_DIR)/core linux
 
 linux: lib
 
 windows:
 	@echo "=== Building core library (Windows) ==="
-	$(MAKE) -C core windows
+	$(MAKE) -C $(SRC_DIR)/core windows
 
 # ============================================================================
 #  C++ Examples
@@ -41,42 +52,183 @@ windows:
 
 examples: lib
 	@echo "=== Building C++ examples ==="
-	$(MAKE) -C examples
+	$(MAKE) -C $(SRC_DIR)/examples
 
 # ============================================================================
 #  Wrapper Examples
 # ============================================================================
 
-wrappers: python-example go-example
+wrappers: python-example go-example csharp-examples
 
 python-example:
 	@echo "=== Python example ready ==="
-	@echo "Run: python wrappers/python/examples/capture_example.py <camera_ip>"
-	@echo "Or:  cd wrappers/python && pip install -e . && python examples/capture_example.py <camera_ip>"
+	@echo "Run: python $(SRC_DIR)/wrappers/python/examples/capture_example.py <camera_ip>"
+	@echo "Or:  cd $(SRC_DIR)/wrappers/python && pip install -e . && python examples/capture_example.py <camera_ip>"
+
+python-rest-example:
+	@echo "=== Python REST example ready ==="
+	@echo "Run: python $(SRC_DIR)/wrappers/python/examples/rest_example.py <host> <user> <pass>"
+
+python-cgi-example:
+	@echo "=== Python CGI snapshot example ready ==="
+	@echo "Run: python $(SRC_DIR)/wrappers/python/examples/cgi_snapshot_example.py <host> [--user U --password P]"
 
 go-example: lib
 	@echo "=== Building Go example ==="
 	@if command -v go > /dev/null; then \
-		cd wrappers/go/examples && \
-		CGO_LDFLAGS="-L$(CURDIR)/core/build/linux" \
-		CGO_CFLAGS="-I$(CURDIR)/core" \
+		cd $(SRC_DIR)/wrappers/go/examples && \
+		CGO_LDFLAGS="-L$(CURDIR)/$(SRC_DIR)/core/build/linux" \
+		CGO_CFLAGS="-I$(CURDIR)/$(SRC_DIR)/core" \
 		go build -o capture_example capture_example.go; \
-		echo "Run: LD_LIBRARY_PATH=$(CURDIR)/core/build/linux wrappers/go/examples/capture_example <camera_ip>"; \
+		echo "Run: LD_LIBRARY_PATH=$(CURDIR)/$(SRC_DIR)/core/build/linux $(SRC_DIR)/wrappers/go/examples/capture_example <camera_ip>"; \
 	else \
 		echo "Go not found. Install go to build Go examples."; \
 	fi
 
+go-rest-example: lib
+	@echo "=== Building Go REST example ==="
+	@if command -v go > /dev/null; then \
+		cd $(SRC_DIR)/wrappers/go/examples && \
+		CGO_LDFLAGS="-L$(CURDIR)/$(SRC_DIR)/core/build/linux" \
+		CGO_CFLAGS="-I$(CURDIR)/$(SRC_DIR)/core" \
+		go build -o rest_example rest_example.go; \
+	else \
+		echo "Go not found. Install go to build Go examples."; \
+	fi
+
+go-cgi-example: lib
+	@echo "=== Building Go CGI snapshot example ==="
+	@if command -v go > /dev/null; then \
+		cd $(SRC_DIR)/wrappers/go/examples && \
+		CGO_LDFLAGS="-L$(CURDIR)/$(SRC_DIR)/core/build/linux" \
+		CGO_CFLAGS="-I$(CURDIR)/$(SRC_DIR)/core" \
+		go build -o cgi_snapshot_example cgi_snapshot_example.go; \
+	else \
+		echo "Go not found. Install go to build Go examples."; \
+	fi
+
+# ============================================================================
+#  C# Wrapper
+# ============================================================================
+
+csharp: lib
+	@echo "=== Building C# wrapper ==="
+	@if command -v dotnet > /dev/null; then \
+		cd $(SRC_DIR)/wrappers/csharp && \
+		dotnet build -c Release Itscam.Sdk/Itscam.Sdk.csproj; \
+		echo "C# build done: $(SRC_DIR)/wrappers/csharp/Itscam.Sdk/bin/Release/"; \
+	else \
+		echo "dotnet not found. Install .NET 8 SDK to build the C# wrapper."; \
+	fi
+
+# Produce a NuGet package containing native binaries for every platform
+# in $(SRC_DIR)/core/build/<rid>/.  Builds the Linux artefacts first;
+# cross-compiles for Windows when MinGW is available.  Optional ARM
+# toolchains may be wired in by extending the lib-arm / lib-arm64
+# targets below.
+csharp-pack: lib
+	@echo "=== Packing C# wrapper ==="
+	@if ! command -v dotnet > /dev/null; then \
+		echo "dotnet not found. Install .NET 8 SDK first."; exit 1; \
+	fi
+	@if command -v x86_64-w64-mingw32-g++ > /dev/null; then \
+		$(MAKE) windows; \
+	fi
+	cd $(SRC_DIR)/wrappers/csharp && \
+	dotnet pack -c Release Itscam.Sdk/Itscam.Sdk.csproj \
+	    -o $(CURDIR)/$(SRC_DIR)/wrappers/csharp/nupkg
+
+# Build the SDK library + all example projects in one solution-level pass.
+csharp-examples: lib
+	@echo "=== Building C# wrapper and all examples ==="
+	@if command -v dotnet > /dev/null; then \
+		cd $(SRC_DIR)/wrappers/csharp && \
+		dotnet build -c Release Itscam.Sdk.sln; \
+		echo "C# examples built: $(SRC_DIR)/wrappers/csharp/examples/*/bin/Release/"; \
+	else \
+		echo "dotnet not found. Install .NET 8 SDK to build C# examples."; \
+		echo "Use 'make docker-csharp-examples' to build inside the Docker container."; \
+		exit 1; \
+	fi
+
+# Runtime identifier for self-contained publish.  Override on the command
+# line if targeting a different architecture, e.g. CSHARP_RID=linux-arm64.
+CSHARP_RID ?= linux-x64
+
+# Publish all example executables as self-contained single-file binaries.
+# Each output lands in examples/<Name>/bin/Release/net8.0/<rid>/publish/.
+# The resulting binary has no .NET runtime dependency.
+csharp-examples-publish: lib
+	@echo "=== Publishing C# examples (self-contained, RID=$(CSHARP_RID)) ==="
+	@if command -v dotnet > /dev/null; then \
+		dotnet publish -c Release -r $(CSHARP_RID) --self-contained true \
+		    -p:PublishSingleFile=true \
+		    $(SRC_DIR)/wrappers/csharp/examples/CaptureExample/CaptureExample.csproj && \
+		dotnet publish -c Release -r $(CSHARP_RID) --self-contained true \
+		    -p:PublishSingleFile=true \
+		    $(SRC_DIR)/wrappers/csharp/examples/MjpegGrabberExample/MjpegGrabberExample.csproj && \
+		dotnet publish -c Release -r $(CSHARP_RID) --self-contained true \
+		    -p:PublishSingleFile=true \
+		    $(SRC_DIR)/wrappers/csharp/examples/SoftwareTriggerSnapshotExample/SoftwareTriggerSnapshotExample.csproj && \
+		dotnet publish -c Release -r $(CSHARP_RID) --self-contained true \
+		    -p:PublishSingleFile=true \
+		    $(SRC_DIR)/wrappers/csharp/examples/BinaryCaptureExample/BinaryCaptureExample.csproj; \
+		echo "Binaries in examples/*/bin/Release/net8.0/$(CSHARP_RID)/publish/"; \
+	else \
+		echo "dotnet not found. Install .NET 8 SDK to publish C# examples."; \
+		echo "Use 'make docker-csharp-examples-publish' to publish inside the Docker container."; \
+		exit 1; \
+	fi
+
+# Individual example convenience targets (depend on csharp-examples so the
+# solution is always up-to-date before printing the run instructions).
+csharp-mjpeg-grabber-example: csharp-examples
+	@echo "Run: cd $(SRC_DIR)/wrappers/csharp/examples/MjpegGrabberExample"
+	@echo "     dotnet run -- <host> --user admin --password 1234 [--duration 10]"
+
+csharp-software-trigger-example: csharp-examples
+	@echo "Run: cd $(SRC_DIR)/wrappers/csharp/examples/SoftwareTriggerSnapshotExample"
+	@echo "     dotnet run -- <host> [--count 20 --interval 500]"
+	@echo "     # add --user admin --password 1234 to also run REST configuration"
+
+# ============================================================================
+#  Live-camera regression (all non-GUI examples)
+# ============================================================================
+
+# Camera under test.  Override on the command line:
+#   make regression-examples CAMERA_IP=10.8.19.8 CAMERA_USER=admin CAMERA_PASS=secret
+CAMERA_IP ?=
+CAMERA_USER ?= admin
+CAMERA_PASS ?=
+
+regression-examples:
+	@if [ -z "$(CAMERA_IP)" ]; then \
+		echo "Set CAMERA_IP, e.g.: make regression-examples CAMERA_IP=10.8.19.8"; \
+		exit 1; \
+	fi
+	$(CURDIR)/tools/regression/run-examples.sh \
+	    "$(CAMERA_IP)" "$(CAMERA_USER)" "$(CAMERA_PASS)"
+
+docker-regression-examples: docker-build
+	@if [ -z "$(CAMERA_IP)" ]; then \
+		echo "Set CAMERA_IP, e.g.: make docker-regression-examples CAMERA_IP=10.8.19.8"; \
+		exit 1; \
+	fi
+	$(DOCKER_RUN) --network host $(DOCKER_IMAGE) \
+	    /sdk/tools/regression/run-examples.sh \
+	    "$(CAMERA_IP)" "$(CAMERA_USER)" "$(CAMERA_PASS)"
+
 go-gui: lib
 	@echo "=== Building Go GUI example (Wails) for Linux (static) ==="
 	@if command -v wails > /dev/null; then \
-		export CGO_CFLAGS="-I$(CURDIR)/core" && \
-		export LD_LIBRARY_PATH="$(CURDIR)/core/build/linux:$$LD_LIBRARY_PATH" && \
-		cd wrappers/go/examples/gui && \
+		export CGO_CFLAGS="-I$(CURDIR)/$(SRC_DIR)/core" && \
+		export LD_LIBRARY_PATH="$(CURDIR)/$(SRC_DIR)/core/build/linux:$$LD_LIBRARY_PATH" && \
+		cd $(SRC_DIR)/wrappers/go/examples/gui && \
 		go mod tidy && \
 		mkdir -p build/bin/linux && \
 		wails build -tags static -o itscam-viewer && \
 		mv build/bin/itscam-viewer build/bin/linux/; \
-		echo "Output: wrappers/go/examples/gui/build/bin/linux/"; \
+		echo "Output: $(SRC_DIR)/wrappers/go/examples/gui/build/bin/linux/"; \
 		ls -lh build/bin/linux/; \
 	else \
 		echo "Wails not found. Install with: go install github.com/wailsapp/wails/v2/cmd/wails@latest"; \
@@ -90,17 +242,57 @@ go-gui-windows: windows
 		export GOARCH=amd64 && \
 		export CC=x86_64-w64-mingw32-gcc && \
 		export CXX=x86_64-w64-mingw32-g++ && \
-		export CGO_CFLAGS="-I$(CURDIR)/core" && \
-		cd wrappers/go/examples/gui && \
+		export CGO_CFLAGS="-I$(CURDIR)/$(SRC_DIR)/core" && \
+		cd $(SRC_DIR)/wrappers/go/examples/gui && \
 		go mod tidy && \
 		mkdir -p build/bin/windows && \
 		wails build -tags static -platform windows/amd64 -o itscam-viewer.exe && \
 		mv build/bin/itscam-viewer.exe build/bin/windows/; \
-		echo "Output: wrappers/go/examples/gui/build/bin/windows/"; \
+		echo "Output: $(SRC_DIR)/wrappers/go/examples/gui/build/bin/windows/"; \
 		ls -lh build/bin/windows/; \
 	else \
 		echo "Wails not found. Install with: go install github.com/wailsapp/wails/v2/cmd/wails@latest"; \
 	fi
+
+# ============================================================================
+#  Code generation (typed REST helpers from OpenAPI)
+# ============================================================================
+#
+# `make codegen` regenerates language-specific typed REST helpers from
+# tools/codegen/spec/default.yaml.  Override the spec path with SPEC=... to
+# target a custom OpenAPI document (e.g. one pulled from a newer firmware
+# release), or OUT_DIR=... to write outputs elsewhere for offline review.
+#
+# The generator is implemented in Node.js (tools/codegen/codegen.mjs), so
+# Node 18+ is required locally.  Use `make docker-codegen` to run inside the
+# project's reproducible builder image when Node isn't available.
+#
+# Generated files are checked into the repo -- consumers never need to run
+# codegen during a normal build.
+
+CODEGEN_DIR := tools/codegen
+NODE ?= node
+NPM ?= npm
+SPEC ?=
+OUT_DIR ?=
+
+# Internal helper -- forward SPEC / OUT_DIR overrides to codegen.mjs.
+CODEGEN_ARGS = $(if $(SPEC),--spec $(SPEC),) $(if $(OUT_DIR),--out-dir $(OUT_DIR),)
+
+# Make sure tools/codegen has its node_modules in place before running.
+codegen-install:
+	@if [ ! -d $(CODEGEN_DIR)/node_modules ]; then \
+		echo "=== Installing codegen Node dependencies ==="; \
+		cd $(CODEGEN_DIR) && $(NPM) install --no-audit --no-fund; \
+	fi
+
+codegen: codegen-install
+	@echo "=== Generating typed REST helpers ==="
+	cd $(CODEGEN_DIR) && $(NODE) codegen.mjs $(CODEGEN_ARGS)
+
+codegen-check: codegen-install
+	@echo "=== Verifying generated REST helpers match committed snapshot ==="
+	cd $(CODEGEN_DIR) && $(NODE) codegen.mjs --check $(CODEGEN_ARGS)
 
 # ============================================================================
 #  Docker Build
@@ -137,6 +329,28 @@ docker-go-gui-windows: docker-build
 	@echo "=== Building Go GUI for Windows inside Docker ==="
 	$(DOCKER_RUN) $(DOCKER_IMAGE) make go-gui-windows
 
+docker-csharp: docker-build
+	@echo "=== Building C# wrapper inside Docker ==="
+	$(DOCKER_RUN) $(DOCKER_IMAGE) make csharp
+
+docker-csharp-examples: docker-build
+	@echo "=== Building C# wrapper + all examples inside Docker ==="
+	$(DOCKER_RUN) $(DOCKER_IMAGE) make csharp-examples
+
+docker-csharp-examples-publish: docker-build
+	@echo "=== Publishing C# examples (self-contained) inside Docker ==="
+	$(DOCKER_RUN) $(DOCKER_IMAGE) make csharp-examples-publish
+
+# SPEC=... is forwarded to the container; OUT_DIR=... is forwarded too, but
+# remember the path must be valid inside the container (e.g. under /sdk).
+docker-codegen: docker-build
+	@echo "=== Regenerating typed REST helpers inside Docker ==="
+	$(DOCKER_RUN) $(DOCKER_IMAGE) make codegen $(if $(SPEC),SPEC=$(SPEC),) $(if $(OUT_DIR),OUT_DIR=$(OUT_DIR),)
+
+docker-codegen-check: docker-build
+	@echo "=== Verifying generated REST helpers (in Docker) ==="
+	$(DOCKER_RUN) $(DOCKER_IMAGE) make codegen-check $(if $(SPEC),SPEC=$(SPEC),) $(if $(OUT_DIR),OUT_DIR=$(OUT_DIR),)
+
 # ============================================================================
 #  All Platforms
 # ============================================================================
@@ -149,7 +363,7 @@ all: linux windows examples wrappers
 # ============================================================================
 
 install:
-	$(MAKE) -C core install
+	$(MAKE) -C $(SRC_DIR)/core install
 
 # ============================================================================
 #  Cleanup
@@ -157,10 +371,24 @@ install:
 
 clean:
 	@echo "=== Cleaning all build artifacts ==="
-	$(MAKE) -C core clean
-	$(MAKE) -C examples clean
-	@rm -f wrappers/go/examples/capture_example
-	@rm -rf wrappers/go/examples/gui/build
+	$(MAKE) -C $(SRC_DIR)/core clean
+	$(MAKE) -C $(SRC_DIR)/examples clean
+	@rm -f $(SRC_DIR)/wrappers/go/examples/capture_example \
+	       $(SRC_DIR)/wrappers/go/examples/rest_example \
+	       $(SRC_DIR)/wrappers/go/examples/cgi_snapshot_example
+	@rm -rf $(SRC_DIR)/wrappers/go/examples/gui/build
+	@rm -rf $(SRC_DIR)/wrappers/csharp/Itscam.Sdk/bin \
+	        $(SRC_DIR)/wrappers/csharp/Itscam.Sdk/obj
+	@rm -rf $(SRC_DIR)/wrappers/csharp/examples/CaptureExample/bin \
+	        $(SRC_DIR)/wrappers/csharp/examples/CaptureExample/obj
+	@rm -rf $(SRC_DIR)/wrappers/csharp/examples/MjpegGrabberExample/bin \
+	        $(SRC_DIR)/wrappers/csharp/examples/MjpegGrabberExample/obj
+	@rm -rf $(SRC_DIR)/wrappers/csharp/examples/SoftwareTriggerSnapshotExample/bin \
+	        $(SRC_DIR)/wrappers/csharp/examples/SoftwareTriggerSnapshotExample/obj
+	@rm -rf $(SRC_DIR)/wrappers/csharp/examples/BinaryCaptureExample/bin \
+	        $(SRC_DIR)/wrappers/csharp/examples/BinaryCaptureExample/obj
+	@rm -rf $(SRC_DIR)/wrappers/csharp/nupkg
+	@rm -rf $(CODEGEN_DIR)/build
 	@echo "Clean complete."
 
 # ============================================================================
@@ -180,19 +408,46 @@ help:
 	@echo "Example targets:"
 	@echo "  examples        Build C++ examples"
 	@echo "  wrappers        Build all wrapper examples"
-	@echo "  python-example  Show Python example instructions"
-	@echo "  go-example      Build Go example"
+	@echo "  python-example  Show Python binary client example usage"
+	@echo "  python-rest-example  Show Python REST example usage"
+	@echo "  python-cgi-example   Show Python CGI snapshot example usage"
+	@echo "  go-example      Build Go binary-client example"
+	@echo "  go-rest-example Build Go REST example"
+	@echo "  go-cgi-example  Build Go CGI snapshot example"
 	@echo "  go-gui          Build Go GUI example (Wails) for Linux"
 	@echo "  go-gui-windows  Build Go GUI example for Windows (cross-compile)"
+	@echo "  csharp          Build .NET wrapper (Release)"
+	@echo "  csharp-examples Build .NET wrapper + all C# examples"
+	@echo "  csharp-examples-publish  Self-contained single-file publish (no runtime needed)"
+	@echo "  csharp-pack     Build native artifacts and produce a NuGet"
+	@echo "  csharp-mjpeg-grabber-example     Build + print run instructions"
+	@echo "  csharp-software-trigger-example  Build + print run instructions"
+	@echo ""
+	@echo "Regression targets (live camera required):"
+	@echo "  regression-examples        Build + run all non-GUI examples"
+	@echo "  docker-regression-examples Same, inside Docker (--network host)"
+	@echo "    Usage: make regression-examples CAMERA_IP=<ip> [CAMERA_USER=admin CAMERA_PASS=secret]"
+	@echo "    Artifacts: .regression/<timestamp>_<camera_ip>/ (gitignored)"
 	@echo ""
 	@echo "Docker targets:"
 	@echo "  docker-build    Build the Docker image"
 	@echo "  docker-all      Build everything inside Docker"
 	@echo "  docker-linux    Build Linux library inside Docker"
 	@echo "  docker-windows  Cross-compile for Windows inside Docker"
+	@echo "  docker-csharp                   Build C# wrapper inside Docker"
+	@echo "  docker-csharp-examples          Build C# wrapper + examples inside Docker"
+	@echo "  docker-csharp-examples-publish  Publish self-contained C# binaries inside Docker"
 	@echo "  docker-go-gui   Build Go GUI inside Docker (Linux)"
 	@echo "  docker-go-gui-windows  Build Go GUI for Windows inside Docker"
+	@echo "  docker-codegen                  Regenerate REST types inside Docker"
+	@echo "  docker-codegen-check            Verify checked-in REST types (Docker)"
 	@echo "  docker-shell    Open interactive shell in Docker"
+	@echo ""
+	@echo "Code generation targets:"
+	@echo "  codegen         Regenerate typed REST helpers (Node 18+ required)"
+	@echo "  codegen-check   Verify checked-in REST types match the spec (CI gate)"
+	@echo "  Override SPEC=/path/to/itscam.yaml to use a custom OpenAPI document"
+	@echo "  Override OUT_DIR=... to write generated files to a different tree"
 	@echo ""
 	@echo "Other targets:"
 	@echo "  all             Build everything"
@@ -201,8 +456,7 @@ help:
 	@echo "  help            Show this help"
 	@echo ""
 	@echo "Directory structure:"
-	@echo "  core/           C/C++ SDK library source"
-	@echo "  examples/       C++ example applications"
-	@echo "  wrappers/"
-	@echo "    python/       Python binding and examples"
-	@echo "    go/           Go binding and examples"
+	@echo "  src/core/       C/C++ SDK library source"
+	@echo "  src/examples/   C++ example applications"
+	@echo "  src/wrappers/   Language wrappers (python, go, csharp)"
+	@echo "  docs/           Chapter-style documentation"

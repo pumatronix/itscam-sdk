@@ -1,0 +1,81 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <LangVersion>9.0</LangVersion>
+    <Nullable>disable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <RootNamespace>Pumatronix.Itscam</RootNamespace>
+    <AssemblyName>Itscam.Sdk</AssemblyName>
+
+    <!-- NuGet metadata -->
+    <IsPackable>true</IsPackable>
+    <PackageId>Pumatronix.Itscam.Sdk</PackageId>
+    <Version>1.0.0</Version>
+    <Authors>Pumatronix Equipamentos Eletronicos</Authors>
+    <Company>Pumatronix</Company>
+    <Product>ITSCAM Client SDK</Product>
+    <Description>Idiomatic .NET wrapper for the ITSCAM Client SDK -- binary, REST and CGI clients for ITSCAM cameras (HTTP and HTTPS).</Description>
+    <Copyright>Copyright (c) 2026 Pumatronix</Copyright>
+    <PackageLicenseExpression>Proprietary</PackageLicenseExpression>
+    <PackageTags>itscam;camera;sdk;pumatronix;mjpeg;rest;cgi;https</PackageTags>
+    <PackageProjectUrl>https://github.com/pumatronix/itscam-sdk</PackageProjectUrl>
+    <RepositoryType>git</RepositoryType>
+    <RepositoryUrl>https://github.com/pumatronix/itscam-sdk</RepositoryUrl>
+    <IncludeBuildOutput>true</IncludeBuildOutput>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+
+    <!-- Don't fail the build over missing native binaries.  They are
+         populated by `make csharp-pack` before packaging. -->
+    <NoWarn>$(NoWarn);CS1591;NU5100</NoWarn>
+  </PropertyGroup>
+
+  <!--
+    System.Memory provides Span<T> / ReadOnlySpan<T> on netstandard2.0.
+    System.Text.Json is required by the auto-generated RestTypes/*.g.cs
+    and by the typed convenience methods on ItscamRestClient.  Both are
+    built-in on net5+; the explicit references make sure netstandard2.0
+    consumers also get them and lock the major version.
+
+    NOTE: Keep System.Text.Json on the latest 8.x release supported by
+    netstandard2.0; 9.x dropped netstandard2.0 support and would force
+    all consumers to .NET 8+.
+  -->
+  <ItemGroup>
+    <PackageReference Include="System.Memory" Version="4.5.5" />
+    <PackageReference Include="System.Text.Json" Version="8.0.5" />
+  </ItemGroup>
+
+  <!--
+    Embed pre-built native libraries from src/core/build/<platform>/
+    into the NuGet package under runtimes/<rid>/native/.  The files must
+    exist by the time `dotnet pack` runs; the top-level Makefile target
+    `csharp-pack` invokes `make linux` (and optionally `make windows`)
+    first to produce them.
+  -->
+  <ItemGroup>
+    <None Include="..\..\..\core\build\linux\libitscam_sdk.so.1.0.0"
+          Pack="true" PackagePath="runtimes\linux-x64\native\libitscam_sdk.so"
+          Condition="Exists('..\..\..\core\build\linux\libitscam_sdk.so.1.0.0')" />
+    <None Include="..\..\..\core\build\linux-arm\libitscam_sdk.so.1.0.0"
+          Pack="true" PackagePath="runtimes\linux-arm\native\libitscam_sdk.so"
+          Condition="Exists('..\..\..\core\build\linux-arm\libitscam_sdk.so.1.0.0')" />
+    <None Include="..\..\..\core\build\linux-arm64\libitscam_sdk.so.1.0.0"
+          Pack="true" PackagePath="runtimes\linux-arm64\native\libitscam_sdk.so"
+          Condition="Exists('..\..\..\core\build\linux-arm64\libitscam_sdk.so.1.0.0')" />
+    <None Include="..\..\..\core\build\windows\itscam_sdk.dll"
+          Pack="true" PackagePath="runtimes\win-x64\native\itscam_sdk.dll"
+          Condition="Exists('..\..\..\core\build\windows\itscam_sdk.dll')" />
+  </ItemGroup>
+
+  <!--
+    Ship a .targets file so consuming projects automatically copy the
+    correct native binary to their output directory at build time.
+  -->
+  <ItemGroup>
+    <!-- NuGet auto-import convention: buildTransitive/<PackageId>.targets -->
+    <None Include="build\Itscam.Sdk.targets"
+          Pack="true" PackagePath="buildTransitive\Pumatronix.Itscam.Sdk.targets" />
+  </ItemGroup>
+
+</Project>

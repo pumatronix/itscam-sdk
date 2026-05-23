@@ -1,0 +1,19 @@
+{
+  "name": "itscam-sdk-codegen",
+  "version": "1.0.0",
+  "private": true,
+  "description": "OpenAPI -> typed REST helpers code generation for the ITSCAM SDK",
+  "type": "module",
+  "scripts": {
+    "postprocess": "node postprocess.mjs",
+    "codegen": "node codegen.mjs"
+  },
+  "dependencies": {
+    "@apidevtools/swagger-parser": "^10.1.0",
+    "quicktype-core": "^23.0.171",
+    "yaml": "^2.5.1"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
