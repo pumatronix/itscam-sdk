@@ -5,7 +5,7 @@
  *
  *  Copyright (c) 2026 Pumatronix
  *
- *  Self-contained header (C++14). Uses OS abstraction layer for threading.
+ *  Self-contained header. Uses OS abstraction layer for threading.
  */
 #pragma once
 

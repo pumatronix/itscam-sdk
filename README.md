@@ -2,9 +2,9 @@
 
 [Português (Brasil)](README.md) | [English (US)](README.en-US.md)
 
-Biblioteca C++17 cross-platform para integrar câmeras ITSCAM da [Pumatronix](https://www.pumatronix.com) (ITSCAM450 / ITSCAM600), com bindings idiomáticos para **C# / .NET**, **Python** e **Go**. O SDK já inclui suporte a HTTPS e o backend mbedTLS, sem dependências de sistema além de um compilador C++.
+Biblioteca cross-platform para integrar câmeras ITSCAM da [Pumatronix](https://www.pumatronix.com) (ITSCAM450 / ITSCAM600). O SDK já inclui suporte a HTTPS e o backend mbedTLS, sem dependências externas além de um compilador C++.
 
-O SDK expõe três classes de client independentes em C++, C#, Python e Go. Escolha o client pelo protocolo e pelo tipo de tarefa. Eles podem rodar lado a lado no mesmo processo. O binary client usa o protocolo **Cougar** na porta TCP **60000**. REST e CGI usam HTTP/HTTPS nas portas **80/443**.
+O SDK expõe três classes de cliente independentes em C++, C#, Python e Go. Escolha o client pelo protocolo e pelo tipo de tarefa. Eles podem rodar lado a lado no mesmo processo. O binary client usa o protocolo **Cougar** na porta TCP **60000**. REST e CGI usam HTTP/HTTPS nas portas **80/443**.
 
 | Client | Transport | Use para | Não use para |
 | ------ | --------- | -------- | ------------ |

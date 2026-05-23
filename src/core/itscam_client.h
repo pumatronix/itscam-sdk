@@ -5,7 +5,7 @@
  *
  *  Copyright (c) 2026 Pumatronix
  *
- *  Requires: C++14, nlohmann/json 3.x (header-only).
+ *  Requires: nlohmann/json 3.x (header-only).
  */
 #pragma once
 

@@ -16,7 +16,7 @@
  *
  *  Copyright (c) 2026 Pumatronix
  *
- *  Requires: C++14, cpp-httplib 0.18+ (header-only).
+ *  Requires: cpp-httplib 0.18+ (header-only).
  */
 #pragma once
 

@@ -9,7 +9,7 @@
  *
  *  Copyright (c) 2026 Pumatronix
  *
- *  Requires: C++17, nlohmann/json 3.x, cpp-httplib 0.18+ (header-only).
+ *  Requires: nlohmann/json 3.x, cpp-httplib 0.18+ (header-only).
  *
  *  Typed REST helpers (e.g. `getOcrConfig() -> Result<OcrConfig>`) are
  *  generated from the camera's OpenAPI document into `itscam_rest_types.hpp`.

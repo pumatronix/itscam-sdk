@@ -18,7 +18,7 @@
  *  This is an INTERNAL header.  It is not installed and not part of the
  *  public SDK surface.
  *
- *  Requires: C++14, cpp-httplib 0.18+ (header-only).
+ *  Requires: cpp-httplib 0.18+ (header-only).
  */
 #pragma once
 

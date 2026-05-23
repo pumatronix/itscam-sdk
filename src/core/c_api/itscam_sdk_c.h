@@ -15,7 +15,7 @@
  *
  * Every wrapper talks to the SDK through this header. The C++ API lives
  * in `src/core/itscam_*.h` and is the recommended surface for native
- * C++17 applications.
+ * applications.
  */
 
 #ifndef ITSCAM_SDK_C_H

@@ -6,7 +6,7 @@
  *  Copyright (c) 2026 Pumatronix
  *
  *  Wire-protocol compatible with the Cougar server daemon.
- *  Requires: C++14, nlohmann/json.
+ *  Requires: nlohmann/json.
  *  Supports: Linux (POSIX sockets), Windows (Winsock2).
  */
 

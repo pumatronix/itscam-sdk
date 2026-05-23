@@ -5,7 +5,7 @@
  *
  *  Copyright (c) 2026 Pumatronix
  *
- *  Self-contained header (C++14, no external dependencies beyond itscam_types.h).
+ *  Self-contained header (no external dependencies beyond itscam_types.h).
  *
  *  Provides functions to extract and parse metadata from JPEG COM markers
  *  (0xFF 0xFE) as produced by ITSCAM cameras.  The comment body uses a
