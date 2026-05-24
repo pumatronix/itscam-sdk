@@ -20,7 +20,12 @@ Extracting `itscam-sdk-<version>.tar.gz` gives you the following structure:
 ```
 itscam-sdk-<version>/
 ├── VERSION.json
-├── README.txt
+├── README-sdk.md                    # tarball layout and per-language install notes (PT-BR)
+├── README-sdk.en-US.md              # same, in English (US)
+├── README-repo.md                   # navigation hub from the GitHub repo (Portuguese)
+├── README.en-US.md                  # same hub, in English
+├── AGENTS.md                        # briefing for AI coding agents
+├── docs/                            # chapter-style guides (getting started, API, wrappers, ...)
 ├── csharp/                          # Multi-RID NuGet (linux-x64 + win-x64 + win-x86)
 │   └── Pumatronix.Itscam.Sdk.<version>.nupkg
 ├── linux-x64/

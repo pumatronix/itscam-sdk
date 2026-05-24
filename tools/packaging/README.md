@@ -5,7 +5,12 @@
 ```
 dist/itscam-sdk-<version>.tar.gz
   VERSION.json
-  README.txt
+  README-sdk.md        Tarball layout and per-language install notes (PT-BR)
+  README-sdk.en-US.md  Same, in English (US)
+  README-repo.md       Navigation hub from the GitHub repo (Portuguese)
+  README.en-US.md      Same hub, in English (US)
+  AGENTS.md
+  docs/                Chapter-style guides (getting started, API clients, wrappers, ...)
   csharp/              Pumatronix.Itscam.Sdk NuGet (linux-x64 + win-x64 + win-x86)
   examples/            Example source (all languages)
     cpp/               C++ sources + consumer Makefile (Linux x64)

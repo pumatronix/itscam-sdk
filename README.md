@@ -39,11 +39,16 @@ Tutoriais passo a passo (criar projeto do zero e salvar a primeira imagem em dis
 
 ## Começar a usar
 
+Escolha um dos caminhos abaixo.
+
+### Opção 1 — Pacote pré-compilado (integração)
+
 O SDK é distribuído como um pacote pré-compilado (`itscam-sdk-<version>.tar.gz`) que contém headers, shared libraries, NuGet, Python wheel e módulo Go para linux-x64, win-x64 e win-x86. Baixe a versão desejada na [página de releases](https://github.com/pumatronix/itscam-sdk/releases), extraia o pacote e integre direto no seu projeto — não é necessário compilar nada:
 
 ```bash
 tar xzf itscam-sdk-<version>.tar.gz
-export SDK=$PWD/itscam-sdk-<version>
+cd itscam-sdk-<version>
+export SDK=$PWD
 ```
 
 | Linguagem | Integração rápida |
@@ -55,30 +60,45 @@ export SDK=$PWD/itscam-sdk-<version>
 | **Java** | `mvn install:install-file -Dfile=$SDK/linux-x64/java/itscam-sdk-*.jar -DgroupId=com.pumatronix -DartifactId=itscam-sdk -Dversion=<v> -Dpackaging=jar` |
 | **Node.js** | `npm install $SDK/linux-x64/nodejs/pumatronix-itscam-sdk-*.tgz` |
 
-Guia completo de integração por linguagem em [`docs/getting-started.md`](docs/getting-started.md).
+Comece por `README-sdk.md` dentro do tarball (layout e install por linguagem). Guia completo em [`docs/getting-started.md`](docs/getting-started.md).
 
-## Build a partir do source (avançado)
+### Opção 2 — Clonar o repositório e compilar
 
-Se você precisa compilar o SDK do zero (contribuidores, cross-compile, debug), use o builder Docker:
+Para contribuidores, debug ou quando você precisa do source completo:
 
 ```bash
-git clone https://github.com/pumatronix/itscam-sdk.git && cd itscam-sdk
-make docker-all     # tudo: Linux + Windows cross + wrappers (recomendado)
-make docker-linux   # só libitscam_sdk.{so,a} para Linux
-make docker-shell   # shell interativo com o toolchain completo
-make sdk-dist       # gera o pacote itscam-sdk-<version>.tar.gz
-make help           # lista todos os targets (docker-* e nativos)
+git clone https://github.com/pumatronix/itscam-sdk.git
+cd itscam-sdk
+make docker-all     # recomendado: Linux + Windows cross + wrappers
 ```
 
-Build nativo local (opcional, se você já tem GCC/Clang instalado):
+Build nativo local (sem Docker), se você já tem GCC/Clang:
 
 ```bash
-make lib            # build libitscam_sdk.{so,a} para Linux
+make lib            # libitscam_sdk.{so,a} para Linux
 make examples       # build dos quatro C++ example binaries
-make all            # tudo: Linux + Windows cross + wrappers
 ```
 
-Todo código nativo fica em [`src/`](src/). Veja [`docs/overview.md`](docs/overview.md) para o layout completo do repository e [`docs/getting-started.md`](docs/getting-started.md) para detalhes de build e integração.
+Rodar um example contra a câmera:
+
+```bash
+./src/examples/build/itscam_sdk_example 192.168.254.254
+./src/examples/build/itscam_rest_example 192.168.254.254 admin 1234
+./src/examples/build/itscam_cgi_example 192.168.254.254
+```
+
+| Linguagem | Próximo passo (source tree) |
+| --------- | -------------------------- |
+| **C++ / C** | Link contra `src/core/build/linux/` — veja [linkar no source tree](docs/getting-started.md#linkar-contra-o-source-tree) |
+| **C# / .NET** | `make csharp` e examples em [`src/wrappers/csharp/examples/`](src/wrappers/csharp/examples/) |
+| **Python** | `make lib` + scripts em [`src/wrappers/python/examples/`](src/wrappers/python/examples/) |
+| **Go** | `make go-cgi-example` ou [`src/wrappers/go/examples/`](src/wrappers/go/examples/) |
+| **Java** | `make java` e examples em [`src/wrappers/java/examples/`](src/wrappers/java/examples/) |
+| **Node.js** | `make nodejs` e scripts em [`src/wrappers/nodejs/examples/`](src/wrappers/nodejs/examples/) |
+
+Outros targets úteis: `make docker-shell` (shell interativo), `make sdk-dist` (gera o pacote pré-compilado), `make help` (lista todos os targets). Cross-compile, linkagem avançada e geração do tarball: [`docs/getting-started.md`](docs/getting-started.md#build-do-sdk-a-partir-do-source).
+
+Todo código nativo fica em [`src/`](src/). Veja [`docs/overview.md`](docs/overview.md) para o layout completo do repository.
 
 ## Uso com AI agents
 

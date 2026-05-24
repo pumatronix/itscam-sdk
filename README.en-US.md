@@ -37,11 +37,16 @@ Reference docs by surface:
 
 ## Getting Started
 
+Pick one of the paths below.
+
+### Option 1 — Pre-compiled package (integration)
+
 The SDK is distributed as a pre-compiled package (`itscam-sdk-<version>.tar.gz`) containing headers, shared libraries, a NuGet, Python wheel, and Go module for linux-x64, win-x64, and win-x86. Download the desired version from the [releases page](https://github.com/pumatronix/itscam-sdk/releases), extract the package, and integrate directly into your project — no compilation needed:
 
 ```bash
 tar xzf itscam-sdk-<version>.tar.gz
-export SDK=$PWD/itscam-sdk-<version>
+cd itscam-sdk-<version>
+export SDK=$PWD
 ```
 
 | Language | Quick integration |
@@ -53,19 +58,16 @@ export SDK=$PWD/itscam-sdk-<version>
 | **Java** | `mvn install:install-file -Dfile=$SDK/linux-x64/java/itscam-sdk-*.jar -DgroupId=com.pumatronix -DartifactId=itscam-sdk -Dversion=<v> -Dpackaging=jar` |
 | **Node.js** | `npm install $SDK/linux-x64/nodejs/pumatronix-itscam-sdk-*.tgz` |
 
-Full integration guide by language in [`docs/getting-started.md`](docs/getting-started.md).
+Start with `README-sdk.en-US.md` inside the tarball (layout and per-language install). Full guide in [`docs/getting-started.en-US.md`](docs/getting-started.en-US.md).
 
-## Building from Source (advanced)
+### Option 2 — Clone the repository and build
 
-If you need to build the SDK from scratch (contributors, cross-compile, debug), use the Docker builder:
+For contributors, debugging, or when you need the full source tree:
 
 ```bash
-git clone https://github.com/pumatronix/itscam-sdk.git && cd itscam-sdk
-make docker-all     # everything: Linux + Windows cross + wrappers (recommended)
-make docker-linux   # libitscam_sdk.{so,a} for Linux only
-make docker-shell   # interactive shell with the full toolchain
-make sdk-dist       # produce the itscam-sdk-<version>.tar.gz package
-make help           # list every target (docker-* and native)
+git clone https://github.com/pumatronix/itscam-sdk.git
+cd itscam-sdk
+make docker-all     # recommended: Linux + Windows cross + wrappers
 ```
 
 Optional native build on the host (when GCC/Clang is already installed):
@@ -73,10 +75,28 @@ Optional native build on the host (when GCC/Clang is already installed):
 ```bash
 make lib            # build libitscam_sdk.{so,a} for Linux
 make examples       # build the four C++ example binaries
-make all            # build everything: Linux + Windows cross + wrappers
 ```
 
-All native code lives under [`src/`](src/). See [`docs/overview.md`](docs/overview.md) for the full repository layout and [`docs/getting-started.md`](docs/getting-started.md) for build and integration details.
+Run an example against the camera:
+
+```bash
+./src/examples/build/itscam_sdk_example 192.168.254.254
+./src/examples/build/itscam_rest_example 192.168.254.254 admin 1234
+./src/examples/build/itscam_cgi_example 192.168.254.254
+```
+
+| Language | Next step (source tree) |
+| -------- | ----------------------- |
+| **C++ / C** | Link against `src/core/build/linux/` — see [linking from the source tree](docs/getting-started.en-US.md#link-against-the-source-tree) |
+| **C# / .NET** | `make csharp` and examples under [`src/wrappers/csharp/examples/`](src/wrappers/csharp/examples/) |
+| **Python** | `make lib` + scripts under [`src/wrappers/python/examples/`](src/wrappers/python/examples/) |
+| **Go** | `make go-cgi-example` or [`src/wrappers/go/examples/`](src/wrappers/go/examples/) |
+| **Java** | `make java` and examples under [`src/wrappers/java/examples/`](src/wrappers/java/examples/) |
+| **Node.js** | `make nodejs` and scripts under [`src/wrappers/nodejs/examples/`](src/wrappers/nodejs/examples/) |
+
+Other useful targets: `make docker-shell` (interactive shell), `make sdk-dist` (produce the pre-compiled package), `make help` (list every target). Cross-compile, advanced linking, and tarball generation: [`docs/getting-started.en-US.md`](docs/getting-started.en-US.md#building-the-sdk-from-source).
+
+All native code lives under [`src/`](src/). See [`docs/overview.en-US.md`](docs/overview.en-US.md) for the full repository layout.
 
 ## Using AI Agents
 
