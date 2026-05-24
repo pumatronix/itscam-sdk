@@ -100,4 +100,4 @@ The script preserves fenced code blocks, tables, lists, blockquotes (including f
 - Local full-text search (offline)
 - **Cmd/Ctrl+K** semantic search through Cloudflare `search-modal-snippet` when configured
 - Floating **SDK Assistant** through `chat-bubble-snippet`
-- Full-page assistant at `/assistant`
+- Full-page assistant at `/assistant` via Cloudflare `chat-page-snippet` (floating bubble hidden on that route)

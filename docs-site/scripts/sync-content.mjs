@@ -55,7 +55,8 @@ function rewriteReadmeLinks(markdown) {
   let out = markdown;
 
   // Repository-internal images live under docs/images/. Sync copies them
-  // to docs-site/public/images/ so /images/... resolves on the site.
+  // to content/public/images/ so /images/... resolves on the site (VitePress
+  // applies the configured base, e.g. /itscam-sdk/, at build time).
   out = out.replace(/\]\(\.?\/?docs\/images\//g, "](/images/");
 
   // Language switcher and self-references at the top of the README.
@@ -149,6 +150,8 @@ title: SDK Assistant
 description: Chat com o assistant da documentação do ITSCAM SDK, powered by Cloudflare AI Search.
 sidebar: false
 aside: false
+outline: false
+pageClass: assistant
 ---
 
 <script setup>

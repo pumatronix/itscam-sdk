@@ -60,6 +60,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # docs/images/ is tracked via Git LFS (README banner). Without
+          # this, sync copies the ~130-byte pointer file and Pages serves
+          # a broken image even though the URL path is correct.
+          lfs: true
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -126,6 +131,8 @@ jobs:
     if: github.event_name == 'push' && vars.R2_BUCKET_NAME != ''
     steps:
       - uses: actions/checkout@v4
+        with:
+          lfs: true
 
       - uses: actions/setup-node@v4
         with:
