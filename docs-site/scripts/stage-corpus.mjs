@@ -10,6 +10,9 @@
  *     README.md
  *     AGENTS.md
  *     docs/api/binary-client.md
+ *     docs-site/content/public/api-ref/cpp/index.html
+ *     src/core/itscam_client.h
+ *     src/core/c_api/itscam_sdk_c.h
  *     src/examples/itscam_sdk_example.cpp
  *     src/wrappers/python/examples/capture_example.py
  *
