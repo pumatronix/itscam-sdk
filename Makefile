@@ -21,12 +21,16 @@
 .PHONY: go-example go-rest-example go-cgi-example go-gui
 .PHONY: csharp csharp-pack csharp-examples csharp-examples-publish
 .PHONY: csharp-mjpeg-grabber-example csharp-software-trigger-example
+.PHONY: java java-pack java-examples
+.PHONY: nodejs nodejs-pack nodejs-examples
 .PHONY: install
 .PHONY: version sdk-dist sdk-dist-clean docker-sdk-dist
 .PHONY: docker-build docker-all docker-linux docker-windows docker-shell docker-go-gui
 .PHONY: docker-csharp docker-csharp-examples docker-csharp-examples-publish
+.PHONY: docker-java docker-java-pack docker-nodejs docker-nodejs-pack
 .PHONY: regression-examples docker-regression-examples
 .PHONY: docs-api docs-api-cpp docs-api-python docs-api-csharp docs-api-go
+.PHONY: docs-api-java docs-api-nodejs
 .PHONY: docs-api-clean docs-sync docs-sync-check
 .PHONY: docs-site docker-docs-api docker-docs-api-cpp docker-docs-site
 
@@ -88,7 +92,7 @@ examples: lib
 #  Wrapper Examples
 # ============================================================================
 
-wrappers: python-example go-example csharp-examples
+wrappers: python-example go-example csharp-examples java-examples nodejs-examples
 
 python-example:
 	@echo "=== Python example ready ==="
@@ -235,6 +239,110 @@ csharp-software-trigger-example: csharp-examples
 	@echo "Run: cd $(SRC_DIR)/wrappers/csharp/examples/SoftwareTriggerSnapshotExample"
 	@echo "     dotnet run -- <host> [--count 20 --interval 500]"
 	@echo "     # add --user admin --password 1234 to also run REST configuration"
+
+# ============================================================================
+#  Java Wrapper (JNA)
+# ============================================================================
+#
+# The Java wrapper lives in src/wrappers/java/ as a Maven multi-module
+# project (parent + itscam-sdk + examples). Native binaries from
+# src/core/build/<rid>/ are staged into the JAR resources tree by
+# tools/packaging/stage-java-natives.sh so consumers do not need to
+# install libitscam_sdk system-wide.
+#
+# Maven 3.9+ and a JDK 11+ are required.
+
+JAVA_DIR := $(SRC_DIR)/wrappers/java
+MAVEN ?= mvn
+
+java: lib
+	@echo "=== Building Java wrapper (JAR) ==="
+	@if command -v $(MAVEN) > /dev/null; then \
+		$(CURDIR)/tools/packaging/stage-java-natives.sh; \
+		cd $(JAVA_DIR) && $(MAVEN) -pl itscam-sdk -am package -DskipTests; \
+		echo "Java JAR: $(JAVA_DIR)/itscam-sdk/target/itscam-sdk-*.jar"; \
+	else \
+		echo "$(MAVEN) not found. Install Maven 3.9+ and a JDK 11+ to build the Java wrapper."; \
+		echo "Use 'make docker-java' to build inside the Docker container."; \
+	fi
+
+java-pack: java
+	@echo "=== Java wrapper packaged ==="
+	@echo "  $(JAVA_DIR)/itscam-sdk/target/itscam-sdk-*.jar"
+	@echo "  Native binaries embedded under META-INF/native/<os>-<arch>/"
+
+java-examples: lib
+	@echo "=== Building Java wrapper + runnable examples ==="
+	@if command -v $(MAVEN) > /dev/null; then \
+		$(CURDIR)/tools/packaging/stage-java-natives.sh; \
+		cd $(JAVA_DIR) && $(MAVEN) -DskipTests package; \
+		echo "Examples (shaded JAR): $(JAVA_DIR)/examples/target/itscam-sdk-examples-*-all.jar"; \
+		echo "Run: java -cp $(JAVA_DIR)/examples/target/itscam-sdk-examples-*-all.jar \\"; \
+		echo "          com.pumatronix.itscam.examples.CaptureExample <camera_ip> [password]"; \
+	else \
+		echo "$(MAVEN) not found. Install Maven 3.9+ and a JDK 11+ to build the Java examples."; \
+		echo "Use 'make docker-java-examples' to build inside the Docker container."; \
+	fi
+
+docker-java: docker-build
+	@echo "=== Building Java wrapper inside Docker ==="
+	$(DOCKER_RUN) $(DOCKER_IMAGE) make java
+
+docker-java-pack: docker-build
+	@echo "=== Packing Java wrapper inside Docker ==="
+	$(DOCKER_RUN) $(DOCKER_IMAGE) make java-pack
+
+docker-java-examples: docker-build
+	@echo "=== Building Java wrapper + examples inside Docker ==="
+	$(DOCKER_RUN) $(DOCKER_IMAGE) make java-examples
+
+# ============================================================================
+#  Node.js Wrapper (koffi)
+# ============================================================================
+#
+# The Node.js wrapper lives in src/wrappers/nodejs/. Native binaries
+# from src/core/build/<rid>/ are staged into native/<platform>-<arch>/
+# by tools/packaging/stage-nodejs-natives.sh so the published npm
+# tarball is self-contained -- consumers do not need to install
+# libitscam_sdk system-wide.
+
+NODEJS_DIR := $(SRC_DIR)/wrappers/nodejs
+
+nodejs: lib
+	@echo "=== Building Node.js wrapper ==="
+	@if command -v $(NODE) > /dev/null && command -v $(NPM) > /dev/null; then \
+		$(CURDIR)/tools/packaging/stage-nodejs-natives.sh; \
+		cd $(NODEJS_DIR) && $(NPM) install --no-audit --no-fund; \
+		echo "Node.js wrapper ready: $(NODEJS_DIR)"; \
+		echo "Run: node $(NODEJS_DIR)/examples/capture-example.js <camera_ip> [password]"; \
+	else \
+		echo "Node.js / npm not found. Install Node 16+ to build the Node.js wrapper."; \
+		echo "Use 'make docker-nodejs' to build inside the Docker container."; \
+	fi
+
+nodejs-pack: nodejs
+	@echo "=== Packing Node.js wrapper (npm pack) ==="
+	@if command -v $(NPM) > /dev/null; then \
+		cd $(NODEJS_DIR) && $(NPM) pack; \
+		echo "Tarball:"; \
+		ls -1 $(NODEJS_DIR)/pumatronix-itscam-sdk-*.tgz 2>/dev/null || true; \
+	else \
+		echo "npm not found."; \
+	fi
+
+nodejs-examples: nodejs
+	@echo "=== Node.js examples ready ==="
+	@echo "Run: node $(NODEJS_DIR)/examples/capture-example.js <camera_ip> [password]"
+	@echo "Or:  node $(NODEJS_DIR)/examples/rest-example.js <host> <user> <pass>"
+	@echo "Or:  node $(NODEJS_DIR)/examples/cgi-snapshot-example.js <host> [--user U --password P]"
+
+docker-nodejs: docker-build
+	@echo "=== Building Node.js wrapper inside Docker ==="
+	$(DOCKER_RUN) $(DOCKER_IMAGE) make nodejs
+
+docker-nodejs-pack: docker-build
+	@echo "=== Packing Node.js wrapper inside Docker ==="
+	$(DOCKER_RUN) $(DOCKER_IMAGE) make nodejs-pack
 
 # ============================================================================
 #  Live-camera regression (all non-GUI examples)
@@ -538,7 +646,7 @@ all: linux windows examples wrappers
 
 SDK_DIST_SCRIPT := $(CURDIR)/tools/packaging/make-sdk-dist.sh
 
-sdk-dist: version lib windows csharp-pack
+sdk-dist: version lib windows csharp-pack java-pack nodejs-pack
 	@echo "=== Packaging SDK distribution ($(SDK_VERSION), linux-x64 + win-x64 + win-x86) ==="
 	@$(SDK_DIST_SCRIPT)
 
@@ -580,6 +688,13 @@ clean:
 	@rm -rf $(SRC_DIR)/wrappers/csharp/examples/BinaryCaptureExample/bin \
 	        $(SRC_DIR)/wrappers/csharp/examples/BinaryCaptureExample/obj
 	@rm -rf $(SRC_DIR)/wrappers/csharp/nupkg
+	@rm -rf $(SRC_DIR)/wrappers/java/itscam-sdk/target \
+	        $(SRC_DIR)/wrappers/java/examples/target \
+	        $(SRC_DIR)/wrappers/java/target \
+	        $(SRC_DIR)/wrappers/java/itscam-sdk/src/main/resources/META-INF/native
+	@rm -rf $(SRC_DIR)/wrappers/nodejs/node_modules \
+	        $(SRC_DIR)/wrappers/nodejs/native
+	@rm -f  $(SRC_DIR)/wrappers/nodejs/pumatronix-itscam-sdk-*.tgz
 	@rm -rf $(CODEGEN_DIR)/build
 	@rm -rf dist/
 	@rm -rf $(DOCS_API_OUT) $(DOCS_SITE_DIR)/content $(DOCS_SITE_DIR)/.vitepress/dist tools/docs/obj
@@ -617,6 +732,12 @@ help:
 	@echo "  csharp-pack-linux  NuGet with Linux native binary only (sdk-dist)"
 	@echo "  csharp-mjpeg-grabber-example     Build + print run instructions"
 	@echo "  csharp-software-trigger-example  Build + print run instructions"
+	@echo "  java            Build Java wrapper JAR (Maven; requires JDK 11+)"
+	@echo "  java-pack       Same as java; embeds native binaries into JAR"
+	@echo "  java-examples   Build Java wrapper + runnable examples"
+	@echo "  nodejs          Build Node.js wrapper (npm install + stage natives)"
+	@echo "  nodejs-pack     Run 'npm pack' to produce a publish-ready tarball"
+	@echo "  nodejs-examples Build Node.js wrapper + show example commands"
 	@echo ""
 	@echo "Regression targets (live camera required):"
 	@echo "  regression-examples        Build + run all non-GUI examples"
@@ -632,6 +753,8 @@ help:
 	@echo "  docker-csharp                   Build C# wrapper inside Docker"
 	@echo "  docker-csharp-examples          Build C# wrapper + examples inside Docker"
 	@echo "  docker-csharp-examples-publish  Publish self-contained C# binaries inside Docker"
+	@echo "  docker-java[-pack|-examples]    Build/pack Java wrapper inside Docker"
+	@echo "  docker-nodejs[-pack]            Build/pack Node.js wrapper inside Docker"
 	@echo "  docker-go-gui   Build Go GUI inside Docker (Linux)"
 	@echo "  docker-go-gui-windows  Build Go GUI for Windows inside Docker"
 	@echo "  docker-codegen                  Regenerate REST types inside Docker"
@@ -669,5 +792,5 @@ help:
 	@echo "Directory structure:"
 	@echo "  src/core/       C/C++ SDK library source"
 	@echo "  src/examples/   C++ example applications"
-	@echo "  src/wrappers/   Language wrappers (python, go, csharp)"
+	@echo "  src/wrappers/   Language wrappers (python, go, csharp, java, nodejs)"
 	@echo "  docs/           Chapter-style documentation"

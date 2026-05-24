@@ -7,7 +7,7 @@ Five-minute path from the pre-compiled SDK package to a running application agai
 ## Prerequisites
 
 - An ITSCAM camera (ITSCAM450 / ITSCAM600) reachable over the network.
-- The distribution package `itscam-sdk-<version>.tar.gz` (obtained from your Pumatronix contact or from the [releases page](https://github.com/pumatronix/itscam-sdk/releases)).
+- The distribution package `itscam-sdk-<version>.tar.gz` (download from the [releases page](https://github.com/pumatronix/itscam-sdk/releases)).
 - For C++ / C: a C++17 compiler (GCC 7+, Clang 5+) and `make`.
 - For C# / .NET: .NET SDK 6.0+.
 - For Python: Python 3.7+.

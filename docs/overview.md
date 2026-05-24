@@ -8,7 +8,7 @@ O **ITSCAM Client SDK** é uma library C++17 cross-platform que conversa com câ
 
 ## Pacote pré-compilado
 
-O SDK é distribuído como `itscam-sdk-<version>.tar.gz`, contendo binários pré-compilados para linux-x64, win-x64 e win-x86, mais NuGet (.NET), Python wheel e módulo Go. Esse é o caminho recomendado para integração -- veja [Getting started](getting-started.md).
+O SDK é distribuído como `itscam-sdk-<version>.tar.gz`, contendo binários pré-compilados para linux-x64, win-x64 e win-x86, mais NuGet (.NET), Python wheel e módulo Go. Baixe o pacote na [página de releases](https://github.com/pumatronix/itscam-sdk/releases) — esse é o caminho recomendado para integração; veja [Getting started](getting-started.md).
 
 ## Build artefacts (a partir do source)
 

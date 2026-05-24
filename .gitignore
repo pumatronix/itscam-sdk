@@ -33,6 +33,19 @@ src/wrappers/csharp/examples/BinaryCaptureExample/bin/
 src/wrappers/csharp/examples/BinaryCaptureExample/obj/
 src/wrappers/csharp/nupkg/
 
+# Java wrapper
+src/wrappers/java/itscam-sdk/target/
+src/wrappers/java/examples/target/
+src/wrappers/java/target/
+# Native binaries staged by tools/packaging/stage-java-natives.sh into JAR resources
+src/wrappers/java/itscam-sdk/src/main/resources/META-INF/native/
+
+# Node.js wrapper
+src/wrappers/nodejs/node_modules/
+# Native binaries staged by tools/packaging/stage-nodejs-natives.sh into the npm tarball
+src/wrappers/nodejs/native/
+src/wrappers/nodejs/pumatronix-itscam-sdk-*.tgz
+
 # Codegen tool
 tools/codegen/node_modules/
 tools/codegen/build/
@@ -52,4 +65,6 @@ src/core/itscam_sdk_version.h
 src/wrappers/python/itscam/_version.py
 src/wrappers/csharp/Version.props
 src/wrappers/go/itscam/version.go
+src/wrappers/java/itscam-sdk/src/main/java/com/pumatronix/itscam/internal/SdkVersion.java
+src/wrappers/nodejs/src/version.js
 VERSION.json

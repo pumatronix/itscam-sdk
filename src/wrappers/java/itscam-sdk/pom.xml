@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ITSCAM Client SDK - Java wrapper.
+
+  Builds a Maven JAR with JNA bindings to libitscam_sdk.{so,dll,dylib}.
+  When the top-level Makefile target `make java-pack` is invoked, the
+  pre-built native binaries from src/core/build/<rid>/ are staged under
+  src/main/resources/META-INF/native/<os>-<arch>/ and packaged into the
+  JAR so consumers do not need to install the native library system-wide.
+
+  Native binaries fall back to the system loader if the JAR does not
+  contain a matching <os>-<arch> entry.
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+            https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.pumatronix</groupId>
+        <artifactId>itscam-sdk-parent</artifactId>
+        <version>0.2.0-SNAPSHOT</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>itscam-sdk</artifactId>
+    <packaging>jar</packaging>
+
+    <name>ITSCAM Client SDK</name>
+    <description>
+        Idiomatic Java wrapper for the Pumatronix ITSCAM Client SDK.
+        Provides the binary, REST and CGI clients backed by the native
+        libitscam_sdk shared library through JNA.
+    </description>
+    <url>https://github.com/pumatronix/itscam-sdk</url>
+
+    <licenses>
+        <license>
+            <name>Proprietary</name>
+            <comments>Copyright (c) 2026 Pumatronix Equipamentos Eletronicos</comments>
+        </license>
+    </licenses>
+
+    <organization>
+        <name>Pumatronix Equipamentos Eletronicos</name>
+        <url>https://www.pumatronix.com</url>
+    </organization>
+
+    <scm>
+        <url>https://github.com/pumatronix/itscam-sdk</url>
+        <connection>scm:git:https://github.com/pumatronix/itscam-sdk.git</connection>
+    </scm>
+
+    <properties>
+        <jna.version>5.14.0</jna.version>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>net.java.dev.jna</groupId>
+            <artifactId>jna</artifactId>
+            <version>${jna.version}</version>
+        </dependency>
+
+        <!-- Test scope -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>5.10.2</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.13.0</version>
+            </plugin>
+
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <version>3.4.1</version>
+                <configuration>
+                    <archive>
+                        <manifestEntries>
+                            <Implementation-Title>ITSCAM Client SDK (Java)</Implementation-Title>
+                            <Implementation-Version>${project.version}</Implementation-Version>
+                            <Implementation-Vendor>Pumatronix</Implementation-Vendor>
+                        </manifestEntries>
+                    </archive>
+                </configuration>
+            </plugin>
+
+            <!-- Include sources & javadoc on `mvn package` for downstream -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-source-plugin</artifactId>
+                <version>3.3.1</version>
+                <executions>
+                    <execution>
+                        <id>attach-sources</id>
+                        <goals><goal>jar-no-fork</goal></goals>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-javadoc-plugin</artifactId>
+                <version>3.7.0</version>
+                <configuration>
+                    <doclint>none</doclint>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>attach-javadocs</id>
+                        <goals><goal>jar</goal></goals>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>3.2.5</version>
+            </plugin>
+        </plugins>
+    </build>
+</project>

@@ -1,0 +1,59 @@
+{
+  "name": "@pumatronix/itscam-sdk",
+  "version": "0.2.0-dev.2",
+  "description": "Idiomatic Node.js wrapper for the Pumatronix ITSCAM Client SDK -- binary, REST and CGI clients backed by the native libitscam_sdk through koffi.",
+  "main": "src/index.js",
+  "types": "types/index.d.ts",
+  "files": [
+    "src/",
+    "types/",
+    "native/",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=16"
+  },
+  "os": [
+    "linux",
+    "darwin",
+    "win32"
+  ],
+  "cpu": [
+    "x64",
+    "arm64",
+    "arm",
+    "ia32"
+  ],
+  "scripts": {
+    "lint": "node -e \"require('./src')\"",
+    "example:capture": "node examples/capture-example.js",
+    "example:rest": "node examples/rest-example.js",
+    "example:cgi": "node examples/cgi-snapshot-example.js"
+  },
+  "keywords": [
+    "itscam",
+    "camera",
+    "sdk",
+    "pumatronix",
+    "lpr",
+    "anpr",
+    "ocr",
+    "mjpeg",
+    "rest",
+    "cgi"
+  ],
+  "author": "Pumatronix Equipamentos Eletronicos",
+  "license": "SEE LICENSE IN LICENSE",
+  "homepage": "https://github.com/pumatronix/itscam-sdk",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pumatronix/itscam-sdk.git"
+  },
+  "bugs": {
+    "url": "https://github.com/pumatronix/itscam-sdk/issues"
+  },
+  "dependencies": {
+    "koffi": "^2.10.0"
+  }
+}

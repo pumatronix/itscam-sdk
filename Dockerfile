@@ -1,7 +1,7 @@
 # ITSCAM SDK Build Environment
 #
 # Dockerfile for building the SDK core library (Linux/Windows)
-# and the supported wrapper examples (Python and Go).
+# and the supported wrapper examples (Python, Go, C# / .NET, Java, Node.js).
 #
 # Usage:
 #   docker build -t itscam-sdk-builder .
@@ -23,6 +23,8 @@ ARG GO_SHA256=f022b6aad78e362bcba9b0b94d09ad58c5a70c6ba3b7582905fababf5fe0181a
 ARG WAILS_VERSION=v2.11.0
 ARG NODE_VERSION=20.18.2
 ARG NODE_SHA256=4e50f727ae09bdafecf2322c72faf7cd82bf3b8851a16b8bb63974e0d8d6eceb
+ARG MAVEN_VERSION=3.9.9
+ARG MAVEN_SHA512=a555254d6b53d267965a3404ecb14e53c3827c09c3b94b5678835887ab404556bfaf78dcfe03ba76fa2508649dca8531c74bca4d5846513522404d48e8c4ac8b
 
 # Avoid interactive prompts during package installation
 ENV DEBIAN_FRONTEND=noninteractive
@@ -45,6 +47,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
     python3-pip \
     python3-dev \
+    # OpenJDK 11 for the Java wrapper (JNA-based; Maven installed below)
+    openjdk-11-jdk-headless \
     # WebKit2GTK for Wails GUI (Go GUI example)
     libwebkit2gtk-4.0-dev \
     libgtk-3-dev \
@@ -112,13 +116,32 @@ RUN set -eux; \
     rm -f /tmp/node.tar.xz
 
 # =============================================================================
+#  Install Maven (for the Java wrapper build)
+# =============================================================================
+#
+# Maven lives under /opt/maven and is exposed via PATH so `make java` and
+# `make docker-java-pack` work for any user inside the container.  The
+# distribution package on Ubuntu 20.04 is too old for our parent POM,
+# so we install the official binary tarball.
+RUN set -eux; \
+    curl -fsSLo /tmp/maven.tar.gz \
+        "https://archive.apache.org/dist/maven/maven-3/${MAVEN_VERSION}/binaries/apache-maven-${MAVEN_VERSION}-bin.tar.gz"; \
+    echo "${MAVEN_SHA512}  /tmp/maven.tar.gz" | sha512sum -c -; \
+    tar -C /opt -xzf /tmp/maven.tar.gz; \
+    ln -sfn "/opt/apache-maven-${MAVEN_VERSION}" /opt/maven; \
+    rm -f /tmp/maven.tar.gz
+
+ENV JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64
+ENV M2_HOME=/opt/maven
+
+# =============================================================================
 #  Environment setup
 # =============================================================================
 
 # Set Go environment (Go already installed at /usr/local/go)
 ENV GOPATH=/go
 ENV GO111MODULE=on
-ENV PATH=/usr/local/go/bin:/go/bin:/opt/node/bin:$PATH
+ENV PATH=/usr/local/go/bin:/go/bin:/opt/node/bin:/opt/maven/bin:$PATH
 
 # Install Wails CLI for Go GUI builds (install to shared /go/bin)
 RUN GOBIN=/go/bin go install github.com/wailsapp/wails/v2/cmd/wails@${WAILS_VERSION}

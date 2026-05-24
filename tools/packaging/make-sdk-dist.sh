@@ -18,6 +18,8 @@ CORE="$ROOT/src/core"
 PY="$ROOT/src/wrappers/python"
 CS="$ROOT/src/wrappers/csharp"
 GO="$ROOT/src/wrappers/go"
+JAVA="$ROOT/src/wrappers/java"
+NODEJS="$ROOT/src/wrappers/nodejs"
 VERSION_JSON="$ROOT/VERSION.json"
 VERSION_MK="$ROOT/tools/version/sdk-version.mk"
 
@@ -267,6 +269,45 @@ stage_go_module() {
     fi
 }
 
+stage_java_jar() {
+    # Java JAR is platform-agnostic (native binaries are embedded inside it
+    # under META-INF/native/<os>-<arch>/), so we copy the same JAR to every
+    # platform directory for consumer convenience.
+    local dest="$1/java"
+    mkdir -p "$dest"
+
+    shopt -s nullglob
+    local jars=("$JAVA/itscam-sdk/target"/itscam-sdk-*.jar)
+    shopt -u nullglob
+
+    if [ "${#jars[@]}" -eq 0 ]; then
+        echo "make-sdk-dist: no Java JAR in $JAVA/itscam-sdk/target -- run 'make java-pack' (or 'make docker-java-pack') first to include Java in the dist; skipping." >&2
+        return 0
+    fi
+
+    cp "${jars[@]}" "$dest/"
+}
+
+stage_nodejs_tarball() {
+    # The Node.js tarball is platform-aware (native binaries staged under
+    # native/<platform>-<arch>/) but the published artefact ships every
+    # supported platform together, so a single tarball lands in every
+    # platform dir.
+    local dest="$1/nodejs"
+    mkdir -p "$dest"
+
+    shopt -s nullglob
+    local tgzs=("$NODEJS"/pumatronix-itscam-sdk-*.tgz)
+    shopt -u nullglob
+
+    if [ "${#tgzs[@]}" -eq 0 ]; then
+        echo "make-sdk-dist: no Node.js tarball in $NODEJS -- run 'make nodejs-pack' (or 'make docker-nodejs-pack') first to include Node.js in the dist; skipping." >&2
+        return 0
+    fi
+
+    cp "${tgzs[@]}" "$dest/"
+}
+
 stage_linux_platform() {
     local dest="$STAGING/linux-x64"
     mkdir -p "$dest"
@@ -275,6 +316,8 @@ stage_linux_platform() {
     stage_c_headers "$dest"
     stage_python_wheel_linux "$dest"
     stage_go_module "$dest" "" ""
+    stage_java_jar "$dest"
+    stage_nodejs_tarball "$dest"
 }
 
 stage_windows_x64_platform() {
@@ -285,6 +328,8 @@ stage_windows_x64_platform() {
     stage_c_headers "$dest"
     stage_python_wheel_windows "$dest" "$WIN_X64_DLL" "win_amd64"
     stage_go_module "$dest" "$WIN_X64_DLL" "$WIN_X64_IMPLIB"
+    stage_java_jar "$dest"
+    stage_nodejs_tarball "$dest"
 }
 
 stage_windows_x86_platform() {
@@ -295,6 +340,8 @@ stage_windows_x86_platform() {
     stage_c_headers "$dest"
     stage_python_wheel_windows "$dest" "$WIN_X86_DLL" "win32"
     stage_go_module "$dest" "$WIN_X86_DLL" "$WIN_X86_IMPLIB"
+    stage_java_jar "$dest"
+    stage_nodejs_tarball "$dest"
 }
 
 write_readme() {
@@ -312,9 +359,9 @@ See VERSION.json for machine-readable metadata.
 Layout
 ------
   csharp/       NuGet (multi-RID: linux-x64 + win-x64 + win-x86 native binaries)
-  linux-x64/    C/C++ headers + .so, Python wheel, Go module
-  win-x64/      C/C++ headers + .dll/.a (64-bit), Python wheel, Go module
-  win-x86/      C/C++ headers + .dll/.a (32-bit), Python wheel, Go module
+  linux-x64/    C/C++ headers + .so, Python wheel, Go module, Java JAR, npm tarball
+  win-x64/      C/C++ headers + .dll/.a (64-bit), Python wheel, Go module, Java JAR, npm tarball
+  win-x86/      C/C++ headers + .dll/.a (32-bit), Python wheel, Go module, Java JAR, npm tarball
 
 C# / .NET
 ---------
@@ -364,6 +411,26 @@ Windows Go
 ----------
   Copy win-x64/go/itscam-sdk-go or win-x86/go/itscam-sdk-go into your project.
   Build on Windows with CGO; native/itscam_sdk.dll must be on PATH or beside the .exe.
+
+Java (any platform)
+-------------------
+  The JAR contains native libraries for linux-x64, win-x64, win-x86, etc.
+  embedded under META-INF/native/<os>-<arch>/; no JNI compilation needed.
+
+  mvn install:install-file \\
+      -Dfile=linux-x64/java/itscam-sdk-${SDK_VERSION}.jar \\
+      -DgroupId=com.pumatronix \\
+      -DartifactId=itscam-sdk \\
+      -Dversion=${SDK_VERSION} \\
+      -Dpackaging=jar
+
+  Then declare 'com.pumatronix:itscam-sdk:${SDK_VERSION}' + JNA 5.14+ in your pom.xml.
+
+Node.js (any platform)
+----------------------
+  npm install ./linux-x64/nodejs/pumatronix-itscam-sdk-${SDK_VERSION}.tgz
+
+  Then: const { ItscamCgiClient } = require('@pumatronix/itscam-sdk');
 EOF
 }
 

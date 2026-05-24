@@ -1,6 +1,6 @@
 # SDK distribution packaging
 
-`make sdk-dist` builds a consumer-ready multi-platform tarball under `dist/`:
+`make sdk-dist` builds a consumer-ready multi-platform tarball under `dist/`. Published releases are attached to [GitHub Releases](https://github.com/pumatronix/itscam-sdk/releases).
 
 ```
 dist/itscam-sdk-<version>.tar.gz

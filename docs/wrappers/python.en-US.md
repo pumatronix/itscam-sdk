@@ -10,7 +10,7 @@ The Python wrapper lives at [`src/wrappers/python/`](../../src/wrappers/python/)
 
 ### From the pre-compiled SDK package (recommended)
 
-The distribution package (`itscam-sdk-<version>.tar.gz`) includes a Python wheel with the native lib bundled:
+The distribution package (`itscam-sdk-<version>.tar.gz`) includes a Python wheel with the native lib bundled. Download from the [releases page](https://github.com/pumatronix/itscam-sdk/releases):
 
 ```bash
 tar xzf itscam-sdk-<version>.tar.gz

@@ -13,6 +13,8 @@ Walkthrough do zero: criar um projeto Python, instalar o wrapper `itscam` e salv
 
 ## 2. Extrair o SDK e instalar a wheel
 
+Baixe `itscam-sdk-<version>.tar.gz` na [página de releases](https://github.com/pumatronix/itscam-sdk/releases):
+
 ```bash
 tar xzf itscam-sdk-<version>.tar.gz
 export SDK=$PWD/itscam-sdk-<version>

@@ -27,7 +27,7 @@ A API nativa fica em [`src/core/`](../../src/core/) e é o ponto de partida para
 
 ## Integração com o SDK pré-compilado (recomendado)
 
-O pacote de distribuição (`itscam-sdk-<version>.tar.gz`) já inclui headers e shared libraries prontos para uso:
+O pacote de distribuição (`itscam-sdk-<version>.tar.gz`) já inclui headers e shared libraries prontos para uso. Baixe na [página de releases](https://github.com/pumatronix/itscam-sdk/releases):
 
 ```bash
 tar xzf itscam-sdk-<version>.tar.gz

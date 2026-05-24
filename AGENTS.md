@@ -85,6 +85,8 @@ Reference: [`docs/https-tls.md`](docs/https-tls.md).
 
 ## 8. Build commands you'll actually run
 
+**Consumer integration** (apps embedding the SDK, not hacking this repo): download the pre-built `itscam-sdk-<version>.tar.gz` from the [GitHub releases page](https://github.com/pumatronix/itscam-sdk/releases) and follow [`docs/getting-started.md`](docs/getting-started.md). Use the commands below only when working inside this repository.
+
 ```bash
 make version                # regenerate version metadata (git tag + sha + date)
 make lib                  # build libitscam_sdk.{so,a}

@@ -23,7 +23,7 @@ Ele cobre as três superfícies do SDK:
 
 ### Via pacote SDK pré-compilado (recomendado)
 
-O pacote de distribuição (`itscam-sdk-<version>.tar.gz`) inclui um NuGet multi-RID pronto para consumo:
+O pacote de distribuição (`itscam-sdk-<version>.tar.gz`) inclui um NuGet multi-RID pronto para consumo. Baixe na [página de releases](https://github.com/pumatronix/itscam-sdk/releases):
 
 ```bash
 tar xzf itscam-sdk-<version>.tar.gz

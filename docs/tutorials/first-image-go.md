@@ -13,6 +13,8 @@ Walkthrough do zero: criar um módulo Go, configurar cgo contra o ITSCAM SDK e s
 
 ## 2. Extrair o SDK pré-compilado
 
+Baixe `itscam-sdk-<version>.tar.gz` na [página de releases](https://github.com/pumatronix/itscam-sdk/releases):
+
 ```bash
 tar xzf itscam-sdk-<version>.tar.gz
 export SDK=$PWD/itscam-sdk-<version>

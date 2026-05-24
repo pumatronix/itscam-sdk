@@ -10,7 +10,7 @@ O wrapper Go fica em [`src/wrappers/go/`](../../src/wrappers/go/) e usa **cgo** 
 
 ### Via pacote SDK pré-compilado (recomendado)
 
-O pacote de distribuição (`itscam-sdk-<version>.tar.gz`) inclui um módulo Go com native lib e cgo directives pré-configurados:
+O pacote de distribuição (`itscam-sdk-<version>.tar.gz`) inclui um módulo Go com native lib e cgo directives pré-configurados. Baixe na [página de releases](https://github.com/pumatronix/itscam-sdk/releases):
 
 ```bash
 tar xzf itscam-sdk-<version>.tar.gz

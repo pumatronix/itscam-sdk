@@ -7,7 +7,7 @@ Chapter-style reference for the ITSCAM Client SDK. Start with [Overview](overvie
 ## Foundations
 
 - [Overview](overview.en-US.md) -- what the SDK is, supported platforms, and repository layout.
-- [Getting started](getting-started.en-US.md) -- integrate with the pre-compiled SDK, run examples, and advanced build from source.
+- [Getting started](getting-started.en-US.md) -- download the pre-compiled SDK from the [releases page](https://github.com/pumatronix/itscam-sdk/releases), integrate into your app, run examples, and (optionally) advanced build from source.
 - [Error handling](error-handling.en-US.md) -- `Result<T>`, `Future<T>`, error codes, and logging.
 - [JPEG metadata (COM marker)](jpeg-metadata.en-US.md) -- extracting plate-recognition and classification metadata embedded in JPEG images.
 - [HTTPS / TLS](https-tls.en-US.md) -- vendored mbedTLS, configuration, and failure modes.
@@ -25,6 +25,8 @@ Chapter-style reference for the ITSCAM Client SDK. Start with [Overview](overvie
 - [C# / .NET](wrappers/csharp.en-US.md)
 - [Python](wrappers/python.en-US.md)
 - [Go](wrappers/go.en-US.md)
+- [Java](wrappers/java.en-US.md)
+- [Node.js](wrappers/nodejs.en-US.md)
 
 ## Tutorials
 
@@ -34,6 +36,12 @@ Step-by-step walkthroughs -- create a project, install the SDK dependency and sa
 - [First image with C# / .NET](tutorials/first-image-csharp.md)
 - [First image with Python](tutorials/first-image-python.md)
 - [First image with Go](tutorials/first-image-go.md)
+- [First image with Java](tutorials/first-image-java.md)
+- [First image with Node.js](tutorials/first-image-nodejs.md)
+
+## Extending the SDK
+
+- [Adding a new wrapper](adding-a-new-wrapper.en-US.md) -- canonical procedure for future language bindings (Rust, Ruby, Swift, Kotlin, ...).
 
 ## History
 
