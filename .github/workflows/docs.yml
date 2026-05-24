@@ -1,5 +1,16 @@
 name: Deploy documentation
 
+# Builds the VitePress documentation site (with Doxygen / pdoc / DocFX /
+# gomarkdoc API references) inside the project's own builder image
+# (itscam-sdk-builder, Ubuntu 20.04 + Doxygen + .NET 8/DocFX + Go 1.25 +
+# gomarkdoc + Python/pdoc + Node 20). Same image and GHA cache scope as
+# `sdk-release.yml`, so a warm Docker cache from either workflow benefits
+# the other.
+#
+# The sync-r2-corpus job stays on the runner because it only needs Node
+# + the aws CLI (provided by aws-actions/configure-aws-credentials) and
+# would gain nothing from going through Docker.
+
 on:
   push:
     branches: [main]
@@ -13,6 +24,7 @@ on:
       - "src/wrappers/**"
       - "src/**/examples/**"
       - "tools/docs/**"
+      - "Dockerfile"
       - ".github/workflows/docs.yml"
   workflow_dispatch:
 
@@ -31,55 +43,52 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build itscam-sdk-builder image (cached in GHA)
+        uses: docker/build-push-action@v6
         with:
-          node-version: 22
+          context: .
+          file: Dockerfile
+          load: true
+          tags: itscam-sdk-builder:ci
+          # Shared scope with sdk-release.yml so the Docker layer cache
+          # is reused across both workflows.
+          cache-from: type=gha,scope=itscam-sdk-builder
+          cache-to: type=gha,mode=max,scope=itscam-sdk-builder
 
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: 8.0.x
-
-      - uses: actions/setup-go@v5
-        with:
-          go-version: "1.25"
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Install Doxygen and Graphviz
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends doxygen graphviz
-
-      - name: Install pdoc, DocFX, gomarkdoc
-        run: |
-          python3 -m pip install --upgrade pip
-          python3 -m pip install pdoc
-          dotnet tool install -g docfx
-          echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
-          go install github.com/princjef/gomarkdoc/cmd/gomarkdoc@latest
-          echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
-
-      - name: Install npm dependencies
-        working-directory: docs-site
-        run: npm install
-
-      - name: Build core library (needed for pdoc Python imports)
-        run: make lib
-
-      - name: Sync content + verify mirror integrity
-        run: make docs-sync-check
-
-      - name: Generate API reference (Doxygen, pdoc, DocFX, gomarkdoc)
-        run: make docs-api
-
-      - name: Build VitePress site
-        working-directory: docs-site
+      - name: Build docs site inside builder image
+        # Combines docs-sync-check + docs-api + VitePress build into one
+        # `docker run` so the bind-mount setup is declared once and the
+        # whole pipeline fails fast on any error. Mirrors the
+        # $(DOCKER_RUN) recipe in the Makefile (mounts $PWD as /sdk,
+        # runs as the runner's UID/GID, sandboxes HOME/caches under
+        # /tmp). VITEPRESS_BASE / VITE_AI_SEARCH_API_URL are forwarded
+        # so the VitePress build picks them up.
         env:
           VITEPRESS_BASE: /${{ github.event.repository.name }}/
           VITE_AI_SEARCH_API_URL: ${{ vars.VITE_AI_SEARCH_API_URL }}
-        run: node node_modules/.bin/vitepress build
+        run: |
+          docker run --rm \
+            -v "$PWD:/sdk" \
+            -w /sdk \
+            -u "$(id -u):$(id -g)" \
+            -e HOME=/tmp \
+            -e XDG_CACHE_HOME=/tmp/.cache \
+            -e NPM_CONFIG_CACHE=/tmp/.npm \
+            -e DOTNET_CLI_HOME=/tmp/dotnet \
+            -e VITEPRESS_BASE \
+            -e VITE_AI_SEARCH_API_URL \
+            itscam-sdk-builder:ci \
+            bash -euxc '
+              make lib
+              make docs-sync-check
+              make docs-api
+              cd docs-site
+              npm install --no-audit --no-fund
+              node node_modules/.bin/vitepress build
+            '
 
       - uses: actions/upload-pages-artifact@v3
         with:
@@ -89,6 +98,9 @@ jobs:
   # curated example sources) to a Cloudflare R2 bucket connected to the
   # AI Search instance as its data source. Cloudflare AI Search auto-syncs
   # the bucket, so we only need to keep R2 in lockstep with `main`.
+  #
+  # Runs on the host (not in the builder image) because it only needs
+  # Node + the aws CLI from aws-actions/configure-aws-credentials.
   sync-r2-corpus:
     runs-on: ubuntu-latest
     if: vars.R2_BUCKET_NAME != ''
