@@ -241,14 +241,14 @@ csharp-software-trigger-example: csharp-examples
 # ============================================================================
 
 # Camera under test.  Override on the command line:
-#   make regression-examples CAMERA_IP=10.8.19.8 CAMERA_USER=admin CAMERA_PASS=secret
+#   make regression-examples CAMERA_IP=192.168.254.254 CAMERA_USER=admin CAMERA_PASS=secret
 CAMERA_IP ?=
 CAMERA_USER ?= admin
 CAMERA_PASS ?=
 
 regression-examples:
 	@if [ -z "$(CAMERA_IP)" ]; then \
-		echo "Set CAMERA_IP, e.g.: make regression-examples CAMERA_IP=10.8.19.8"; \
+		echo "Set CAMERA_IP, e.g.: make regression-examples CAMERA_IP=192.168.254.254"; \
 		exit 1; \
 	fi
 	$(CURDIR)/tools/regression/run-examples.sh \
@@ -256,7 +256,7 @@ regression-examples:
 
 docker-regression-examples: docker-build
 	@if [ -z "$(CAMERA_IP)" ]; then \
-		echo "Set CAMERA_IP, e.g.: make docker-regression-examples CAMERA_IP=10.8.19.8"; \
+		echo "Set CAMERA_IP, e.g.: make docker-regression-examples CAMERA_IP=192.168.254.254"; \
 		exit 1; \
 	fi
 	$(DOCKER_RUN) --network host $(DOCKER_IMAGE) \
