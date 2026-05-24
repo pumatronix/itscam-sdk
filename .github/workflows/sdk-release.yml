@@ -73,6 +73,9 @@ jobs:
             -e XDG_CACHE_HOME=/tmp/.cache \
             -e NPM_CONFIG_CACHE=/tmp/.npm \
             -e DOTNET_CLI_HOME=/tmp/dotnet \
+            -e GOPATH=/tmp/go \
+            -e GOMODCACHE=/tmp/go/pkg/mod \
+            -e GOCACHE=/tmp/go/build-cache \
             itscam-sdk-builder:ci \
             make sdk-dist
 

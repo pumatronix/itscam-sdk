@@ -54,7 +54,10 @@ DOCKER_RUN := docker run --rm \
 	-e HOME=/tmp \
 	-e XDG_CACHE_HOME=/tmp/.cache \
 	-e NPM_CONFIG_CACHE=/tmp/.npm \
-	-e DOTNET_CLI_HOME=/tmp/dotnet
+	-e DOTNET_CLI_HOME=/tmp/dotnet \
+	-e GOPATH=/tmp/go \
+	-e GOMODCACHE=/tmp/go/pkg/mod \
+	-e GOCACHE=/tmp/go/build-cache
 DOCKER_RUN_IT := $(DOCKER_RUN) -it
 
 # Default target - build library and C++ examples
