@@ -179,7 +179,7 @@ const LogCb = koffi.proto(
 const StreamCb = koffi.proto(
     'CgiStreamCallback',
     'void',
-    [koffi.pointer(ITSCAM_CgiStreamFrame), 'void *']);
+    ['ITSCAM_CgiStreamFrame *', 'void *']);
 
 // ============================================================================
 //  Function bindings
@@ -194,7 +194,7 @@ const fns = {
     Client_connect: lib.func(
         'int ITSCAM_Client_connect(void *client, const char *address, '
         + 'uint16 port, uint32 timeoutMs, '
-        + koffi.pointer(ITSCAM_AutoReconnectConfig) + ' reconnect)'),
+        + 'ITSCAM_AutoReconnectConfig * reconnect)'),
     Client_disconnect: lib.func(
         'void ITSCAM_Client_disconnect(void *client)'),
     Client_isConnected: lib.func(
@@ -204,15 +204,15 @@ const fns = {
         + 'const char *password, uint32 timeoutMs)'),
     Client_subscribe: lib.func(
         'int ITSCAM_Client_subscribe(void *client, '
-        + koffi.pointer(ITSCAM_EventSubscription) + ' events, '
+        + 'ITSCAM_EventSubscription * events, '
         + 'uint32 timeoutMs)'),
     Client_subscribeCaptures: lib.func(
         'int ITSCAM_Client_subscribeCaptures(void *client, '
-        + koffi.pointer(ITSCAM_CaptureSubscriptionConfig) + ' config, '
+        + 'ITSCAM_CaptureSubscriptionConfig * config, '
         + 'uint32 timeoutMs)'),
     Client_captureSnapshot: lib.func(
         'int ITSCAM_Client_captureSnapshot(void *client, '
-        + koffi.pointer(ITSCAM_SnapshotRequest) + ' request, '
+        + 'ITSCAM_SnapshotRequest * request, '
         + 'uint32 timeoutMs, _Out_ void **outResult)'),
     Client_getLastFrame: lib.func(
         'int ITSCAM_Client_getLastFrame(void *client, int quality, '
@@ -247,7 +247,7 @@ const fns = {
     CaptureResultArray_destroy: lib.func(
         'void ITSCAM_CaptureResultArray_destroy(void *array)'),
     CaptureResult_getInfo: lib.func(
-        ITSCAM_FrameInfo + ' ITSCAM_CaptureResult_getInfo(void *result)'),
+        'ITSCAM_FrameInfo ITSCAM_CaptureResult_getInfo(void *result)'),
     CaptureResult_getJpeg: lib.func(
         'uint8 *ITSCAM_CaptureResult_getJpeg(void *result, _Out_ size_t *outSize)'),
     CaptureResult_getPlateCount: lib.func(
@@ -266,15 +266,15 @@ const fns = {
         'size_t ITSCAM_ProfileArray_size(void *array)'),
     ProfileArray_get: lib.func(
         'int ITSCAM_ProfileArray_get(void *array, size_t index, '
-        + '_Out_ ' + ITSCAM_ProfileInfo + ' *outInfo)'),
+        + '_Out_ ITSCAM_ProfileInfo *outInfo)'),
     ProfileArray_destroy: lib.func(
         'void ITSCAM_ProfileArray_destroy(void *array)'),
 
     // System utilities
     getSystemLocalTime: lib.func(
-        ITSCAM_Timestamp + ' ITSCAM_getSystemLocalTime()'),
+        'ITSCAM_Timestamp ITSCAM_getSystemLocalTime()'),
     getSystemUtcTime: lib.func(
-        ITSCAM_Timestamp + ' ITSCAM_getSystemUtcTime()'),
+        'ITSCAM_Timestamp ITSCAM_getSystemUtcTime()'),
     getEpochTime: lib.func('uint64 ITSCAM_getEpochTime()'),
     getEpochTimeMs: lib.func('uint64 ITSCAM_getEpochTimeMs()'),
     storeFile: lib.func(
@@ -418,7 +418,7 @@ const fns = {
         + '_Out_ void **outImage)'),
     Cgi_getSnapshot: lib.func(
         'int ITSCAM_CgiClient_getSnapshot(void *client, '
-        + koffi.pointer(ITSCAM_CgiSnapshotRequest) + ' request, '
+        + 'ITSCAM_CgiSnapshotRequest * request, '
         + 'uint32 timeoutMs, _Out_ void **outImages)'),
     Cgi_startMjpegStream: lib.func(
         'int ITSCAM_CgiClient_startMjpegStream(void *client, '

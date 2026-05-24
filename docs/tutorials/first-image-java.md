@@ -24,7 +24,8 @@ mvn install:install-file \
     -DgroupId=com.pumatronix \
     -DartifactId=itscam-sdk \
     -Dversion=<version> \
-    -Dpackaging=jar
+    -Dpackaging=jar \
+    -DgeneratePom=true
 ```
 
 > **Compilando o SDK do zero?** Se você precisa buildar a partir do source em vez de usar o pacote pré-compilado, veja a [seção avançada de build](../getting-started.md#build-do-sdk-a-partir-do-source). Após `make java`, o JAR fica em `src/wrappers/java/itscam-sdk/target/itscam-sdk-<version>.jar`.
@@ -38,7 +39,7 @@ mvn archetype:generate -DgroupId=com.example -DartifactId=meu-app \
 cd meu-app
 ```
 
-Edite `pom.xml`:
+Edite `pom.xml` (ajuste `itscam.sdk.version` para coincidir com `-Dversion` do passo 2):
 
 ```xml
 <project>
@@ -49,12 +50,13 @@ Edite `pom.xml`:
     <properties>
         <maven.compiler.source>11</maven.compiler.source>
         <maven.compiler.target>11</maven.compiler.target>
+        <itscam.sdk.version>0.3.1</itscam.sdk.version>
     </properties>
     <dependencies>
         <dependency>
             <groupId>com.pumatronix</groupId>
             <artifactId>itscam-sdk</artifactId>
-            <version>0.0.1-SNAPSHOT</version>
+            <version>${itscam.sdk.version}</version>
         </dependency>
         <dependency>
             <groupId>net.java.dev.jna</groupId>

@@ -27,7 +27,8 @@ mvn install:install-file \
     -DgroupId=com.pumatronix \
     -DartifactId=itscam-sdk \
     -Dversion=<version> \
-    -Dpackaging=jar
+    -Dpackaging=jar \
+    -DgeneratePom=true
 ```
 
 Depois disso, declare no seu `pom.xml`:

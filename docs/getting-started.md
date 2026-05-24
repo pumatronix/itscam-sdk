@@ -60,6 +60,7 @@ Nos exemplos abaixo, `$SDK` aponta para o diretório raiz extraído (ex: `/opt/i
 # Compile e linke contra a shared library pré-compilada:
 g++ -std=c++17 \
     -I$SDK/linux-x64/cpp/include \
+    -I$SDK/linux-x64/cpp/include/3rdparty \
     -c your_app.cpp -o your_app.o
 
 g++ your_app.o \

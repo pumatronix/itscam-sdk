@@ -57,7 +57,7 @@ export SDK=$PWD
 | **C# / .NET** | `nuget.config` (feed local + nuget.org) + `dotnet add package Pumatronix.Itscam.Sdk` |
 | **Python** | `pip install $SDK/linux-x64/python/itscam-*.whl` |
 | **Go** | `go mod edit -replace=...=$SDK/linux-x64/go/itscam-sdk-go` |
-| **Java** | `mvn install:install-file -Dfile=$SDK/linux-x64/java/itscam-sdk-*.jar -DgroupId=com.pumatronix -DartifactId=itscam-sdk -Dversion=<v> -Dpackaging=jar` |
+| **Java** | `mvn install:install-file ... -DgeneratePom=true` (veja [wrapper Java](docs/wrappers/java.md)) |
 | **Node.js** | `npm install $SDK/linux-x64/nodejs/pumatronix-itscam-sdk-*.tgz` |
 
 Comece por `README-sdk.md` dentro do tarball (layout e install por linguagem). Guia completo em [`docs/getting-started.md`](docs/getting-started.md).

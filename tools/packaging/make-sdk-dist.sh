@@ -275,6 +275,7 @@ stage_go_module() {
 
     if [[ "$platform_root" == *linux* ]]; then
         cp "$LINUX_LIB_DIR/libitscam_sdk.so.${SDK_LIB_VERSION}" "$dest/native/libitscam_sdk.so"
+        ln -sf libitscam_sdk.so "$dest/native/libitscam_sdk.so.0"
         ln -sf libitscam_sdk.so "$dest/native/libitscam_sdk.so.1"
     else
         cp "$dll" "$dest/native/itscam_sdk.dll"
@@ -414,7 +415,7 @@ Java (examples/java/)
     mvn install:install-file \\
         -Dfile=linux-x64/java/itscam-sdk-${MAVEN_VERSION}.jar \\
         -DgroupId=com.pumatronix -DartifactId=itscam-sdk \\
-        -Dversion=${MAVEN_VERSION} -Dpackaging=jar
+        -Dversion=${MAVEN_VERSION} -Dpackaging=jar -DgeneratePom=true
   javac -cp ~/.m2/repository/com/pumatronix/itscam-sdk/${MAVEN_VERSION}/itscam-sdk-${MAVEN_VERSION}.jar \\
         examples/java/src/main/java/com/pumatronix/itscam/examples/CaptureExample.java
   java -cp ... com.pumatronix.itscam.examples.CaptureExample 192.168.254.254 1234
@@ -552,7 +553,7 @@ stage_documentation() {
 }
 
 write_sdk_readme() {
-    cat >"$STAGING/README-sdk.md" <<EOF
+    cat >"$STAGING/README-sdk.md" <<README_SDK_MD
 # ITSCAM Client SDK ${SDK_VERSION_FULL}
 
 [Português (Brasil)](README-sdk.md) | [English (US)](README-sdk.en-US.md)
@@ -677,7 +678,8 @@ mvn install:install-file \\
     -DgroupId=com.pumatronix \\
     -DartifactId=itscam-sdk \\
     -Dversion=${SDK_VERSION} \\
-    -Dpackaging=jar
+    -Dpackaging=jar \\
+    -DgeneratePom=true
 \`\`\`
 
 Depois declare \`com.pumatronix:itscam-sdk:${SDK_VERSION}\` + JNA 5.14+ no \`pom.xml\`.
@@ -689,9 +691,9 @@ npm install ./linux-x64/nodejs/pumatronix-itscam-sdk-${SDK_VERSION}.tgz
 \`\`\`
 
 Depois: \`const { ItscamCgiClient } = require('@pumatronix/itscam-sdk');\`
-EOF
+README_SDK_MD
 
-    cat >"$STAGING/README-sdk.en-US.md" <<EOF
+    cat >"$STAGING/README-sdk.en-US.md" <<README_SDK_EN
 # ITSCAM Client SDK ${SDK_VERSION_FULL}
 
 [Português (Brasil)](README-sdk.md) | [English (US)](README-sdk.en-US.md)
@@ -816,7 +818,8 @@ mvn install:install-file \\
     -DgroupId=com.pumatronix \\
     -DartifactId=itscam-sdk \\
     -Dversion=${SDK_VERSION} \\
-    -Dpackaging=jar
+    -Dpackaging=jar \\
+    -DgeneratePom=true
 \`\`\`
 
 Then declare \`com.pumatronix:itscam-sdk:${SDK_VERSION}\` + JNA 5.14+ in your \`pom.xml\`.
@@ -828,7 +831,7 @@ npm install ./linux-x64/nodejs/pumatronix-itscam-sdk-${SDK_VERSION}.tgz
 \`\`\`
 
 Then: \`const { ItscamCgiClient } = require('@pumatronix/itscam-sdk');\`
-EOF
+README_SDK_EN
 }
 
 main() {
