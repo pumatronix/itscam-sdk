@@ -25,9 +25,9 @@ using detail::parseMultipart;
 using detail::StreamingMultipartParser;
 using Thread = itscam_os::Thread;
 
-// ============================================================================
-//  Local helpers
-// ============================================================================
+//=========================================================================
+// Local helpers
+//=========================================================================
 
 namespace {
 
@@ -90,9 +90,9 @@ CgiImage toCgiImage(const HttpResponse& rsp) {
 
 }  // namespace
 
-// ============================================================================
-//  Streaming worker
-// ============================================================================
+//=========================================================================
+// Streaming worker
+//=========================================================================
 
 namespace {
 
@@ -186,9 +186,9 @@ private:
 
 }  // namespace
 
-// ============================================================================
-//  Impl
-// ============================================================================
+//=========================================================================
+// Impl
+//=========================================================================
 
 struct ItscamCgiClient::Impl {
 
@@ -258,9 +258,9 @@ struct ItscamCgiClient::Impl {
     }
 };
 
-// ============================================================================
-//  Constructor / destructor / move
-// ============================================================================
+//=========================================================================
+// Constructor / destructor / move
+//=========================================================================
 
 ItscamCgiClient::ItscamCgiClient() : mImpl(new Impl()) {}
 
@@ -274,9 +274,9 @@ ItscamCgiClient::ItscamCgiClient(ItscamCgiClient&&) noexcept = default;
 ItscamCgiClient& ItscamCgiClient::operator=(ItscamCgiClient&&) noexcept
     = default;
 
-// ============================================================================
-//  Connection / settings
-// ============================================================================
+//=========================================================================
+// Connection / settings
+//=========================================================================
 
 void ItscamCgiClient::setBaseUrl(const std::string& host, uint16_t port,
                                  const std::string& scheme) {
@@ -287,9 +287,9 @@ void ItscamCgiClient::setApiPrefix(const std::string& prefix) {
     mImpl->apiPrefix = prefix;
 }
 
-// ============================================================================
-//  TLS
-// ============================================================================
+//=========================================================================
+// TLS
+//=========================================================================
 
 void ItscamCgiClient::setCaCertFile(const std::string& pemPath) {
     mImpl->transport.setCaCertFile(pemPath);
@@ -308,9 +308,9 @@ void ItscamCgiClient::setClientCertificate(const std::string& certPem,
     mImpl->transport.setClientCertificate(certPem, keyPem);
 }
 
-// ============================================================================
-//  Authentication
-// ============================================================================
+//=========================================================================
+// Authentication
+//=========================================================================
 
 Result<void> ItscamCgiClient::login(const std::string& username,
                                     const std::string& password,
@@ -372,9 +372,9 @@ void ItscamCgiClient::clearBasicAuth() {
     mImpl->transport.clearBasicAuth();
 }
 
-// ============================================================================
-//  /api/lastframe.cgi
-// ============================================================================
+//=========================================================================
+// /api/lastframe.cgi
+//=========================================================================
 
 Result<CgiImage> ItscamCgiClient::getLastFrame(uint32_t timeoutMs) {
     auto res = mImpl->get(mImpl->apiPrefix + "/lastframe.cgi", timeoutMs);
@@ -387,9 +387,9 @@ Result<CgiImage> ItscamCgiClient::getLastFrame(uint32_t timeoutMs) {
     return toCgiImage(rsp);
 }
 
-// ============================================================================
-//  /api/snapshot.cgi
-// ============================================================================
+//=========================================================================
+// /api/snapshot.cgi
+//=========================================================================
 
 Result<std::vector<CgiImage>> ItscamCgiClient::getSnapshot(
     const SnapshotCgiRequest& request, uint32_t timeoutMs) {
@@ -419,9 +419,9 @@ Future<std::vector<CgiImage>> ItscamCgiClient::getSnapshotAsync(
     return future;
 }
 
-// ============================================================================
-//  /api/mjpegvideo.cgi
-// ============================================================================
+//=========================================================================
+// /api/mjpegvideo.cgi
+//=========================================================================
 
 Result<void> ItscamCgiClient::startMjpegStream(CgiStreamCallback callback,
                                                uint32_t timeoutMs) {
@@ -449,9 +449,9 @@ bool ItscamCgiClient::isMjpegStreamRunning() const {
     return mImpl->mjpegWorker && mImpl->mjpegWorker->isRunning();
 }
 
-// ============================================================================
-//  /api/trigger.cgi
-// ============================================================================
+//=========================================================================
+// /api/trigger.cgi
+//=========================================================================
 
 Result<std::string> ItscamCgiClient::forceTrigger(uint32_t timeoutMs) {
     auto path = mImpl->apiPrefix + "/trigger.cgi?force=1";
@@ -464,9 +464,9 @@ Result<std::string> ItscamCgiClient::forceTrigger(uint32_t timeoutMs) {
     return std::string(rsp.body.begin(), rsp.body.end());
 }
 
-// ============================================================================
-//  /api/reboot.cgi
-// ============================================================================
+//=========================================================================
+// /api/reboot.cgi
+//=========================================================================
 
 Result<std::string> ItscamCgiClient::reboot(uint32_t timeoutMs) {
     auto path = mImpl->apiPrefix + "/reboot.cgi";
@@ -479,9 +479,9 @@ Result<std::string> ItscamCgiClient::reboot(uint32_t timeoutMs) {
     return std::string(rsp.body.begin(), rsp.body.end());
 }
 
-// ============================================================================
-//  Generic escape hatch
-// ============================================================================
+//=========================================================================
+// Generic escape hatch
+//=========================================================================
 
 Result<CgiResponse> ItscamCgiClient::httpGetRaw(
     const std::string& path,
@@ -502,9 +502,9 @@ Result<CgiResponse> ItscamCgiClient::httpGetRaw(
     return out;
 }
 
-// ============================================================================
-//  Logging
-// ============================================================================
+//=========================================================================
+// Logging
+//=========================================================================
 
 void ItscamCgiClient::setLogHandler(
     std::function<void(LogLevel, const std::string&)> cb) {

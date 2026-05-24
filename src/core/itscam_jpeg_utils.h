@@ -35,9 +35,9 @@
 
 namespace itscam {
 
-// =============================================================================
-//  Low-level: extract the raw JPEG COM marker string
-// =============================================================================
+//=========================================================================
+// Low-level: extract the raw JPEG COM marker string
+//=========================================================================
 
 /**
  * @brief Extract the comment string from a JPEG's COM marker (0xFF 0xFE).
@@ -90,9 +90,9 @@ inline std::string extractJpegComment(const std::vector<uint8_t>& jpeg)
     return extractJpegComment(jpeg.data(), jpeg.size());
 }
 
-// =============================================================================
-//  Mid-level: parse comment string into a key=value tag map
-// =============================================================================
+//=========================================================================
+// Mid-level: parse comment string into a key=value tag map
+//=========================================================================
 
 namespace detail {
 
@@ -147,9 +147,9 @@ inline std::map<std::string, std::string> parseJpegCommentTags(
     return parseJpegCommentTags(extractJpegComment(jpeg));
 }
 
-// =============================================================================
-//  High-level: extract structured recognition / detection results
-// =============================================================================
+//=========================================================================
+// High-level: extract structured recognition / detection results
+//=========================================================================
 
 /**
  * @brief Extract plate recognition results from JPEG comment tags.
@@ -322,9 +322,9 @@ inline std::vector<ObjectDetection> extractObjectDetections(
     return detections;
 }
 
-// =============================================================================
-//  Convenience: populate a CaptureResult from JPEG comment metadata
-// =============================================================================
+//=========================================================================
+// Convenience: populate a CaptureResult from JPEG comment metadata
+//=========================================================================
 
 /**
  * @brief Populate plate and object detection fields in a CaptureResult

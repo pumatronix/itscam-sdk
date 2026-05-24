@@ -29,18 +29,18 @@
 namespace itscam {
 namespace detail {
 
-// ============================================================================
-//  Boundary extraction
-// ============================================================================
+//=========================================================================
+// Boundary extraction
+//=========================================================================
 
 /// Pull the `boundary=...` parameter out of a Content-Type header.  Returns
 /// the empty string when no boundary is present.  Both quoted and unquoted
 /// forms are accepted.
 std::string extractMultipartBoundary(const std::string& contentType);
 
-// ============================================================================
-//  Buffered parse  (snapshot.cgi)
-// ============================================================================
+//=========================================================================
+// Buffered parse  (snapshot.cgi)
+//=========================================================================
 
 /// Parse @p body as a multipart payload using @p boundary.  Each part is
 /// converted into a CgiImage with its `headers` map filled and `mimeType`
@@ -49,9 +49,9 @@ std::string extractMultipartBoundary(const std::string& contentType);
 std::vector<CgiImage> parseMultipart(const std::vector<uint8_t>& body,
                                      const std::string& boundary);
 
-// ============================================================================
-//  Streaming parse  (mjpegvideo.cgi, snapshot multipart over the wire)
-// ============================================================================
+//=========================================================================
+// Streaming parse  (mjpegvideo.cgi, snapshot multipart over the wire)
+//=========================================================================
 
 /// Incremental multipart parser.  Push bytes via push() as they arrive and
 /// each completed part is delivered through the callback supplied at

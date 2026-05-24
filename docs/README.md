@@ -7,7 +7,7 @@ Referência organizada por chapters para o ITSCAM Client SDK. Comece pelo [Overv
 ## Fundamentos
 
 - [Overview](overview.md) -- o que é o SDK, platforms suportadas e layout do repository.
-- [Getting started](getting-started.md) -- integração com o SDK pré-compilado, examples e build avançado a partir do source.
+- [Getting started](getting-started.md) -- baixe o SDK pré-compilado na [página de releases](https://github.com/pumatronix/itscam-sdk/releases), integre no seu app, rode examples e (opcional) build avançado a partir do source.
 - [Error handling](error-handling.md) -- `Result<T>`, `Future<T>`, error codes e logging.
 - [JPEG metadata (COM marker)](jpeg-metadata.md) -- extração de metadados de reconhecimento e classificação embutidos nas imagens JPEG.
 - [HTTPS / TLS](https-tls.md) -- mbedTLS vendored, configuration e failure modes.
@@ -24,6 +24,8 @@ Referência organizada por chapters para o ITSCAM Client SDK. Comece pelo [Overv
 - [C# / .NET](wrappers/csharp.md)
 - [Python](wrappers/python.md)
 - [Go](wrappers/go.md)
+- [Java](wrappers/java.md)
+- [Node.js](wrappers/nodejs.md)
 
 ## Tutoriais
 
@@ -33,6 +35,12 @@ Walkthroughs do zero -- criar um projeto, instalar a dependência do SDK e salva
 - [Primeira imagem com C# / .NET](tutorials/first-image-csharp.md)
 - [Primeira imagem com Python](tutorials/first-image-python.md)
 - [Primeira imagem com Go](tutorials/first-image-go.md)
+- [Primeira imagem com Java](tutorials/first-image-java.md)
+- [Primeira imagem com Node.js](tutorials/first-image-nodejs.md)
+
+## Estendendo o SDK
+
+- [Adicionar um novo wrapper](adding-a-new-wrapper.md) -- procedimento canônico para futuros bindings (Rust, Ruby, Swift, Kotlin, ...).
 
 ## Histórico
 

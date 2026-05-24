@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ITSCAM Client SDK - Java examples.
+
+  Three runnable demos that mirror the Python / Go / C# examples:
+    - CaptureExample      (binary client, TCP 60000)
+    - RestExample         (REST API on 80/443; login required)
+    - CgiSnapshotExample  (CGI on 80/443; auth optional)
+
+  Each main class is exposed as a separate `mvn exec:java` profile so
+  developers can run them directly from the source tree:
+
+    cd src/wrappers/java
+    mvn -pl examples -am package
+    mvn -pl examples exec:java \
+        -Dexec.mainClass=com.pumatronix.itscam.examples.CaptureExample \
+        -Dexec.args="192.168.254.254 1234"
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+            https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.pumatronix</groupId>
+        <artifactId>itscam-sdk-parent</artifactId>
+        <version>0.2.0-SNAPSHOT</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>itscam-sdk-examples</artifactId>
+    <packaging>jar</packaging>
+    <name>ITSCAM Client SDK - Java examples</name>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.pumatronix</groupId>
+            <artifactId>itscam-sdk</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.13.0</version>
+            </plugin>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>3.3.0</version>
+                <configuration>
+                    <mainClass>com.pumatronix.itscam.examples.CaptureExample</mainClass>
+                </configuration>
+            </plugin>
+
+            <!-- Build a "fat" runnable JAR with all dependencies inlined,
+                 so the example can be invoked with a single `java -jar`. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-shade-plugin</artifactId>
+                <version>3.5.3</version>
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+                        <goals><goal>shade</goal></goals>
+                        <configuration>
+                            <createDependencyReducedPom>false</createDependencyReducedPom>
+                            <transformers>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                                    <mainClass>com.pumatronix.itscam.examples.CaptureExample</mainClass>
+                                </transformer>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
+                            </transformers>
+                            <finalName>itscam-sdk-examples-${project.version}-all</finalName>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>

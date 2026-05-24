@@ -23,7 +23,7 @@ Ele cobre as três superfícies do SDK:
 
 ### Via pacote SDK pré-compilado (recomendado)
 
-O pacote de distribuição (`itscam-sdk-<version>.tar.gz`) inclui um NuGet multi-RID pronto para consumo:
+O pacote de distribuição (`itscam-sdk-<version>.tar.gz`) inclui um NuGet multi-RID pronto para consumo. Baixe na [página de releases](https://github.com/pumatronix/itscam-sdk/releases):
 
 ```bash
 tar xzf itscam-sdk-<version>.tar.gz
@@ -102,15 +102,19 @@ await rest.LoginAsync("admin", "1234");
 // Read-only: typed POCO é conveniente.
 List<ProfileConfig> profiles = await rest.GetProfilesAsync();
 
-// Configuration changes: partial PUT (envie só o que você muda).
-await rest.PatchJsonAsync("/api/image/profiles/0",
-    new JsonObject { ["trigger"] = new JsonObject { ["enabled"] = false } });
+// Configuration changes: setter tipado com serialização parcial (preferencial).
+var patch = new ProfileConfig { Trigger = new TriggerConfig { Enabled = false } };
+await rest.UpdateProfileByIdAsync(0, patch);
+
+// Alternativa: patchJson genérico para payloads não tipados.
+// await rest.PatchJsonAsync("/api/image/profiles/0",
+//     new JsonObject { ["trigger"] = new JsonObject { ["enabled"] = false } });
 
 // Raw JSON para endpoints ainda não promovidos a typed helpers:
 string json = await rest.GetAsync("/api/equipment/misc/readonly/volatile");
 ```
 
-`PatchJsonAsync` faz um PUT de documento JSON parcial; o daemon faz merge dos campos enviados sobre a config existente. **Não** dê GET no profile inteiro e PUT de volta -- `PUT /api/image/profiles/{id}` rejeita bodies com documento completo com HTTP 500. Veja [`docs/api/rest-client.md`](../api/rest-client.md) para detalhes.
+Setters tipados usam **serialização parcial** -- apenas fields explicitamente setados no struct são incluídos no body PUT. O daemon faz merge dos campos enviados sobre a config existente. O genérico `PatchJsonAsync` permanece disponível para payloads não tipados ou endpoints sem typed helper. Veja [`docs/api/rest-client.md`](../api/rest-client.md) para detalhes.
 
 ## Projeto de example
 

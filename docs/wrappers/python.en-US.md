@@ -10,7 +10,7 @@ The Python wrapper lives at [`src/wrappers/python/`](../../src/wrappers/python/)
 
 ### From the pre-compiled SDK package (recommended)
 
-The distribution package (`itscam-sdk-<version>.tar.gz`) includes a Python wheel with the native lib bundled:
+The distribution package (`itscam-sdk-<version>.tar.gz`) includes a Python wheel with the native lib bundled. Download from the [releases page](https://github.com/pumatronix/itscam-sdk/releases):
 
 ```bash
 tar xzf itscam-sdk-<version>.tar.gz
@@ -89,10 +89,10 @@ with ItscamCgiClient() as cgi:
 
 The REST client exposes two coexisting surfaces:
 
-* **Typed helpers** (preferred) -- `rest.get_ocr_config()`, `rest.set_ocr_config(cfg)`, `rest.get_profiles()` etc. return dataclasses generated from the camera's OpenAPI document. See [`docs/codegen.md`](../codegen.md) for the maintainer / downstream refresh workflow.
+* **Typed helpers** (preferred) -- `rest.get_ocr_config()`, `rest.set_ocr_config(cfg)`, `rest.get_profiles()` etc. return dataclasses generated from the camera's OpenAPI document. They use partial serialization -- `None`/unset fields are omitted from the PUT body. See [`docs/codegen.md`](../codegen.md) for the maintainer / downstream refresh workflow.
 * **Generic verbs** (escape hatch) -- `rest.get(path)`, `rest.put(path, body)`, `rest.post`, `rest.delete` return parsed JSON (`dict` / `list`).
 
-* **Partial PUT** -- `rest.patch_json(path, patch)` sends only the fields being changed. Required for image profiles and recommended for most configuration updates. See [`docs/api/rest-client.md`](../api/rest-client.md).
+* **Generic partial PUT** -- `rest.patch_json(path, patch)` sends only the fields supplied. Available for untyped payloads or endpoints without a typed helper. See [`docs/api/rest-client.md`](../api/rest-client.md).
 
 ```python
 from itscam import ItscamRestClient, ProfileConfig
@@ -104,9 +104,14 @@ with ItscamRestClient() as rest:
     # Read-only: typed POCO is convenient.
     profiles = rest.get_profiles()
 
-    # Write: partial PUT (do not round-trip the full profile object).
-    rest.patch_json("/api/image/profiles/0",
-                    {"trigger": {"enabled": False}})
+    # Write: typed setter with partial serialization (preferred).
+    from itscam import ProfileConfig, TriggerConfig
+    patch = ProfileConfig(trigger=TriggerConfig(enabled=False))
+    rest.update_profile_by_id(0, patch)
+
+    # Alternative: generic patch_json for untyped payloads.
+    # rest.patch_json("/api/image/profiles/0",
+    #                 {"trigger": {"enabled": False}})
 
     # Generic verbs:
     print(rest.get("/api/equipment/misc/readonly/constants"))

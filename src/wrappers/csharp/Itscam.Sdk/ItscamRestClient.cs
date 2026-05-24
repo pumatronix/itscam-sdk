@@ -156,16 +156,19 @@ namespace Pumatronix.Itscam
         /// PUT a partial JSON document to <paramref name="path"/>.
         ///
         /// <para>
-        /// This is the correct way to change ITSCAM configuration.  The
-        /// daemon merges the supplied fields into the existing config.
-        /// Sending back the full document from a GET (what
-        /// <see cref="UpdateJsonAsync"/> does) is rejected with HTTP 500 on
-        /// several endpoints -- notably <c>PUT /api/image/profiles/{id}</c>.
+        /// Typed setters already use partial serialization (null properties
+        /// are omitted), so <see cref="PatchJsonAsync"/> is mainly useful for
+        /// endpoints without a typed helper or for hand-built patches.
         /// </para>
         ///
         /// <para>
         /// Example -- disable the hardware trigger on profile 0:
         /// <code>
+        /// // Preferred typed approach:
+        /// await rest.UpdateProfileByIdAsync(0,
+        ///     new ProfileConfig { Trigger = new Trigger { Enabled = false } });
+        ///
+        /// // Untyped alternative:
         /// await rest.PatchJsonAsync("/api/image/profiles/0",
         ///     new JsonObject { ["trigger"] = new JsonObject { ["enabled"] = false } });
         /// </code>
@@ -342,12 +345,12 @@ namespace Pumatronix.Itscam
         }
 
         /// <summary>
-        /// PUT /api/image/profiles/{id} -- sends a full ProfileConfig document.
+        /// PUT /api/image/profiles/{id} -- update a single profile.
         ///
         /// <para>
-        /// <b>Warning:</b> the daemon rejects full-document PUT on this
-        /// endpoint (HTTP 500).  Use <see cref="PatchJsonAsync"/> to send
-        /// only the fields you want to change.
+        /// Only non-null properties are included in the PUT body (partial
+        /// serialization).  Construct a <see cref="ProfileConfig"/> with only
+        /// the properties you want to change.
         /// </para>
         /// </summary>
         public async Task<ProfileConfig> UpdateProfileByIdAsync(
@@ -366,9 +369,7 @@ namespace Pumatronix.Itscam
         /// PUT /api/image/profiles -- bulk update (JSON array body).
         ///
         /// <para>
-        /// <b>Warning:</b> same partial-PUT caveat as
-        /// <see cref="UpdateProfileByIdAsync"/>; prefer
-        /// <see cref="PatchJsonAsync"/> for subset changes.
+        /// Each profile is partially serialized (null properties omitted).
         /// </para>
         /// </summary>
         public async Task<ProfileConfig> UpdateProfilesAsync(

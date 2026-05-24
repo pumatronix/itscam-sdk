@@ -17,7 +17,7 @@ The generated outputs live next to the language wrappers and **are checked
 into the repo**:
 
 ```
-src/core/itscam_rest_types.hpp                                # C++
+src/core/itscam_rest_types.h                                # C++
 src/wrappers/csharp/Itscam.Sdk/RestTypes/RestTypes.g.cs       # C# / .NET
 src/wrappers/python/itscam/rest_types.py                      # Python
 src/wrappers/go/itscam/rest_types.go                          # Go

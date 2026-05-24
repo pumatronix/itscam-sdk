@@ -48,7 +48,7 @@ const CORE_API_HEADERS = [
   "src/core/itscam_types.h",
   "src/core/itscam_sdk_utils.h",
   "src/core/itscam_jpeg_utils.h",
-  "src/core/itscam_rest_types.hpp",
+  "src/core/itscam_rest_types.h",
 ];
 
 const CORE_API_SOURCES = [

@@ -16,17 +16,22 @@
 #
 # Copyright (c) 2026 Pumatronix
 
-.PHONY: all linux windows lib examples wrappers clean help
+.PHONY: all linux windows lib examples examples-windows wrappers clean help
 .PHONY: python-example python-rest-example python-cgi-example
-.PHONY: go-example go-rest-example go-cgi-example go-gui
-.PHONY: csharp csharp-pack csharp-examples csharp-examples-publish
+.PHONY: go-example go-rest-example go-cgi-example go-examples go-examples-windows
+.PHONY: go-examples-windows-x86 go-gui go-gui-windows sdk-dist-examples
+.PHONY: csharp csharp-pack csharp-examples csharp-examples-publish csharp-examples-publish-all
 .PHONY: csharp-mjpeg-grabber-example csharp-software-trigger-example
+.PHONY: java java-pack java-examples
+.PHONY: nodejs nodejs-pack nodejs-examples
 .PHONY: install
-.PHONY: version sdk-dist sdk-dist-clean docker-sdk-dist
+.PHONY: version sdk-dist sdk-dist-clean docker-sdk-dist docker-sdk-dist-examples
 .PHONY: docker-build docker-all docker-linux docker-windows docker-shell docker-go-gui
 .PHONY: docker-csharp docker-csharp-examples docker-csharp-examples-publish
+.PHONY: docker-java docker-java-pack docker-nodejs docker-nodejs-pack
 .PHONY: regression-examples docker-regression-examples
 .PHONY: docs-api docs-api-cpp docs-api-python docs-api-csharp docs-api-go
+.PHONY: docs-api-java docs-api-nodejs
 .PHONY: docs-api-clean docs-sync docs-sync-check
 .PHONY: docs-site docker-docs-api docker-docs-api-cpp docker-docs-site
 
@@ -49,7 +54,10 @@ DOCKER_RUN := docker run --rm \
 	-e HOME=/tmp \
 	-e XDG_CACHE_HOME=/tmp/.cache \
 	-e NPM_CONFIG_CACHE=/tmp/.npm \
-	-e DOTNET_CLI_HOME=/tmp/dotnet
+	-e DOTNET_CLI_HOME=/tmp/dotnet \
+	-e GOPATH=/tmp/go \
+	-e GOMODCACHE=/tmp/go/pkg/mod \
+	-e GOCACHE=/tmp/go/build-cache
 DOCKER_RUN_IT := $(DOCKER_RUN) -it
 
 # Default target - build library and C++ examples
@@ -84,11 +92,15 @@ examples: lib
 	@echo "=== Building C++ examples ==="
 	$(MAKE) -C $(SRC_DIR)/examples
 
+examples-windows: windows
+	@echo "=== Cross-compiling C++ examples for Windows ==="
+	$(MAKE) -C $(SRC_DIR)/examples windows
+
 # ============================================================================
 #  Wrapper Examples
 # ============================================================================
 
-wrappers: python-example go-example csharp-examples
+wrappers: python-example go-example csharp-examples java-examples nodejs-examples
 
 python-example:
 	@echo "=== Python example ready ==="
@@ -136,6 +148,68 @@ go-cgi-example: lib
 	else \
 		echo "Go not found. Install go to build Go examples."; \
 	fi
+
+GO_EXAMPLES_DIR := $(SRC_DIR)/wrappers/go/examples
+GO_GUI_DIR := $(GO_EXAMPLES_DIR)/gui
+
+# Build all Go CLI examples for Linux (used by sdk-dist).
+go-examples: lib
+	@echo "=== Building Go CLI examples (Linux) ==="
+	@if ! command -v go > /dev/null; then \
+		echo "Go not found. Install go to build Go examples."; exit 1; \
+	fi
+	@cd $(GO_EXAMPLES_DIR) && \
+	CGO_LDFLAGS="-L$(CURDIR)/$(SRC_DIR)/core/build/linux" \
+	CGO_CFLAGS="-I$(CURDIR)/$(SRC_DIR)/core" \
+	go build -o capture_example capture_example.go && \
+	CGO_LDFLAGS="-L$(CURDIR)/$(SRC_DIR)/core/build/linux" \
+	CGO_CFLAGS="-I$(CURDIR)/$(SRC_DIR)/core" \
+	go build -o rest_example rest_example.go && \
+	CGO_LDFLAGS="-L$(CURDIR)/$(SRC_DIR)/core/build/linux" \
+	CGO_CFLAGS="-I$(CURDIR)/$(SRC_DIR)/core" \
+	go build -o cgi_snapshot_example cgi_snapshot_example.go
+
+# Cross-compile Go CLI examples for Windows amd64 (used by sdk-dist).
+go-examples-windows: windows
+	@echo "=== Building Go CLI examples (Windows amd64) ==="
+	@if ! command -v go > /dev/null; then \
+		echo "Go not found. Install go to build Go examples."; exit 1; \
+	fi
+	@mkdir -p $(GO_EXAMPLES_DIR)/build/win-x64
+	@cd $(GO_EXAMPLES_DIR) && \
+	CGO_ENABLED=1 GOOS=windows GOARCH=amd64 CC=x86_64-w64-mingw32-gcc \
+	CGO_LDFLAGS="-L$(CURDIR)/$(SRC_DIR)/core/build/win-x64" \
+	CGO_CFLAGS="-I$(CURDIR)/$(SRC_DIR)/core" \
+	go build -o build/win-x64/capture_example.exe capture_example.go && \
+	CGO_ENABLED=1 GOOS=windows GOARCH=amd64 CC=x86_64-w64-mingw32-gcc \
+	CGO_LDFLAGS="-L$(CURDIR)/$(SRC_DIR)/core/build/win-x64" \
+	CGO_CFLAGS="-I$(CURDIR)/$(SRC_DIR)/core" \
+	go build -o build/win-x64/rest_example.exe rest_example.go && \
+	CGO_ENABLED=1 GOOS=windows GOARCH=amd64 CC=x86_64-w64-mingw32-gcc \
+	CGO_LDFLAGS="-L$(CURDIR)/$(SRC_DIR)/core/build/win-x64" \
+	CGO_CFLAGS="-I$(CURDIR)/$(SRC_DIR)/core" \
+	go build -o build/win-x64/cgi_snapshot_example.exe cgi_snapshot_example.go
+
+# Cross-compile Go CLI examples for Windows x86 (used by sdk-dist).
+go-examples-windows-x86: windows
+	@echo "=== Building Go CLI examples (Windows x86) ==="
+	@if ! command -v go > /dev/null; then \
+		echo "Go not found. Install go to build Go examples."; exit 1; \
+	fi
+	@mkdir -p $(GO_EXAMPLES_DIR)/build/win-x86
+	@cd $(GO_EXAMPLES_DIR) && \
+	CGO_ENABLED=1 GOOS=windows GOARCH=386 CC=i686-w64-mingw32-gcc \
+	CGO_LDFLAGS="-L$(CURDIR)/$(SRC_DIR)/core/build/win-x86" \
+	CGO_CFLAGS="-I$(CURDIR)/$(SRC_DIR)/core" \
+	go build -o build/win-x86/capture_example.exe capture_example.go && \
+	CGO_ENABLED=1 GOOS=windows GOARCH=386 CC=i686-w64-mingw32-gcc \
+	CGO_LDFLAGS="-L$(CURDIR)/$(SRC_DIR)/core/build/win-x86" \
+	CGO_CFLAGS="-I$(CURDIR)/$(SRC_DIR)/core" \
+	go build -o build/win-x86/rest_example.exe rest_example.go && \
+	CGO_ENABLED=1 GOOS=windows GOARCH=386 CC=i686-w64-mingw32-gcc \
+	CGO_LDFLAGS="-L$(CURDIR)/$(SRC_DIR)/core/build/win-x86" \
+	CGO_CFLAGS="-I$(CURDIR)/$(SRC_DIR)/core" \
+	go build -o build/win-x86/cgi_snapshot_example.exe cgi_snapshot_example.go
 
 # ============================================================================
 #  C# Wrapper
@@ -205,25 +279,31 @@ CSHARP_RID ?= linux-x64
 # The resulting binary has no .NET runtime dependency.
 csharp-examples-publish: lib
 	@echo "=== Publishing C# examples (self-contained, RID=$(CSHARP_RID)) ==="
-	@if command -v dotnet > /dev/null; then \
-		dotnet publish -c Release -r $(CSHARP_RID) --self-contained true \
-		    -p:PublishSingleFile=true \
-		    $(SRC_DIR)/wrappers/csharp/examples/CaptureExample/CaptureExample.csproj && \
-		dotnet publish -c Release -r $(CSHARP_RID) --self-contained true \
-		    -p:PublishSingleFile=true \
-		    $(SRC_DIR)/wrappers/csharp/examples/MjpegGrabberExample/MjpegGrabberExample.csproj && \
-		dotnet publish -c Release -r $(CSHARP_RID) --self-contained true \
-		    -p:PublishSingleFile=true \
-		    $(SRC_DIR)/wrappers/csharp/examples/SoftwareTriggerSnapshotExample/SoftwareTriggerSnapshotExample.csproj && \
-		dotnet publish -c Release -r $(CSHARP_RID) --self-contained true \
-		    -p:PublishSingleFile=true \
-		    $(SRC_DIR)/wrappers/csharp/examples/BinaryCaptureExample/BinaryCaptureExample.csproj; \
-		echo "Binaries in examples/*/bin/Release/net8.0/$(CSHARP_RID)/publish/"; \
-	else \
+	@if ! command -v dotnet > /dev/null; then \
 		echo "dotnet not found. Install .NET 8 SDK to publish C# examples."; \
 		echo "Use 'make docker-csharp-examples-publish' to publish inside the Docker container."; \
 		exit 1; \
 	fi
+	@dotnet publish -c Release -r $(CSHARP_RID) --self-contained true \
+	    -p:PublishSingleFile=true \
+	    $(SRC_DIR)/wrappers/csharp/examples/CaptureExample/CaptureExample.csproj
+	@dotnet publish -c Release -r $(CSHARP_RID) --self-contained true \
+	    -p:PublishSingleFile=true \
+	    $(SRC_DIR)/wrappers/csharp/examples/MjpegGrabberExample/MjpegGrabberExample.csproj
+	@dotnet publish -c Release -r $(CSHARP_RID) --self-contained true \
+	    -p:PublishSingleFile=true \
+	    $(SRC_DIR)/wrappers/csharp/examples/SoftwareTriggerSnapshotExample/SoftwareTriggerSnapshotExample.csproj
+	@dotnet publish -c Release -r $(CSHARP_RID) --self-contained true \
+	    -p:PublishSingleFile=true \
+	    $(SRC_DIR)/wrappers/csharp/examples/BinaryCaptureExample/BinaryCaptureExample.csproj
+	@echo "Binaries in examples/*/bin/Release/net8.0/$(CSHARP_RID)/publish/"
+
+# Publish self-contained C# examples for every platform in the SDK dist.
+csharp-examples-publish-all: windows
+	@echo "=== Publishing C# examples for all SDK dist platforms ==="
+	@$(MAKE) csharp-examples-publish CSHARP_RID=linux-x64
+	@$(MAKE) csharp-examples-publish CSHARP_RID=win-x64
+	@$(MAKE) csharp-examples-publish CSHARP_RID=win-x86
 
 # Individual example convenience targets (depend on csharp-examples so the
 # solution is always up-to-date before printing the run instructions).
@@ -237,18 +317,122 @@ csharp-software-trigger-example: csharp-examples
 	@echo "     # add --user admin --password 1234 to also run REST configuration"
 
 # ============================================================================
+#  Java Wrapper (JNA)
+# ============================================================================
+#
+# The Java wrapper lives in src/wrappers/java/ as a Maven multi-module
+# project (parent + itscam-sdk + examples). Native binaries from
+# src/core/build/<rid>/ are staged into the JAR resources tree by
+# tools/packaging/stage-java-natives.sh so consumers do not need to
+# install libitscam_sdk system-wide.
+#
+# Maven 3.9+ and a JDK 11+ are required.
+
+JAVA_DIR := $(SRC_DIR)/wrappers/java
+MAVEN ?= mvn
+
+java: lib
+	@echo "=== Building Java wrapper (JAR) ==="
+	@if command -v $(MAVEN) > /dev/null; then \
+		$(CURDIR)/tools/packaging/stage-java-natives.sh; \
+		cd $(JAVA_DIR) && $(MAVEN) -pl itscam-sdk -am package -DskipTests; \
+		echo "Java JAR: $(JAVA_DIR)/itscam-sdk/target/itscam-sdk-*.jar"; \
+	else \
+		echo "$(MAVEN) not found. Install Maven 3.9+ and a JDK 11+ to build the Java wrapper."; \
+		echo "Use 'make docker-java' to build inside the Docker container."; \
+	fi
+
+java-pack: java
+	@echo "=== Java wrapper packaged ==="
+	@echo "  $(JAVA_DIR)/itscam-sdk/target/itscam-sdk-*.jar"
+	@echo "  Native binaries embedded under META-INF/native/<os>-<arch>/"
+
+java-examples: lib
+	@echo "=== Building Java wrapper + runnable examples ==="
+	@if command -v $(MAVEN) > /dev/null; then \
+		$(CURDIR)/tools/packaging/stage-java-natives.sh; \
+		cd $(JAVA_DIR) && $(MAVEN) -DskipTests package; \
+		echo "Examples (shaded JAR): $(JAVA_DIR)/examples/target/itscam-sdk-examples-*-all.jar"; \
+		echo "Run: java -cp $(JAVA_DIR)/examples/target/itscam-sdk-examples-*-all.jar \\"; \
+		echo "          com.pumatronix.itscam.examples.CaptureExample <camera_ip> [password]"; \
+	else \
+		echo "$(MAVEN) not found. Install Maven 3.9+ and a JDK 11+ to build the Java examples."; \
+		echo "Use 'make docker-java-examples' to build inside the Docker container."; \
+	fi
+
+docker-java: docker-build
+	@echo "=== Building Java wrapper inside Docker ==="
+	$(DOCKER_RUN) $(DOCKER_IMAGE) make java
+
+docker-java-pack: docker-build
+	@echo "=== Packing Java wrapper inside Docker ==="
+	$(DOCKER_RUN) $(DOCKER_IMAGE) make java-pack
+
+docker-java-examples: docker-build
+	@echo "=== Building Java wrapper + examples inside Docker ==="
+	$(DOCKER_RUN) $(DOCKER_IMAGE) make java-examples
+
+# ============================================================================
+#  Node.js Wrapper (koffi)
+# ============================================================================
+#
+# The Node.js wrapper lives in src/wrappers/nodejs/. Native binaries
+# from src/core/build/<rid>/ are staged into native/<platform>-<arch>/
+# by tools/packaging/stage-nodejs-natives.sh so the published npm
+# tarball is self-contained -- consumers do not need to install
+# libitscam_sdk system-wide.
+
+NODEJS_DIR := $(SRC_DIR)/wrappers/nodejs
+
+nodejs: lib
+	@echo "=== Building Node.js wrapper ==="
+	@if command -v $(NODE) > /dev/null && command -v $(NPM) > /dev/null; then \
+		$(CURDIR)/tools/packaging/stage-nodejs-natives.sh; \
+		cd $(NODEJS_DIR) && $(NPM) install --no-audit --no-fund; \
+		echo "Node.js wrapper ready: $(NODEJS_DIR)"; \
+		echo "Run: node $(NODEJS_DIR)/examples/capture-example.js <camera_ip> [password]"; \
+	else \
+		echo "Node.js / npm not found. Install Node 16+ to build the Node.js wrapper."; \
+		echo "Use 'make docker-nodejs' to build inside the Docker container."; \
+	fi
+
+nodejs-pack: nodejs
+	@echo "=== Packing Node.js wrapper (npm pack) ==="
+	@if command -v $(NPM) > /dev/null; then \
+		$(CURDIR)/tools/packaging/npm-pack-versioned.sh; \
+		echo "Tarball:"; \
+		ls -1 $(NODEJS_DIR)/pumatronix-itscam-sdk-*.tgz 2>/dev/null || true; \
+	else \
+		echo "npm not found."; \
+	fi
+
+nodejs-examples: nodejs
+	@echo "=== Node.js examples ready ==="
+	@echo "Run: node $(NODEJS_DIR)/examples/capture-example.js <camera_ip> [password]"
+	@echo "Or:  node $(NODEJS_DIR)/examples/rest-example.js <host> <user> <pass>"
+	@echo "Or:  node $(NODEJS_DIR)/examples/cgi-snapshot-example.js <host> [--user U --password P]"
+
+docker-nodejs: docker-build
+	@echo "=== Building Node.js wrapper inside Docker ==="
+	$(DOCKER_RUN) $(DOCKER_IMAGE) make nodejs
+
+docker-nodejs-pack: docker-build
+	@echo "=== Packing Node.js wrapper inside Docker ==="
+	$(DOCKER_RUN) $(DOCKER_IMAGE) make nodejs-pack
+
+# ============================================================================
 #  Live-camera regression (all non-GUI examples)
 # ============================================================================
 
 # Camera under test.  Override on the command line:
-#   make regression-examples CAMERA_IP=10.8.19.8 CAMERA_USER=admin CAMERA_PASS=secret
+#   make regression-examples CAMERA_IP=192.168.254.254 CAMERA_USER=admin CAMERA_PASS=secret
 CAMERA_IP ?=
 CAMERA_USER ?= admin
 CAMERA_PASS ?=
 
 regression-examples:
 	@if [ -z "$(CAMERA_IP)" ]; then \
-		echo "Set CAMERA_IP, e.g.: make regression-examples CAMERA_IP=10.8.19.8"; \
+		echo "Set CAMERA_IP, e.g.: make regression-examples CAMERA_IP=192.168.254.254"; \
 		exit 1; \
 	fi
 	$(CURDIR)/tools/regression/run-examples.sh \
@@ -256,7 +440,7 @@ regression-examples:
 
 docker-regression-examples: docker-build
 	@if [ -z "$(CAMERA_IP)" ]; then \
-		echo "Set CAMERA_IP, e.g.: make docker-regression-examples CAMERA_IP=10.8.19.8"; \
+		echo "Set CAMERA_IP, e.g.: make docker-regression-examples CAMERA_IP=192.168.254.254"; \
 		exit 1; \
 	fi
 	$(DOCKER_RUN) --network host $(DOCKER_IMAGE) \
@@ -265,39 +449,39 @@ docker-regression-examples: docker-build
 
 go-gui: lib
 	@echo "=== Building Go GUI example (Wails) for Linux (static) ==="
-	@if command -v wails > /dev/null; then \
-		export CGO_CFLAGS="-I$(CURDIR)/$(SRC_DIR)/core" && \
-		export LD_LIBRARY_PATH="$(CURDIR)/$(SRC_DIR)/core/build/linux:$$LD_LIBRARY_PATH" && \
-		cd $(SRC_DIR)/wrappers/go/examples/gui && \
-		go mod tidy && \
-		mkdir -p build/bin/linux && \
-		wails build -tags static -o itscam-viewer && \
-		mv build/bin/itscam-viewer build/bin/linux/; \
-		echo "Output: $(SRC_DIR)/wrappers/go/examples/gui/build/bin/linux/"; \
-		ls -lh build/bin/linux/; \
-	else \
+	@if ! command -v wails > /dev/null; then \
 		echo "Wails not found. Install with: go install github.com/wailsapp/wails/v2/cmd/wails@latest"; \
+		exit 1; \
 	fi
+	@export CGO_CFLAGS="-I$(CURDIR)/$(SRC_DIR)/core" && \
+	export LD_LIBRARY_PATH="$(CURDIR)/$(SRC_DIR)/core/build/linux:$$LD_LIBRARY_PATH" && \
+	cd $(GO_GUI_DIR) && \
+	go mod tidy && \
+	mkdir -p build/bin/linux && \
+	wails build -tags static -o itscam-viewer && \
+	mv build/bin/itscam-viewer build/bin/linux/
+	@echo "Output: $(GO_GUI_DIR)/build/bin/linux/itscam-viewer"
+	@ls -lh $(GO_GUI_DIR)/build/bin/linux/
 
 go-gui-windows: windows
 	@echo "=== Building Go GUI example (Wails) for Windows (static) ==="
-	@if command -v wails > /dev/null; then \
-		export CGO_ENABLED=1 && \
-		export GOOS=windows && \
-		export GOARCH=amd64 && \
-		export CC=x86_64-w64-mingw32-gcc && \
-		export CXX=x86_64-w64-mingw32-g++ && \
-		export CGO_CFLAGS="-I$(CURDIR)/$(SRC_DIR)/core" && \
-		cd $(SRC_DIR)/wrappers/go/examples/gui && \
-		go mod tidy && \
-		mkdir -p build/bin/windows && \
-		wails build -tags static -platform windows/amd64 -o itscam-viewer.exe && \
-		mv build/bin/itscam-viewer.exe build/bin/windows/; \
-		echo "Output: $(SRC_DIR)/wrappers/go/examples/gui/build/bin/windows/"; \
-		ls -lh build/bin/windows/; \
-	else \
+	@if ! command -v wails > /dev/null; then \
 		echo "Wails not found. Install with: go install github.com/wailsapp/wails/v2/cmd/wails@latest"; \
+		exit 1; \
 	fi
+	@export CGO_ENABLED=1 && \
+	export GOOS=windows && \
+	export GOARCH=amd64 && \
+	export CC=x86_64-w64-mingw32-gcc && \
+	export CXX=x86_64-w64-mingw32-g++ && \
+	export CGO_CFLAGS="-I$(CURDIR)/$(SRC_DIR)/core" && \
+	cd $(GO_GUI_DIR) && \
+	go mod tidy && \
+	mkdir -p build/bin/windows && \
+	wails build -tags static -platform windows/amd64 -o itscam-viewer.exe && \
+	mv build/bin/itscam-viewer.exe build/bin/windows/
+	@echo "Output: $(GO_GUI_DIR)/build/bin/windows/itscam-viewer.exe"
+	@ls -lh $(GO_GUI_DIR)/build/bin/windows/
 
 # ============================================================================
 #  Code generation (typed REST helpers from OpenAPI)
@@ -538,9 +722,17 @@ all: linux windows examples wrappers
 
 SDK_DIST_SCRIPT := $(CURDIR)/tools/packaging/make-sdk-dist.sh
 
-sdk-dist: version lib windows csharp-pack
+# Build Wails GUI binaries for the consumer tarball (source for everything else).
+sdk-dist-examples: go-gui go-gui-windows
+	@echo "=== SDK distribution examples ready (Wails GUI binaries) ==="
+
+sdk-dist: version lib windows csharp-pack java-pack nodejs-pack sdk-dist-examples
 	@echo "=== Packaging SDK distribution ($(SDK_VERSION), linux-x64 + win-x64 + win-x86) ==="
 	@$(SDK_DIST_SCRIPT)
+
+docker-sdk-dist-examples: docker-build
+	@echo "=== Building SDK distribution examples inside Docker ==="
+	$(DOCKER_RUN) $(DOCKER_IMAGE) make sdk-dist-examples
 
 sdk-dist-clean:
 	@echo "=== Removing SDK distribution artefacts ==="
@@ -568,6 +760,7 @@ clean:
 	@rm -f $(SRC_DIR)/wrappers/go/examples/capture_example \
 	       $(SRC_DIR)/wrappers/go/examples/rest_example \
 	       $(SRC_DIR)/wrappers/go/examples/cgi_snapshot_example
+	@rm -rf $(SRC_DIR)/wrappers/go/examples/build
 	@rm -rf $(SRC_DIR)/wrappers/go/examples/gui/build
 	@rm -rf $(SRC_DIR)/wrappers/csharp/Itscam.Sdk/bin \
 	        $(SRC_DIR)/wrappers/csharp/Itscam.Sdk/obj
@@ -580,6 +773,13 @@ clean:
 	@rm -rf $(SRC_DIR)/wrappers/csharp/examples/BinaryCaptureExample/bin \
 	        $(SRC_DIR)/wrappers/csharp/examples/BinaryCaptureExample/obj
 	@rm -rf $(SRC_DIR)/wrappers/csharp/nupkg
+	@rm -rf $(SRC_DIR)/wrappers/java/itscam-sdk/target \
+	        $(SRC_DIR)/wrappers/java/examples/target \
+	        $(SRC_DIR)/wrappers/java/target \
+	        $(SRC_DIR)/wrappers/java/itscam-sdk/src/main/resources/META-INF/native
+	@rm -rf $(SRC_DIR)/wrappers/nodejs/node_modules \
+	        $(SRC_DIR)/wrappers/nodejs/native
+	@rm -f  $(SRC_DIR)/wrappers/nodejs/pumatronix-itscam-sdk-*.tgz
 	@rm -rf $(CODEGEN_DIR)/build
 	@rm -rf dist/
 	@rm -rf $(DOCS_API_OUT) $(DOCS_SITE_DIR)/content $(DOCS_SITE_DIR)/.vitepress/dist tools/docs/obj
@@ -608,15 +808,25 @@ help:
 	@echo "  go-example      Build Go binary-client example"
 	@echo "  go-rest-example Build Go REST example"
 	@echo "  go-cgi-example  Build Go CGI snapshot example"
+	@echo "  go-examples     Build all Go CLI examples (Linux)"
+	@echo "  go-examples-windows     Build Go CLI examples (Windows amd64)"
+	@echo "  go-examples-windows-x86  Build Go CLI examples (Windows x86)"
 	@echo "  go-gui          Build Go GUI example (Wails) for Linux"
 	@echo "  go-gui-windows  Build Go GUI example for Windows (cross-compile)"
 	@echo "  csharp          Build .NET wrapper (Release)"
 	@echo "  csharp-examples Build .NET wrapper + all C# examples"
-	@echo "  csharp-examples-publish  Self-contained single-file publish (no runtime needed)"
+	@echo "  csharp-examples-publish      Self-contained single-file publish (no runtime needed)"
+	@echo "  csharp-examples-publish-all  Publish C# examples for linux-x64 + win-x64 + win-x86"
 	@echo "  csharp-pack     Build native artifacts and produce a NuGet"
 	@echo "  csharp-pack-linux  NuGet with Linux native binary only (sdk-dist)"
 	@echo "  csharp-mjpeg-grabber-example     Build + print run instructions"
 	@echo "  csharp-software-trigger-example  Build + print run instructions"
+	@echo "  java            Build Java wrapper JAR (Maven; requires JDK 11+)"
+	@echo "  java-pack       Same as java; embeds native binaries into JAR"
+	@echo "  java-examples   Build Java wrapper + runnable examples"
+	@echo "  nodejs          Build Node.js wrapper (npm install + stage natives)"
+	@echo "  nodejs-pack     Run 'npm pack' to produce a publish-ready tarball"
+	@echo "  nodejs-examples Build Node.js wrapper + show example commands"
 	@echo ""
 	@echo "Regression targets (live camera required):"
 	@echo "  regression-examples        Build + run all non-GUI examples"
@@ -632,6 +842,8 @@ help:
 	@echo "  docker-csharp                   Build C# wrapper inside Docker"
 	@echo "  docker-csharp-examples          Build C# wrapper + examples inside Docker"
 	@echo "  docker-csharp-examples-publish  Publish self-contained C# binaries inside Docker"
+	@echo "  docker-java[-pack|-examples]    Build/pack Java wrapper inside Docker"
+	@echo "  docker-nodejs[-pack]            Build/pack Node.js wrapper inside Docker"
 	@echo "  docker-go-gui   Build Go GUI inside Docker (Linux)"
 	@echo "  docker-go-gui-windows  Build Go GUI for Windows inside Docker"
 	@echo "  docker-codegen                  Regenerate REST types inside Docker"
@@ -658,9 +870,11 @@ help:
 	@echo ""
 	@echo "Other targets:"
 	@echo "  version         Regenerate version metadata from git tag / commit / date"
-	@echo "  sdk-dist        Build consumer tar.gz (linux-x64 + win-x64 + win-x86)"
-	@echo "  docker-sdk-dist Same, inside Docker"
-	@echo "  sdk-dist-clean  Remove dist/ archives and staging"
+	@echo "  sdk-dist-examples     Build pre-built Wails GUI for the consumer tarball"
+	@echo "  sdk-dist              Build consumer tar.gz (libs + example source + Wails GUI)"
+	@echo "  docker-sdk-dist       Same, inside Docker"
+	@echo "  docker-sdk-dist-examples  Build Wails GUI only, inside Docker"
+	@echo "  sdk-dist-clean        Remove dist/ archives and staging"
 	@echo "  all             Build everything"
 	@echo "  install         Install library to system"
 	@echo "  clean           Remove all build artifacts"
@@ -669,5 +883,5 @@ help:
 	@echo "Directory structure:"
 	@echo "  src/core/       C/C++ SDK library source"
 	@echo "  src/examples/   C++ example applications"
-	@echo "  src/wrappers/   Language wrappers (python, go, csharp)"
+	@echo "  src/wrappers/   Language wrappers (python, go, csharp, java, nodejs)"
 	@echo "  docs/           Chapter-style documentation"

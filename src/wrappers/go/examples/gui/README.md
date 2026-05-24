@@ -139,7 +139,7 @@ Ensure `itscam_sdk.dll` is in the same directory as `itscam-viewer.exe`, then ru
 ## Usage
 
 1. **Connect to Camera**
-   - Enter the camera IP address and port (default: 50000)
+   - Enter the camera IP address and port (default: 60000)
    - Enter the authentication password
    - Click "Connect"
 

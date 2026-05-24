@@ -4,8 +4,6 @@
  *  ITSCAM Client SDK - Main client class
  *
  *  Copyright (c) 2026 Pumatronix
- *
- *  Requires: nlohmann/json 3.x (header-only).
  */
 #pragma once
 
@@ -32,9 +30,9 @@ public:
     ItscamClient(const ItscamClient&) = delete;
     ItscamClient& operator=(const ItscamClient&) = delete;
 
-    // =========================================================================
-    //  Connection
-    // =========================================================================
+    //=========================================================================
+    // Connection
+    //=========================================================================
 
     Result<void> connect(const std::string& address,
                          uint16_t port = 60000,
@@ -49,9 +47,9 @@ public:
     void disconnect();
     bool isConnected() const;
 
-    // =========================================================================
-    //  Authentication
-    // =========================================================================
+    //=========================================================================
+    // Authentication
+    //=========================================================================
 
     /// Pre-store credentials so that replaySession() authenticates before
     /// sending any other commands. Call this before connect() when the
@@ -73,9 +71,9 @@ public:
         const CaptureSubscriptionConfig& config = CaptureSubscriptionConfig(),
         uint32_t timeoutMs = 10000);
 
-    // =========================================================================
-    //  Capture
-    // =========================================================================
+    //=========================================================================
+    // Capture
+    //=========================================================================
 
     /// Trigger a snapshot and wait for all resulting images.
     /// For single-exposure, the vector has one element.
@@ -97,9 +95,9 @@ public:
     Future<std::vector<uint8_t>> getLastFrameAsync(int quality = 80,
                                                    uint32_t timeoutMs = 10000);
 
-    // =========================================================================
-    //  Profile management  (sync only)
-    // =========================================================================
+    //=========================================================================
+    // Profile management  (sync only)
+    //=========================================================================
 
     /// Return the numeric ID of the currently active profile.
     Result<uint32_t> getActiveProfileId(uint32_t timeoutMs = 10000);
@@ -111,9 +109,9 @@ public:
     /// List all available profiles (id, name, description, active flag).
     Result<std::vector<ProfileInfo>> listProfiles(uint32_t timeoutMs = 10000);
 
-    // =========================================================================
-    //  Trigger & Exposure  (sync only, profile-aware)
-    // =========================================================================
+    //=========================================================================
+    // Trigger & Exposure  (sync only, profile-aware)
+    //=========================================================================
 
     /// @param profileId  Profile to query. Defaults to CURRENT_PROFILE.
     Result<TriggerConfig>  getTriggerConfig(
@@ -135,9 +133,9 @@ public:
         uint32_t profileId = CURRENT_PROFILE,
         uint32_t timeoutMs = 10000);
 
-    // =========================================================================
-    //  Multi-exposure  (sync only, profile-aware)
-    // =========================================================================
+    //=========================================================================
+    // Multi-exposure  (sync only, profile-aware)
+    //=========================================================================
 
     /// Read the current multi-exposure configuration for the given profile.
     Result<MultiExposureConfig> getMultiExposureConfig(
@@ -150,9 +148,9 @@ public:
         uint32_t profileId = CURRENT_PROFILE,
         uint32_t timeoutMs = 10000);
 
-    // =========================================================================
-    //  Serial communication  (sync only)
-    // =========================================================================
+    //=========================================================================
+    // Serial communication  (sync only)
+    //=========================================================================
 
     Result<SerialConfig> configureSerial(SerialPort port,
                                          const SerialConfig& config,
@@ -170,9 +168,9 @@ public:
                                  const std::string& b64Data,
                                  uint32_t timeoutMs = 10000);
 
-    // =========================================================================
-    //  Typed equipment configuration  (sync only)
-    // =========================================================================
+    //=========================================================================
+    // Typed equipment configuration  (sync only)
+    //=========================================================================
 
     Result<DeviceInfo> getDeviceInfo(uint32_t timeoutMs = 10000);
 
@@ -188,9 +186,9 @@ public:
                                  const ScenarioCrop& crop,
                                  uint32_t timeoutMs = 10000);
 
-    // =========================================================================
-    //  Generic equipment configuration
-    // =========================================================================
+    //=========================================================================
+    // Generic equipment configuration
+    //=========================================================================
 
     /// Return the entire configuration tree as nested JSON.
     Result<nlohmann::json> getAllConfigs(uint32_t timeoutMs = 10000);
@@ -202,15 +200,15 @@ public:
                                      const nlohmann::json& data,
                                      uint32_t timeoutMs = 10000);
 
-    // =========================================================================
-    //  System
-    // =========================================================================
+    //=========================================================================
+    // System
+    //=========================================================================
 
     Result<void>   reboot(uint32_t timeoutMs = 10000);
 
-    // =========================================================================
-    //  Event callbacks
-    // =========================================================================
+    //=========================================================================
+    // Event callbacks
+    //=========================================================================
 
     void onTriggerMetadata(std::function<void(const FrameInfo&)> cb);
     void onSnapshotMetadata(std::function<void(const FrameInfo&)> cb);
@@ -247,9 +245,9 @@ public:
     void onConnectionStateChanged(
         std::function<void(ConnectionState, const std::string&)> cb);
 
-    // =========================================================================
-    //  Advanced
-    // =========================================================================
+    //=========================================================================
+    // Advanced
+    //=========================================================================
 
     void setPingInterval(uint32_t seconds);
 
@@ -264,9 +262,9 @@ public:
     /// delivering partial results.  Default: 5000ms.
     void setExposureGroupTimeout(uint32_t milliseconds);
 
-    // =========================================================================
-    //  Low-level session setup and raw protocol access
-    // =========================================================================
+    //=========================================================================
+    // Low-level session setup and raw protocol access
+    //=========================================================================
 
     /// Lower-level event subscription primitive.
     /// Prefer subscribeCaptures() for the common image-capture workflow.

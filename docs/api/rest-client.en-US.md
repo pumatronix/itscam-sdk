@@ -6,11 +6,11 @@ The REST client wraps the **ITSCAM webapp backend** -- the Node.js service that 
 
 Header: [`src/core/itscam_rest_client.h`](../../src/core/itscam_rest_client.h). C++ example: [`src/examples/itscam_rest_example.cpp`](../../src/examples/itscam_rest_example.cpp).
 
-> **Full per-method reference** (signatures, typed structs, overloads): see the [generated Doxygen reference](/api-ref/cpp/classitscam_1_1ItscamRestClient.html). This page focuses on concepts (typed surface vs escape hatch, partial PUT, error handling) and examples.
+> **Full per-method reference** (signatures, typed structs, overloads): see the [generated Doxygen reference](/api-ref/cpp/classitscam_1_1ItscamRestClient.html). This page focuses on concepts (typed surface vs escape hatch, partial serialization, error handling) and examples.
 
 The REST client exposes two coexisting surfaces:
 
-* **Typed helpers** (preferred). `getOcrConfig()` returns `Result<OcrConfig>`, `setOcrConfig(OcrConfig)` accepts and returns the typed struct. The types live in [`src/core/itscam_rest_types.hpp`](../../src/core/itscam_rest_types.hpp) and are **auto-generated** from the camera's OpenAPI document. See [`docs/codegen.md`](../codegen.md) for the refresh / regeneration workflow.
+* **Typed helpers** (preferred). `getOcrConfig()` returns `Result<OcrConfig>`, `setOcrConfig(OcrConfig)` accepts and returns the typed struct. The types live in [`src/core/itscam_rest_types.h`](../../src/core/itscam_rest_types.h) and are **auto-generated** from the camera's OpenAPI document. See [`docs/codegen.md`](../codegen.md) for the refresh / regeneration workflow.
 * **Generic HTTP verbs** (escape hatch). `httpGet` / `httpPut` / `httpPost` / `httpDelete` return `Result<nlohmann::json>` for endpoints that aren't typed yet, partial-update bodies, or fields outside the current schema snapshot.
 
 > **Breaking change:** prior to the typed surface, `getOcrConfig()` and friends returned `Result<nlohmann::json>`. Migrate to either the typed overloads (preferred) or the generic `httpGet("/api/equipment/ocr")` escape hatch when you specifically want raw JSON.
@@ -74,8 +74,8 @@ p.trigger.emplace();                                  // Result<ProfileConfig>
 p.trigger->enabled = false;
 
 auto updated = rest.updateProfileById((int)p.id, p);  // PUT    /api/image/profiles/{id}
-// Warning: full-document PUT fails on profiles -- use patchJson() instead:
-// rest.patchJson("/api/image/profiles/0", {{"trigger", {{"enabled", false}}}});
+                                                       //        (partial serialization --
+                                                       //         only set fields are sent)
 auto created = rest.createProfile(p);                 // POST   /api/image/profiles
 auto deleted = rest.deleteProfile(0);                 // DELETE /api/image/profiles?id=0
                                                        //         (raw JSON response)
@@ -175,33 +175,36 @@ auto r4 = rest.httpDelete("/api/some/endpoint");
 
 The generic methods use the path **as-is** -- no API prefix is prepended, so include `/api/...` yourself. Use `rest.apiPrefix()` to get the configured prefix if you want to build paths relative to it.
 
-> **When to reach for the escape hatch:** schema gaps (e.g. an endpoint hasn't been promoted to a typed wrapper yet), fields newer than the SDK snapshot, partial updates that intentionally omit fields (the typed setters round-trip the whole object), or one-off diagnostic calls. Otherwise the typed surface is preferable for compile-time safety, IDE completion, and parity across language bindings.
+> **When to reach for the escape hatch:** schema gaps (e.g. an endpoint hasn't been promoted to a typed wrapper yet), fields newer than the SDK snapshot, untyped payloads for endpoints without a typed helper, or one-off diagnostic calls. Otherwise the typed surface is preferable for compile-time safety, IDE completion, and parity across language bindings.
 
-## Read-modify-write: use partial PUT (PatchJsonAsync)
+## Partial updates: typed setters with partial serialization
 
-The ITSCAM daemon treats most PUT endpoints as **partial updates**: send only the fields you want to change and the server merges them into the existing configuration. Two patterns that **do not work** on several endpoints (notably `PUT /api/image/profiles/{id}`):
-
-* **Typed round-trip** -- `SetProfilesAsync(await GetProfilesAsync())` drops undocumented JSON fields during deserialisation.
-* **Full-document round-trip** -- GET the entire config, edit one field, PUT the whole JSON back. The daemon rejects this with HTTP 500 even when the body is an unmodified GET response (a webapp/daemon limitation, not an SDK bug).
-
-The correct pattern is a **partial PUT** containing only the fields being changed:
+Typed setters (e.g. `updateProfileById`, `SetOcrConfigAsync`, `set_ocr_config`, `SetOcrConfig`) use **partial serialization**: unset/null/nil/nullopt fields are automatically omitted from the PUT body. Construct a typed struct with only the fields you want to change and pass it directly to the setter -- the daemon merges the supplied fields into the existing configuration.
 
 ```csharp
-// C# -- ItscamRestClient.PatchJsonAsync
-await rest.PatchJsonAsync("/api/image/profiles/0",
-    new JsonObject { ["trigger"] = new JsonObject { ["enabled"] = false } });
+// C# -- typed partial update (preferred)
+var patch = new ProfileConfig { Trigger = new TriggerConfig { Enabled = false } };
+await rest.UpdateProfileByIdAsync(0, patch);
 ```
 
-Equivalent in C++/Python/Go: build a minimal JSON object and call `patchJson` / `patch_json` / `PatchJSON`, or the generic `httpPut` / `put` / `Put` with the same fragment.
+```cpp
+// C++ -- typed partial update (preferred)
+ProfileConfig patch;
+patch.trigger.emplace();
+patch.trigger->enabled = false;
+rest.updateProfileById(0, patch);
+```
+
+### Generic alternative: patchJson
+
+The generic `patchJson` / `PatchJsonAsync` / `patch_json` / `PatchJSON` methods remain available for untyped payloads, endpoints without a typed helper, or when constructing the patch from raw JSON is more convenient:
 
 ```cpp
 rest.patchJson("/api/image/profiles/0",
                nlohmann::json{{"trigger", {{"enabled", false}}}});
 ```
 
-`UpdateJsonAsync` (GET + mutate + PUT full document) remains available in C# but must not be used against image profiles.
-
-The C# `MjpegGrabberExample` and `SoftwareTriggerSnapshotExample` use `GetProfilesAsync()` to find profile ids (read-only) and `PatchJsonAsync()` for every write.
+The C# `MjpegGrabberExample` and `SoftwareTriggerSnapshotExample` use `GetProfilesAsync()` to find profile ids (read-only) and typed setters or `PatchJsonAsync()` for writes.
 
 ## Error handling
 

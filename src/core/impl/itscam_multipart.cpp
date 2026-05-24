@@ -15,9 +15,9 @@
 namespace itscam {
 namespace detail {
 
-// ============================================================================
-//  Local helpers
-// ============================================================================
+//=========================================================================
+// Local helpers
+//=========================================================================
 
 namespace {
 
@@ -83,9 +83,9 @@ std::string headerValue(const std::map<std::string, std::string>& headers,
 
 }  // namespace
 
-// ============================================================================
-//  Boundary extraction
-// ============================================================================
+//=========================================================================
+// Boundary extraction
+//=========================================================================
 
 std::string extractMultipartBoundary(const std::string& contentType) {
     auto lower = toLower(contentType);
@@ -110,9 +110,9 @@ std::string extractMultipartBoundary(const std::string& contentType) {
     return trim(value);
 }
 
-// ============================================================================
-//  Buffered parse
-// ============================================================================
+//=========================================================================
+// Buffered parse
+//=========================================================================
 
 std::vector<CgiImage> parseMultipart(const std::vector<uint8_t>& body,
                                      const std::string& boundary) {
@@ -171,9 +171,9 @@ std::vector<CgiImage> parseMultipart(const std::vector<uint8_t>& body,
     return out;
 }
 
-// ============================================================================
-//  StreamingMultipartParser
-// ============================================================================
+//=========================================================================
+// StreamingMultipartParser
+//=========================================================================
 
 StreamingMultipartParser::StreamingMultipartParser(
     const std::string& boundary, PartCallback cb)

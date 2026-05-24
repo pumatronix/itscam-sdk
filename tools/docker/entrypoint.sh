@@ -21,4 +21,13 @@ EOF
     exit 1
 fi
 
+# Go module/build cache: image GOPATH (/go) is owned by the image's builder
+# user (uid 1000), but bind-mount builds run as the host uid (Makefile
+# DOCKER_RUN, GitHub Actions, etc.). Keep wails/gomarkdoc on PATH via
+# /go/bin; only redirect writable cache dirs.
+export GOPATH="${GOPATH:-/tmp/go}"
+export GOMODCACHE="${GOMODCACHE:-/tmp/go/pkg/mod}"
+export GOCACHE="${GOCACHE:-/tmp/go/build-cache}"
+mkdir -p "$GOMODCACHE" "$GOCACHE"
+
 exec "$@"

@@ -23,9 +23,9 @@
 
 using json = nlohmann::json;
 
-// ============================================================================
-//  Opaque types
-// ============================================================================
+//=========================================================================
+// Opaque types
+//=========================================================================
 
 struct ITSCAM_RestClient {
     itscam::ItscamRestClient impl;
@@ -34,9 +34,9 @@ struct ITSCAM_RestClient {
     void*              logUd = nullptr;
 };
 
-// ============================================================================
-//  Helpers
-// ============================================================================
+//=========================================================================
+// Helpers
+//=========================================================================
 
 namespace {
 
@@ -94,9 +94,9 @@ inline std::string apiPath(ITSCAM_RestClient* c, const char* tail) {
 
 }  // namespace
 
-// ============================================================================
-//  Lifecycle
-// ============================================================================
+//=========================================================================
+// Lifecycle
+//=========================================================================
 
 extern "C" {
 
@@ -108,9 +108,9 @@ void ITSCAM_RestClient_destroy(ITSCAM_RestClient* client) {
     delete client;
 }
 
-// ============================================================================
-//  Connection / TLS
-// ============================================================================
+//=========================================================================
+// Connection / TLS
+//=========================================================================
 
 ITSCAM_ErrorCode ITSCAM_RestClient_setBaseUrl(ITSCAM_RestClient* c,
                                               const char* host,
@@ -146,9 +146,9 @@ void ITSCAM_RestClient_setClientCertificate(ITSCAM_RestClient* c,
     if (c && certPem && keyPem) c->impl.setClientCertificate(certPem, keyPem);
 }
 
-// ============================================================================
-//  Authentication
-// ============================================================================
+//=========================================================================
+// Authentication
+//=========================================================================
 
 ITSCAM_ErrorCode ITSCAM_RestClient_login(ITSCAM_RestClient* c,
                                          const char* username,
@@ -168,9 +168,9 @@ void ITSCAM_RestClient_clearAuthToken(ITSCAM_RestClient* c) {
     if (c) c->impl.clearAuthToken();
 }
 
-// ============================================================================
-//  Generic HTTP verbs
-// ============================================================================
+//=========================================================================
+// Generic HTTP verbs
+//=========================================================================
 
 ITSCAM_ErrorCode ITSCAM_RestClient_httpGet(ITSCAM_RestClient* c,
                                            const char* path,
@@ -208,15 +208,15 @@ ITSCAM_ErrorCode ITSCAM_RestClient_httpDelete(ITSCAM_RestClient* c,
     return handleResult(c->impl.httpDelete(path, timeoutMs), out);
 }
 
-// ============================================================================
-//  Typed convenience wrappers
+//=========================================================================
+// Typed convenience wrappers
 //
-//  All these wrappers route through the generic httpGet / httpPut escape
-//  hatch on the C++ side so the C ABI stays JSON-string-based (the C++
-//  surface returns strongly-typed C++ structs which the C ABI cannot
-//  marshal directly).  `setApiPrefix(...)` is honoured by reading the
-//  current prefix back via `apiPrefix()`.
-// ============================================================================
+// All these wrappers route through the generic httpGet / httpPut escape
+// hatch on the C++ side so the C ABI stays JSON-string-based (the C++
+// surface returns strongly-typed C++ structs which the C ABI cannot
+// marshal directly).  `setApiPrefix(...)` is honoured by reading the
+// current prefix back via `apiPrefix()`.
+//=========================================================================
 
 ITSCAM_ErrorCode ITSCAM_RestClient_getProfiles(ITSCAM_RestClient* c,
                                                uint32_t t,
@@ -305,9 +305,9 @@ DEFINE_TYPED_GET(getItscamproStatus,  "/equipment/servers/itscampro/status")
 #undef DEFINE_TYPED_GET
 #undef DEFINE_TYPED_SET
 
-// ============================================================================
-//  Logging
-// ============================================================================
+//=========================================================================
+// Logging
+//=========================================================================
 
 void ITSCAM_RestClient_onLog(ITSCAM_RestClient* c, ITSCAM_LogCallback cb,
                              void* ud) {
@@ -328,9 +328,9 @@ void ITSCAM_RestClient_onLog(ITSCAM_RestClient* c, ITSCAM_LogCallback cb,
     });
 }
 
-// ============================================================================
-//  ITSCAM_String accessors
-// ============================================================================
+//=========================================================================
+// ITSCAM_String accessors
+//=========================================================================
 
 const char* ITSCAM_String_data(const ITSCAM_String* s) {
     return s ? s->data.c_str() : "";

@@ -24,9 +24,9 @@
 #include <tuple>
 #include <utility>
 
-// ============================================================================
-//  Platform Detection
-// ============================================================================
+//=========================================================================
+// Platform Detection
+//=========================================================================
 
 #if defined(_WIN32) || defined(__MINGW32__)
 #   define ITSCAM_OS_WINDOWS 1
@@ -36,9 +36,9 @@
 #   define ITSCAM_OS_LINUX   1
 #endif
 
-// ============================================================================
-//  Socket Error Codes (platform-independent)
-// ============================================================================
+//=========================================================================
+// Socket Error Codes (platform-independent)
+//=========================================================================
 
 #define ITSCAM_SOCK_OK            0
 #define ITSCAM_SOCK_EWOULDBLOCK   1
@@ -51,15 +51,15 @@
 #define ITSCAM_SOCK_EINTR         8
 #define ITSCAM_SOCK_EUNKNOWN      99
 
-// ============================================================================
-//  OS Abstraction Namespace - Internal API
-// ============================================================================
+//=========================================================================
+// OS Abstraction Namespace - Internal API
+//=========================================================================
 
 namespace itscam_os {
 
-// ============================================================================
-//  Platform-specific Types
-// ============================================================================
+//=========================================================================
+// Platform-specific Types
+//=========================================================================
 
 #if ITSCAM_OS_WINDOWS
     // Forward declare Windows types to avoid including windows.h in header
@@ -88,9 +88,9 @@ using CondHandle = CondImpl*;
 // Thread function signature
 using ThreadFunc = void (*)(void* arg);
 
-// ============================================================================
-//  Byte Order Functions (Network <-> Host)
-// ============================================================================
+//=========================================================================
+// Byte Order Functions (Network <-> Host)
+//=========================================================================
 
 /** @brief Convert 16-bit value from host to network byte order. */
 uint16_t hostToNet16(uint16_t hostshort);
@@ -104,9 +104,9 @@ uint16_t netToHost16(uint16_t netshort);
 /** @brief Convert 32-bit value from network to host byte order. */
 uint32_t netToHost32(uint32_t netlong);
 
-// ============================================================================
-//  Socket Functions
-// ============================================================================
+//=========================================================================
+// Socket Functions
+//=========================================================================
 
 /**
  * @brief Initialize socket subsystem (required on Windows, no-op on Linux).
@@ -195,9 +195,9 @@ int socketErrno();
  */
 const char* socketStrerror(int err);
 
-// ============================================================================
-//  Thread Functions
-// ============================================================================
+//=========================================================================
+// Thread Functions
+//=========================================================================
 
 /**
  * @brief Create and start a new thread.
@@ -230,17 +230,29 @@ int threadDetach(ThreadHandle thread);
 bool threadJoinable(ThreadHandle thread);
 
 /**
- * @brief Sleep the current thread.
+ * @brief Sleep the current thread (low-level OS call).
  * @param ms Milliseconds to sleep.
  */
 void sleepMs(uint32_t ms);
 
+/**
+ * @brief Sleep the current thread.
+ * @param ms Milliseconds to sleep.
+ *
+ * Prefer this over std::this_thread::sleep_for in application code: it
+ * works on every supported platform, including MinGW builds that use the
+ * win32 (not posix) threading model.
+ */
+inline void sleepForMs(uint32_t ms) {
+    sleepMs(ms);
+}
+
 /** @brief Yield the current thread's time slice. */
 void threadYield();
 
-// ============================================================================
-//  Mutex Functions
-// ============================================================================
+//=========================================================================
+// Mutex Functions
+//=========================================================================
 
 /**
  * @brief Create a mutex.
@@ -276,9 +288,9 @@ int mutexUnlock(MutexHandle mutex);
  */
 int mutexTrylock(MutexHandle mutex);
 
-// ============================================================================
-//  Condition Variable Functions
-// ============================================================================
+//=========================================================================
+// Condition Variable Functions
+//=========================================================================
 
 /**
  * @brief Create a condition variable.
@@ -324,9 +336,9 @@ int condSignal(CondHandle cond);
  */
 int condBroadcast(CondHandle cond);
 
-// ============================================================================
-//  Time Functions
-// ============================================================================
+//=========================================================================
+// Time Functions
+//=========================================================================
 
 /**
  * @brief Get current monotonic time in milliseconds.
@@ -340,9 +352,9 @@ uint64_t monotonicMs();
  */
 uint64_t epochMs();
 
-// ============================================================================
-//  C++ RAII Wrappers
-// ============================================================================
+//=========================================================================
+// C++ RAII Wrappers
+//=========================================================================
 
 /**
  * @brief RAII mutex wrapper (similar to std::mutex).
@@ -599,13 +611,6 @@ private:
         delete wrapper;
     }
 };
-
-/**
- * @brief Sleep for the specified duration.
- */
-inline void sleepForMs(uint32_t ms) {
-    sleepMs(ms);
-}
 
 /**
  * @brief Yield current thread.

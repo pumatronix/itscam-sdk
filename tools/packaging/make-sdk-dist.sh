@@ -3,11 +3,12 @@
 # Stage a consumer-ready multi-platform SDK distribution and pack it as tar.gz.
 #
 # Layout (under dist/itscam-sdk-<version>/):
-#   VERSION.json, README.txt
+#   VERSION.json, README-sdk.md, README-sdk.en-US.md, README-repo.md, README.en-US.md, AGENTS.md, docs/
 #   csharp/              NuGet (linux-x64 + win-x64 + win-x86 native runtimes)
-#   linux-x64/cpp|c|python|go/
-#   win-x64/cpp|c|python|go/
-#   win-x86/cpp|c|python|go/
+#   linux-x64/cpp|c|python|go|java|nodejs/
+#   win-x64/ ...
+#   win-x86/ ...
+#   examples/            Example source (all languages); pre-built Wails GUI in examples/bin/
 #
 # Copyright (c) 2026 Pumatronix
 
@@ -18,6 +19,15 @@ CORE="$ROOT/src/core"
 PY="$ROOT/src/wrappers/python"
 CS="$ROOT/src/wrappers/csharp"
 GO="$ROOT/src/wrappers/go"
+JAVA="$ROOT/src/wrappers/java"
+NODEJS="$ROOT/src/wrappers/nodejs"
+EXAMPLES_CPP="$ROOT/src/examples"
+GO_EXAMPLES="$ROOT/src/wrappers/go/examples"
+GO_GUI_BIN="$GO_EXAMPLES/gui/build/bin"
+CSHARP_EXAMPLES="$ROOT/src/wrappers/csharp/examples"
+JAVA_EXAMPLES_SRC="$ROOT/src/wrappers/java/examples"
+PY_EXAMPLES="$ROOT/src/wrappers/python/examples"
+NODEJS_EXAMPLES="$ROOT/src/wrappers/nodejs/examples"
 VERSION_JSON="$ROOT/VERSION.json"
 VERSION_MK="$ROOT/tools/version/sdk-version.mk"
 
@@ -54,6 +64,9 @@ fields = {
     "SDK_GIT_SHA": data["gitSha"],
     "SDK_GIT_SHA_SHORT": data["gitShaShort"],
     "SDK_BUILD_DATE": data["buildDate"],
+    "NUGET_VERSION": data.get("nugetVersion", data["version"]),
+    "MAVEN_VERSION": data.get("mavenVersion", data["version"]),
+    "NPM_VERSION": data.get("npmVersion", data["version"]),
 }
 for key, value in fields.items():
     print(f"{key}={shlex.quote(str(value))}")
@@ -68,6 +81,8 @@ PY
         set +a
         SDK_VERSION_FULL="${SDK_VERSION_FULL:-$SDK_VERSION}"
         SDK_LIB_VERSION="${SDK_LIB_VERSION:-$SDK_VERSION}"
+        NUGET_VERSION="${NUGET_VERSION:-$SDK_VERSION}"
+        MAVEN_VERSION="${MAVEN_VERSION:-$SDK_VERSION}"
         return
     fi
     die "missing VERSION.json (run 'make version' first)"
@@ -87,7 +102,7 @@ stage_cpp_headers() {
         itscam_os.h
         itscam_jpeg_utils.h
         itscam_sdk_utils.h
-        itscam_rest_types.hpp
+        itscam_rest_types.h
     )
     for h in "${headers[@]}"; do
         cp "$CORE/$h" "$dest/"
@@ -267,6 +282,221 @@ stage_go_module() {
     fi
 }
 
+stage_java_jar() {
+    # Java JAR is platform-agnostic (native binaries are embedded inside it
+    # under META-INF/native/<os>-<arch>/), so we copy the same JAR to every
+    # platform directory for consumer convenience.
+    local dest="$1/java"
+    mkdir -p "$dest"
+
+    shopt -s nullglob
+    local jars=("$JAVA/itscam-sdk/target"/itscam-sdk-*.jar)
+    shopt -u nullglob
+
+    if [ "${#jars[@]}" -eq 0 ]; then
+        echo "make-sdk-dist: no Java JAR in $JAVA/itscam-sdk/target -- run 'make java-pack' (or 'make docker-java-pack') first to include Java in the dist; skipping." >&2
+        return 0
+    fi
+
+    cp "${jars[@]}" "$dest/"
+}
+
+write_consumer_cpp_makefile() {
+    local dest="$1"
+    cat >"$dest/Makefile" <<'EOF'
+# ITSCAM SDK C++ Examples -- consumer bundle Makefile (Linux x64)
+#
+# Run from the unpacked SDK tarball root:
+#   make -C examples/cpp
+#
+# Copyright (c) 2026 Pumatronix
+
+SDK_ROOT  := ../..
+INCLUDE   := $(SDK_ROOT)/linux-x64/cpp/include
+LIB_DIR   := $(SDK_ROOT)/linux-x64/cpp/lib
+BUILD_DIR := build
+
+CXX       ?= g++
+CXXFLAGS  := -std=c++17 -Wall -Wextra
+INCLUDES  := -I$(INCLUDE)
+LDFLAGS   := -L$(LIB_DIR) -litscam_sdk -lpthread -Wl,-rpath,'$$ORIGIN:$(LIB_DIR)'
+
+EXAMPLES := \
+	$(BUILD_DIR)/itscam_sdk_example \
+	$(BUILD_DIR)/itscam_rest_example \
+	$(BUILD_DIR)/itscam_cgi_example \
+	$(BUILD_DIR)/itscam_trigger_recorder
+
+.PHONY: all clean help
+
+all: $(EXAMPLES)
+
+$(BUILD_DIR):
+	@mkdir -p $@
+
+$(BUILD_DIR)/%: %.cpp | $(BUILD_DIR)
+	@echo "Building $(notdir $@)..."
+	$(CXX) $(CXXFLAGS) $(INCLUDES) $< -o $@ $(LDFLAGS)
+
+clean:
+	rm -rf $(BUILD_DIR)
+
+help:
+	@echo "Build C++ examples against the Linux x64 SDK in this bundle."
+	@echo "Usage: make -C examples/cpp [target]"
+EOF
+}
+
+write_csharp_example_csproj() {
+    local dest="$1"
+    local project="$2"
+    cat >"$dest/$project.csproj" <<EOF
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>Pumatronix.Itscam.Examples</RootNamespace>
+    <Nullable>disable</Nullable>
+    <LangVersion>9.0</LangVersion>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Pumatronix.Itscam.Sdk" Version="${NUGET_VERSION}" />
+  </ItemGroup>
+</Project>
+EOF
+}
+
+write_examples_readme() {
+    cat >"$STAGING/examples/README.txt" <<EOF
+ITSCAM SDK Examples (source)
+============================
+
+This directory contains example source code for every supported language.
+Build and run them against the SDK libraries shipped in this bundle.
+
+Pre-built binaries: only the Wails desktop viewer is included, under bin/.
+  bin/linux-x64/itscam-viewer
+  bin/win-x64/itscam-viewer.exe
+
+C++ (examples/cpp/)
+-------------------
+  make -C examples/cpp
+  ./examples/cpp/build/itscam_sdk_example 192.168.254.254
+  Link against ../linux-x64/cpp/lib (Linux) or ../win-x64/cpp/bin (Windows).
+
+Go CLI (examples/go/*.go)
+-------------------------
+  export LD_LIBRARY_PATH=\$(pwd)/linux-x64/go/itscam-sdk-go/native:\$LD_LIBRARY_PATH
+  go build -C examples/go -o capture_example capture_example.go
+
+Go Wails GUI (examples/go/gui/)
+-------------------------------
+  Pre-built: ./examples/bin/linux-x64/itscam-viewer
+  Rebuild from source: see examples/go/gui/README.md
+
+C# (examples/csharp/)
+---------------------
+  dotnet restore --source \$(pwd)/csharp
+  dotnet run --project examples/csharp/CaptureExample -- 192.168.254.254 admin 1234
+
+Java (examples/java/)
+---------------------
+  Install the SDK JAR first:
+    mvn install:install-file \\
+        -Dfile=linux-x64/java/itscam-sdk-${MAVEN_VERSION}.jar \\
+        -DgroupId=com.pumatronix -DartifactId=itscam-sdk \\
+        -Dversion=${MAVEN_VERSION} -Dpackaging=jar
+  javac -cp ~/.m2/repository/com/pumatronix/itscam-sdk/${MAVEN_VERSION}/itscam-sdk-${MAVEN_VERSION}.jar \\
+        examples/java/src/main/java/com/pumatronix/itscam/examples/CaptureExample.java
+  java -cp ... com.pumatronix.itscam.examples.CaptureExample 192.168.254.254 1234
+
+Python (examples/python/)
+-------------------------
+  pip install linux-x64/python/itscam-*.whl
+  python3 examples/python/capture_example.py 192.168.254.254
+
+Node.js (examples/nodejs/)
+--------------------------
+  npm install ./linux-x64/nodejs/pumatronix-itscam-sdk-${NPM_VERSION}.tgz
+  node examples/nodejs/capture-example.js 192.168.254.254 1234
+EOF
+}
+
+stage_examples_source() {
+    local dest="$STAGING/examples"
+    echo "=== Staging example source ==="
+
+    mkdir -p "$dest/cpp"
+    cp "$EXAMPLES_CPP"/*.cpp "$dest/cpp/"
+    write_consumer_cpp_makefile "$dest/cpp"
+    if [ -f "$EXAMPLES_CPP/README.md" ]; then
+        cp "$EXAMPLES_CPP/README.md" "$dest/cpp/"
+    fi
+
+    mkdir -p "$dest/go"
+    cp "$GO_EXAMPLES"/capture_example.go \
+       "$GO_EXAMPLES"/rest_example.go \
+       "$GO_EXAMPLES"/cgi_snapshot_example.go \
+       "$dest/go/"
+    mkdir -p "$dest/go/gui"
+    tar -C "$GO_EXAMPLES/gui" --exclude='./build' -cf - . | tar -C "$dest/go/gui" -xf -
+
+    local csharp_projects=(
+        CaptureExample
+        MjpegGrabberExample
+        SoftwareTriggerSnapshotExample
+        BinaryCaptureExample
+    )
+    for project in "${csharp_projects[@]}"; do
+        mkdir -p "$dest/csharp/$project"
+        cp "$CSHARP_EXAMPLES/$project/Program.cs" "$dest/csharp/$project/"
+        write_csharp_example_csproj "$dest/csharp/$project" "$project"
+    done
+
+    mkdir -p "$dest/java"
+    cp -r "$JAVA_EXAMPLES_SRC/src" "$dest/java/"
+
+    mkdir -p "$dest/python"
+    cp "$PY_EXAMPLES"/*.py "$dest/python/"
+
+    mkdir -p "$dest/nodejs"
+    cp "$NODEJS_EXAMPLES"/*.js "$dest/nodejs/"
+
+    write_examples_readme
+}
+
+stage_wails_gui_binaries() {
+    local dest="$STAGING/examples/bin"
+    echo "=== Staging pre-built Wails GUI ==="
+
+    require_file "$GO_GUI_BIN/linux/itscam-viewer"
+    require_file "$GO_GUI_BIN/windows/itscam-viewer.exe"
+
+    mkdir -p "$dest/linux-x64" "$dest/win-x64"
+    cp "$GO_GUI_BIN/linux/itscam-viewer" "$dest/linux-x64/"
+    cp "$GO_GUI_BIN/windows/itscam-viewer.exe" "$dest/win-x64/"
+}
+
+stage_nodejs_tarball() {
+    # The Node.js tarball is platform-aware (native binaries staged under
+    # native/<platform>-<arch>/) but the published artefact ships every
+    # supported platform together, so a single tarball lands in every
+    # platform dir.
+    local dest="$1/nodejs"
+    mkdir -p "$dest"
+
+    shopt -s nullglob
+    local tgzs=("$NODEJS"/pumatronix-itscam-sdk-*.tgz)
+    shopt -u nullglob
+
+    if [ "${#tgzs[@]}" -eq 0 ]; then
+        echo "make-sdk-dist: no Node.js tarball in $NODEJS -- run 'make nodejs-pack' (or 'make docker-nodejs-pack') first to include Node.js in the dist; skipping." >&2
+        return 0
+    fi
+
+    cp "${tgzs[@]}" "$dest/"
+}
+
 stage_linux_platform() {
     local dest="$STAGING/linux-x64"
     mkdir -p "$dest"
@@ -275,6 +505,8 @@ stage_linux_platform() {
     stage_c_headers "$dest"
     stage_python_wheel_linux "$dest"
     stage_go_module "$dest" "" ""
+    stage_java_jar "$dest"
+    stage_nodejs_tarball "$dest"
 }
 
 stage_windows_x64_platform() {
@@ -285,6 +517,8 @@ stage_windows_x64_platform() {
     stage_c_headers "$dest"
     stage_python_wheel_windows "$dest" "$WIN_X64_DLL" "win_amd64"
     stage_go_module "$dest" "$WIN_X64_DLL" "$WIN_X64_IMPLIB"
+    stage_java_jar "$dest"
+    stage_nodejs_tarball "$dest"
 }
 
 stage_windows_x86_platform() {
@@ -295,75 +529,278 @@ stage_windows_x86_platform() {
     stage_c_headers "$dest"
     stage_python_wheel_windows "$dest" "$WIN_X86_DLL" "win32"
     stage_go_module "$dest" "$WIN_X86_DLL" "$WIN_X86_IMPLIB"
+    stage_java_jar "$dest"
+    stage_nodejs_tarball "$dest"
 }
 
-write_readme() {
-    cat >"$STAGING/README.txt" <<EOF
-ITSCAM Client SDK ${SDK_VERSION_FULL}
-=====================================
+stage_documentation() {
+    echo "=== Staging documentation ==="
+    cp "$ROOT/README.md" "$STAGING/README-repo.md"
+    cp "$ROOT/README.en-US.md" \
+       "$ROOT/AGENTS.md" \
+       "$STAGING/"
+    cp -r "$ROOT/docs" "$STAGING/"
+}
 
-Consumer bundle produced by: make sdk-dist
+write_sdk_readme() {
+    cat >"$STAGING/README-sdk.md" <<EOF
+# ITSCAM Client SDK ${SDK_VERSION_FULL}
+
+[Português (Brasil)](README-sdk.md) | [English (US)](README-sdk.en-US.md)
+
+Pacote consumer gerado por: \`make sdk-dist\`
+Commit Git: ${SDK_GIT_SHA}
+Data do build: ${SDK_BUILD_DATE}
+
+Plataformas: linux-x64, win-x64, win-x86
+Veja \`VERSION.json\` para metadados legíveis por máquina.
+
+## Documentação
+
+- **README-sdk.md** — este arquivo; layout do tarball e notas de instalação por linguagem
+- **README-sdk.en-US.md** — same in English (US)
+- **README-repo.md** — hub de navegação e quick-link matrix do repositório GitHub (PT-BR)
+- **README.en-US.md** — mesmo hub, em inglês (US)
+- **AGENTS.md** — briefing para AI coding agents que integram o SDK
+- **docs/** — guias chapter-style (getting started, API clients, wrappers, ...)
+
+## Layout
+
+- \`csharp/\` — NuGet (multi-RID: linux-x64 + win-x64 + win-x86 native binaries)
+- \`examples/\` — source dos examples para todas as linguagens; Wails GUI pré-compilado em \`examples/bin/\`
+- \`linux-x64/\` — headers C/C++ + \`.so\`, wheel Python, módulo Go, JAR Java, tarball npm
+- \`win-x64/\` — headers C/C++ + \`.dll\`/\`.a\` (64-bit), wheel Python, módulo Go, JAR Java, tarball npm
+- \`win-x86/\` — headers C/C++ + \`.dll\`/\`.a\` (32-bit), wheel Python, módulo Go, JAR Java, tarball npm
+
+## Examples
+
+\`examples/\` inclui source para C++, Go, C#, Java, Python e Node.js.
+Veja \`examples/README.txt\` para instruções de build/execução por linguagem.
+
+O viewer desktop Wails é o único binary de example pré-compilado:
+
+- \`examples/bin/linux-x64/itscam-viewer\`
+- \`examples/bin/win-x64/itscam-viewer.exe\`
+
+Início rápido (Wails GUI):
+
+\`\`\`bash
+./examples/bin/linux-x64/itscam-viewer          # Linux
+examples\\bin\\win-x64\\itscam-viewer.exe       # Windows 64-bit
+\`\`\`
+
+## C# / .NET
+
+\`\`\`bash
+dotnet add package Pumatronix.Itscam.Sdk --source \$(pwd)/csharp
+\`\`\`
+
+## Linux C / C++
+
+Headers: \`linux-x64/cpp/include/\`
+Library: \`linux-x64/cpp/lib/\` (link \`-litscam_sdk -lpthread\`)
+
+\`\`\`bash
+g++ -std=c++17 -Ilinux-x64/cpp/include -c your_app.cpp
+g++ your_app.o -Llinux-x64/cpp/lib -litscam_sdk -lpthread \\
+    -Wl,-rpath,'\$ORIGIN/linux-x64/cpp/lib' -o your_app
+\`\`\`
+
+## Linux C API
+
+Headers: \`linux-x64/c/include/c_api/\`
+Library: \`linux-x64/c/lib/\`
+
+## Linux Python
+
+\`\`\`bash
+pip install linux-x64/python/itscam-*.whl
+\`\`\`
+
+## Linux Go
+
+\`\`\`bash
+export LD_LIBRARY_PATH=\$(pwd)/linux-x64/go/itscam-sdk-go/native:\$LD_LIBRARY_PATH
+go build -C linux-x64/go/itscam-sdk-go ./...
+\`\`\`
+
+## Windows C / C++
+
+Headers: \`win-x64/cpp/include/\`
+Binaries: \`win-x64/cpp/bin/itscam_sdk.dll\` + \`libitscam_sdk.a\`
+
+Link com \`libitscam_sdk.a\` e distribua \`itscam_sdk.dll\` junto do \`.exe\`.
+
+## Windows C API
+
+Headers: \`win-x64/c/include/c_api/\`
+Binaries: \`win-x64/c/bin/\`
+
+## Windows Python
+
+\`\`\`bash
+pip install win-x64/python/itscam-*.whl    # 64-bit
+pip install win-x86/python/itscam-*.whl    # 32-bit
+\`\`\`
+
+## Windows Go
+
+Copie \`win-x64/go/itscam-sdk-go\` ou \`win-x86/go/itscam-sdk-go\` para o seu projeto.
+Build no Windows com CGO; \`native/itscam_sdk.dll\` deve estar no PATH ou ao lado do \`.exe\`.
+
+## Java (qualquer plataforma)
+
+O JAR contém native libraries para linux-x64, win-x64, win-x86, etc.
+embutidas em \`META-INF/native/<os>-<arch>/\`; sem compilação JNI.
+
+\`\`\`bash
+mvn install:install-file \\
+    -Dfile=linux-x64/java/itscam-sdk-${SDK_VERSION}.jar \\
+    -DgroupId=com.pumatronix \\
+    -DartifactId=itscam-sdk \\
+    -Dversion=${SDK_VERSION} \\
+    -Dpackaging=jar
+\`\`\`
+
+Depois declare \`com.pumatronix:itscam-sdk:${SDK_VERSION}\` + JNA 5.14+ no \`pom.xml\`.
+
+## Node.js (qualquer plataforma)
+
+\`\`\`bash
+npm install ./linux-x64/nodejs/pumatronix-itscam-sdk-${SDK_VERSION}.tgz
+\`\`\`
+
+Depois: \`const { ItscamCgiClient } = require('@pumatronix/itscam-sdk');\`
+EOF
+
+    cat >"$STAGING/README-sdk.en-US.md" <<EOF
+# ITSCAM Client SDK ${SDK_VERSION_FULL}
+
+[Português (Brasil)](README-sdk.md) | [English (US)](README-sdk.en-US.md)
+
+Consumer bundle produced by: \`make sdk-dist\`
 Git commit: ${SDK_GIT_SHA}
 Build date: ${SDK_BUILD_DATE}
 
 Platforms: linux-x64, win-x64, win-x86
-See VERSION.json for machine-readable metadata.
+See \`VERSION.json\` for machine-readable metadata.
 
-Layout
-------
-  csharp/       NuGet (multi-RID: linux-x64 + win-x64 + win-x86 native binaries)
-  linux-x64/    C/C++ headers + .so, Python wheel, Go module
-  win-x64/      C/C++ headers + .dll/.a (64-bit), Python wheel, Go module
-  win-x86/      C/C++ headers + .dll/.a (32-bit), Python wheel, Go module
+## Documentation
 
-C# / .NET
----------
-  dotnet add package Pumatronix.Itscam.Sdk --source \$(pwd)/csharp
+- **README-sdk.md** — tarball layout and per-language install notes (Portuguese)
+- **README-sdk.en-US.md** — this file
+- **README-repo.md** — navigation hub and quick-link matrix from the GitHub repo (Portuguese)
+- **README.en-US.md** — same hub, in English (US)
+- **AGENTS.md** — briefing for AI coding agents integrating the SDK
+- **docs/** — chapter-style guides (getting started, API clients, wrappers, ...)
 
-Linux C / C++
--------------
-  Headers: linux-x64/cpp/include/
-  Library: linux-x64/cpp/lib/       (link -litscam_sdk -lpthread)
+## Layout
 
-  g++ -std=c++17 -Ilinux-x64/cpp/include -c your_app.cpp
-  g++ your_app.o -Llinux-x64/cpp/lib -litscam_sdk -lpthread \\
-      -Wl,-rpath,'\$ORIGIN/linux-x64/cpp/lib' -o your_app
+- \`csharp/\` — NuGet (multi-RID: linux-x64 + win-x64 + win-x86 native binaries)
+- \`examples/\` — example source for all languages; pre-built Wails GUI in \`examples/bin/\`
+- \`linux-x64/\` — C/C++ headers + \`.so\`, Python wheel, Go module, Java JAR, npm tarball
+- \`win-x64/\` — C/C++ headers + \`.dll\`/\`.a\` (64-bit), Python wheel, Go module, Java JAR, npm tarball
+- \`win-x86/\` — C/C++ headers + \`.dll\`/\`.a\` (32-bit), Python wheel, Go module, Java JAR, npm tarball
 
-Linux C API
------------
-  Headers: linux-x64/c/include/c_api/
-  Library: linux-x64/c/lib/
+## Examples
 
-Linux Python
-------------
-  pip install linux-x64/python/itscam-*.whl
+\`examples/\` ships source code for C++, Go, C#, Java, Python, and Node.js.
+See \`examples/README.txt\` for build/run instructions per language.
 
-Linux Go
---------
-  export LD_LIBRARY_PATH=\$(pwd)/linux-x64/go/itscam-sdk-go/native:\$LD_LIBRARY_PATH
-  go build -C linux-x64/go/itscam-sdk-go ./...
+The Wails desktop viewer is the only pre-built example binary:
 
-Windows C / C++
------------------
-  Headers: win-x64/cpp/include/
-  Binaries: win-x64/cpp/bin/itscam_sdk.dll + libitscam_sdk.a
+- \`examples/bin/linux-x64/itscam-viewer\`
+- \`examples/bin/win-x64/itscam-viewer.exe\`
 
-  Link with libitscam_sdk.a and ship itscam_sdk.dll next to your .exe.
+Quick start (Wails GUI):
 
-Windows C API
--------------
-  Headers: win-x64/c/include/c_api/
-  Binaries: win-x64/c/bin/
+\`\`\`bash
+./examples/bin/linux-x64/itscam-viewer          # Linux
+examples\\bin\\win-x64\\itscam-viewer.exe       # Windows 64-bit
+\`\`\`
 
-Windows Python
---------------
-  pip install win-x64/python/itscam-*.whl    (64-bit)
-  pip install win-x86/python/itscam-*.whl    (32-bit)
+## C# / .NET
 
-Windows Go
-----------
-  Copy win-x64/go/itscam-sdk-go or win-x86/go/itscam-sdk-go into your project.
-  Build on Windows with CGO; native/itscam_sdk.dll must be on PATH or beside the .exe.
+\`\`\`bash
+dotnet add package Pumatronix.Itscam.Sdk --source \$(pwd)/csharp
+\`\`\`
+
+## Linux C / C++
+
+Headers: \`linux-x64/cpp/include/\`
+Library: \`linux-x64/cpp/lib/\` (link \`-litscam_sdk -lpthread\`)
+
+\`\`\`bash
+g++ -std=c++17 -Ilinux-x64/cpp/include -c your_app.cpp
+g++ your_app.o -Llinux-x64/cpp/lib -litscam_sdk -lpthread \\
+    -Wl,-rpath,'\$ORIGIN/linux-x64/cpp/lib' -o your_app
+\`\`\`
+
+## Linux C API
+
+Headers: \`linux-x64/c/include/c_api/\`
+Library: \`linux-x64/c/lib/\`
+
+## Linux Python
+
+\`\`\`bash
+pip install linux-x64/python/itscam-*.whl
+\`\`\`
+
+## Linux Go
+
+\`\`\`bash
+export LD_LIBRARY_PATH=\$(pwd)/linux-x64/go/itscam-sdk-go/native:\$LD_LIBRARY_PATH
+go build -C linux-x64/go/itscam-sdk-go ./...
+\`\`\`
+
+## Windows C / C++
+
+Headers: \`win-x64/cpp/include/\`
+Binaries: \`win-x64/cpp/bin/itscam_sdk.dll\` + \`libitscam_sdk.a\`
+
+Link with \`libitscam_sdk.a\` and ship \`itscam_sdk.dll\` next to your \`.exe\`.
+
+## Windows C API
+
+Headers: \`win-x64/c/include/c_api/\`
+Binaries: \`win-x64/c/bin/\`
+
+## Windows Python
+
+\`\`\`bash
+pip install win-x64/python/itscam-*.whl    # 64-bit
+pip install win-x86/python/itscam-*.whl    # 32-bit
+\`\`\`
+
+## Windows Go
+
+Copy \`win-x64/go/itscam-sdk-go\` or \`win-x86/go/itscam-sdk-go\` into your project.
+Build on Windows with CGO; \`native/itscam_sdk.dll\` must be on PATH or beside the \`.exe\`.
+
+## Java (any platform)
+
+The JAR contains native libraries for linux-x64, win-x64, win-x86, etc.
+embedded under \`META-INF/native/<os>-<arch>/\`; no JNI compilation needed.
+
+\`\`\`bash
+mvn install:install-file \\
+    -Dfile=linux-x64/java/itscam-sdk-${SDK_VERSION}.jar \\
+    -DgroupId=com.pumatronix \\
+    -DartifactId=itscam-sdk \\
+    -Dversion=${SDK_VERSION} \\
+    -Dpackaging=jar
+\`\`\`
+
+Then declare \`com.pumatronix:itscam-sdk:${SDK_VERSION}\` + JNA 5.14+ in your \`pom.xml\`.
+
+## Node.js (any platform)
+
+\`\`\`bash
+npm install ./linux-x64/nodejs/pumatronix-itscam-sdk-${SDK_VERSION}.tgz
+\`\`\`
+
+Then: \`const { ItscamCgiClient } = require('@pumatronix/itscam-sdk');\`
 EOF
 }
 
@@ -388,8 +825,11 @@ main() {
     stage_linux_platform
     stage_windows_x64_platform
     stage_windows_x86_platform
+    stage_examples_source
+    stage_wails_gui_binaries
+    stage_documentation
     cp "$ROOT/VERSION.json" "$STAGING/VERSION.json"
-    write_readme
+    write_sdk_readme
 
     mkdir -p "$DIST_ROOT"
     rm -f "$ARCHIVE"

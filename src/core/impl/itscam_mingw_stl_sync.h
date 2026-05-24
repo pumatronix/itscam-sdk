@@ -1,5 +1,5 @@
 /*
- *  itscam_mingw_stl_sync.hpp
+ *  itscam_mingw_stl_sync.h
  *
  *  Minimal std::thread / mutex / condition_variable shims for MinGW builds
  *  that use the win32 (not posix) threading model.  libstdc++ omits <thread>
@@ -9,8 +9,8 @@
  *
  *  Copyright (c) 2026 Pumatronix
  */
-#ifndef ITSCAM_MINGW_STL_SYNC_HPP
-#define ITSCAM_MINGW_STL_SYNC_HPP
+#ifndef ITSCAM_MINGW_STL_SYNC_H
+#define ITSCAM_MINGW_STL_SYNC_H
 
 #include <chrono>
 #include <cstdint>
@@ -183,4 +183,4 @@ inline void call_once(once_flag& flag, Callable&& fn) {
 
 } // namespace std
 
-#endif // ITSCAM_MINGW_STL_SYNC_HPP
+#endif // ITSCAM_MINGW_STL_SYNC_H

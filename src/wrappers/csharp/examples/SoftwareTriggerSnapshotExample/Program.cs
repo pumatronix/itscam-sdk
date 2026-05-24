@@ -3,19 +3,17 @@
 //
 // Example: Software-Triggered Snapshot Loop
 //
-// Demonstrates the SDK's REST surfaces (when credentials are supplied):
+// Demonstrates the SDK's typed REST surface with partial serialization:
 //
-//   * GetProfilesAsync() (typed) -- read-only inspection of profile names
-//     and ids.
-//   * PatchJsonAsync() (partial PUT) -- the correct way to change camera
-//     configuration.  The ITSCAM daemon merges only the supplied fields;
-//     sending back a full GET response body is rejected with HTTP 500 on
-//     PUT /api/image/profiles/{id}.
+//   * GetProfilesAsync() -- read profile names and ids.
+//   * UpdateProfileByIdAsync() -- disable trigger and configure exposure
+//     using typed partial structs.
+//   * SetOcrConfigAsync() / SetClassifierConfigAsync() -- enable recognition.
 //
 // When --user and --password are supplied the example also:
 //
 //   1. Logs in to the REST API (REST always requires auth).
-//   2. Patches day/night profiles: trigger off, 2 exposure steps.
+//   2. Updates day/night profiles: trigger off, 2 exposure steps.
 //   3. Enables Jidosha OCR and the vehicle classifier.
 //
 // The snapshot loop always runs via snapshot.cgi (ItscamCgiClient).
@@ -193,17 +191,17 @@ class Program
             targeted.AddRange(profiles);
         }
 
-        var steps = new JsonArray();
+        var steps = new List<Something>();
         for (int i = 0; i < TargetExposureCount; ++i)
             steps.Add(DefaultExposureStep());
 
-        var patch = new JsonObject
+        var patch = new ProfileConfig
         {
-            ["trigger"] = new JsonObject { ["enabled"] = false },
-            ["multipleExposures"] = new JsonObject
+            Trigger = new Trigger { Enabled = false },
+            MultipleExposures = new MultipleExposures
             {
-                ["enabled"]  = true,
-                ["settings"] = steps,
+                Enabled  = true,
+                Settings = steps,
             },
         };
 
@@ -212,40 +210,39 @@ class Program
             string name = profile.Name ?? "(unnamed)";
             Console.WriteLine($"  Configuring profile '{name}' (id={profile.Id})...");
 
-            await rest.PatchJsonAsync(
-                $"/api/image/profiles/{profile.Id}", patch);
+            await rest.UpdateProfileByIdAsync((int)profile.Id, patch);
             Console.WriteLine(
                 $"    -> trigger disabled, {TargetExposureCount} exposures configured.");
         }
     }
 
-    static JsonObject DefaultExposureStep() => new JsonObject
+    static Something DefaultExposureStep() => new Something
     {
-        ["shutter"] = new JsonObject
+        Shutter = new Shutter
         {
-            ["percentageOfCurrent"] = true,
-            ["value"]               = 100,
+            PercentageOfCurrent = true,
+            Value               = 100,
         },
-        ["gain"] = new JsonObject
+        Gain = new SettingGain
         {
-            ["percentageOfCurrent"] = true,
-            ["value"]               = 100,
+            PercentageOfCurrent = true,
+            Value               = 100,
         },
     };
 
     static async Task EnableJidoshaAndClassifier(ItscamRestClient rest)
     {
         Console.WriteLine("\n[REST] Enabling Jidosha OCR engine...");
-        await rest.PatchJsonAsync("/api/equipment/ocr", new JsonObject
+        await rest.SetOcrConfigAsync(new OcrConfig
         {
-            ["ocr"] = new JsonObject { ["enabled"] = true },
+            Ocr = new OcrConfigOcr { Enabled = true },
         });
         Console.WriteLine("  -> ocr.enabled = true");
 
         Console.WriteLine("\n[REST] Enabling vehicle Classifier...");
-        await rest.PatchJsonAsync("/api/equipment/classifier", new JsonObject
+        await rest.SetClassifierConfigAsync(new ClassifierConfig
         {
-            ["classifier"] = new JsonObject { ["enabled"] = true },
+            Classifier = new ClassifierConfigClassifier { Enabled = true },
         });
         Console.WriteLine("  -> classifier.enabled = true");
     }

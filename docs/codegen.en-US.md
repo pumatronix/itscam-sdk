@@ -7,7 +7,7 @@ The ITSCAM REST surface (and its sibling C# / Python / Go wrappers) ships **type
 ```
 tools/codegen/spec/itscam-<version>.yaml          # versioned snapshot(s)
 tools/codegen/spec/default.yaml                   # pointer to the active one
-src/core/itscam_rest_types.hpp                    # generated C++
+src/core/itscam_rest_types.h                    # generated C++
 src/wrappers/csharp/Itscam.Sdk/RestTypes/RestTypes.g.cs   # generated C#
 src/wrappers/python/itscam/rest_types.py          # generated Python
 src/wrappers/go/itscam/rest_types.go              # generated Go
@@ -94,7 +94,7 @@ make codegen OUT_DIR=/tmp/itscam-gen
 ## Compatibility expectations
 
 * **Forward-compatible reads.** All four target languages (`nlohmann::json`, `System.Text.Json`, Python `dataclasses`, Go structs) tolerate **unknown JSON fields**, so a camera running a firmware newer than the bundled snapshot will still deserialise into the SDK types -- the new fields are silently dropped.
-* **Caveat on writes.** Typed setters round-trip the whole object, so fields the SDK does not know about are lost on a `setXxxConfig()` call. If that matters (e.g. you are PUT'ing a partial update), fall back to the generic `httpGet`/`httpPut` escape hatch or regenerate types against your firmware.
+* **Caveat on writes.** Typed setters use partial serialization -- unset/nullopt fields are omitted from the PUT body. However, fields the SDK does not *know* about (i.e. fields added by newer firmware but absent from the bundled snapshot) cannot be preserved by a typed setter. If you need to leave unknown fields untouched, use the generic `httpGet`/`httpPut` escape hatch or regenerate types against your firmware.
 * **Backward-compatible reads.** A camera running an older firmware works as long as none of the fields the SDK actually *uses* have disappeared. If a required field is missing the typed getter surfaces `Error::Code::InvalidParameter` with a `schema mismatch: ...` message -- the cue to regenerate, or to consult the raw JSON via the generic verbs.
 
 ## Gaps and patches in the snapshot

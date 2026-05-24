@@ -314,7 +314,7 @@ using socket_t = int;
 #include <map>
 #include <memory>
 #if defined(ITSCAM_MINGW_WIN32_THREADS)
-#include "../impl/itscam_mingw_stl_sync.hpp"
+#include "../impl/itscam_mingw_stl_sync.h"
 #include <mutex> // lock_guard, unique_lock templates only
 #else
 #include <mutex>

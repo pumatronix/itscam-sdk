@@ -1164,6 +1164,97 @@ namespace itscam {
     void from_json(json const & j, Scheme & x);
     void to_json(json & j, Scheme const & x);
 
+    // Partial-JSON serializers (omit nullopt fields for typed partial PUT)
+    json to_partial_json(Exposition const & x);
+    json to_partial_json(AdvancedIris const & x);
+    json to_partial_json(AdvancedWhitebalance const & x);
+    json to_partial_json(Advanced const & x);
+    json to_partial_json(WhitebalanceClass const & x);
+    json to_partial_json(Color const & x);
+    json to_partial_json(ShutterClass const & x);
+    json to_partial_json(ExposureIris const & x);
+    json to_partial_json(Roi1Class const & x);
+    json to_partial_json(Level const & x);
+    json to_partial_json(Exposure const & x);
+    json to_partial_json(Hdr const & x);
+    json to_partial_json(ProfileConfigLens const & x);
+    json to_partial_json(MovFilter const & x);
+    json to_partial_json(Power const & x);
+    json to_partial_json(Flash const & x);
+    json to_partial_json(SettingGain const & x);
+    json to_partial_json(Shutter const & x);
+    json to_partial_json(Something const & x);
+    json to_partial_json(MultipleExposures const & x);
+    json to_partial_json(Overlay const & x);
+    json to_partial_json(Lower const & x);
+    json to_partial_json(Transitions const & x);
+    json to_partial_json(Trigger const & x);
+    json to_partial_json(ProfileConfigWhitebalance const & x);
+    json to_partial_json(ProfileConfig const & x);
+    json to_partial_json(OcrConfigOcr const & x);
+    json to_partial_json(OcrConfig const & x);
+    json to_partial_json(Voting const & x);
+    json to_partial_json(AnalyticsConfig const & x);
+    json to_partial_json(SpeedCalibrationRegion1 const & x);
+    json to_partial_json(TriggerRegion0 const & x);
+    json to_partial_json(ClassifierConfigClassifier const & x);
+    json to_partial_json(ClassifierConfig const & x);
+    json to_partial_json(AutoFocusRoi const & x);
+    json to_partial_json(AutoFocus const & x);
+    json to_partial_json(H264Main const & x);
+    json to_partial_json(H264 const & x);
+    json to_partial_json(MjpegMain const & x);
+    json to_partial_json(Mjpeg const & x);
+    json to_partial_json(StreamConfig const & x);
+    json to_partial_json(Scenario1Crop const & x);
+    json to_partial_json(Scenario2Crop const & x);
+    json to_partial_json(SnapshotCrop const & x);
+    json to_partial_json(Misc const & x);
+    json to_partial_json(Ae const & x);
+    json to_partial_json(Fps const & x);
+    json to_partial_json(Gps const & x);
+    json to_partial_json(Isp const & x);
+    json to_partial_json(MiscVolatileLens const & x);
+    json to_partial_json(Profile const & x);
+    json to_partial_json(MiscVolatile const & x);
+    json to_partial_json(Itscampro const & x);
+    json to_partial_json(ItscamproConfig const & x);
+    json to_partial_json(ItscamproStatus const & x);
+    json to_partial_json(Sign const & x);
+    json to_partial_json(ImageSignConfig const & x);
+    json to_partial_json(Local const & x);
+    json to_partial_json(Transfer const & x);
+    json to_partial_json(Ftp const & x);
+    json to_partial_json(FtpConfig const & x);
+    json to_partial_json(LinceConfig const & x);
+    json to_partial_json(LinceStatus const & x);
+    json to_partial_json(VehicleIndicator const & x);
+    json to_partial_json(VehicleIndicatorConfig const & x);
+    json to_partial_json(ConfigCgi const & x);
+    json to_partial_json(Auth const & x);
+    json to_partial_json(Cougar const & x);
+    json to_partial_json(Itscamprotocol const & x);
+    json to_partial_json(ProtocolsConfig const & x);
+    json to_partial_json(ProfileTransitioner const & x);
+    json to_partial_json(Region0 const & x);
+    json to_partial_json(LanesConfig const & x);
+    json to_partial_json(IoConfig const & x);
+    json to_partial_json(IoBasic const & x);
+    json to_partial_json(Part const & x);
+    json to_partial_json(Body const & x);
+    json to_partial_json(Header const & x);
+    json to_partial_json(Resolution const & x);
+    json to_partial_json(Jpeg const & x);
+    json to_partial_json(Persistency const & x);
+    json to_partial_json(Url const & x);
+    json to_partial_json(RestApiClientConfig const & x);
+    json to_partial_json(RestApiClientStatus const & x);
+    json to_partial_json(AnalyticsClassifier const & x);
+    json to_partial_json(AnalyticsOcr const & x);
+    json to_partial_json(Analytics const & x);
+    json to_partial_json(DeviceId const & x);
+    json to_partial_json(Licenses const & x);
+
     inline void from_json(json const & j, Exposition& x) {
         x.preferred_shutter = get_stack_optional<int64_t>(j, "preferredShutter");
         x.update_factor = get_stack_optional<double>(j, "updateFactor");
@@ -2610,5 +2701,835 @@ namespace itscam {
             default: throw std::runtime_error("Unexpected value in enumeration \"Scheme\": " + std::to_string(static_cast<int>(x)));
         }
     }
+    // ---- Partial-JSON serializers (generated) ----
+
+    inline json to_partial_json(Exposition const & x) {
+        json j = json::object();
+        if (x.preferred_shutter) j["preferredShutter"] = *x.preferred_shutter;
+        if (x.update_factor) j["updateFactor"] = *x.update_factor;
+        if (x.update_rate) j["updateRate"] = *x.update_rate;
+        return j;
+    }
+
+    inline json to_partial_json(AdvancedIris const & x) {
+        json j = json::object();
+        if (x.update_rate) j["updateRate"] = *x.update_rate;
+        return j;
+    }
+
+    inline json to_partial_json(AdvancedWhitebalance const & x) {
+        json j = json::object();
+        if (x.update_rate) j["updateRate"] = *x.update_rate;
+        return j;
+    }
+
+    inline json to_partial_json(Advanced const & x) {
+        json j = json::object();
+        if (x.exposition) j["exposition"] = to_partial_json(*x.exposition);
+        if (x.iris) j["iris"] = to_partial_json(*x.iris);
+        if (x.whitebalance) j["whitebalance"] = to_partial_json(*x.whitebalance);
+        return j;
+    }
+
+    inline json to_partial_json(WhitebalanceClass const & x) {
+        json j = json::object();
+        if (x.blue) j["blue"] = *x.blue;
+        if (x.green) j["green"] = *x.green;
+        if (x.red) j["red"] = *x.red;
+        return j;
+    }
+
+    inline json to_partial_json(Color const & x) {
+        json j = json::object();
+        if (x.blacklevel) j["blacklevel"] = *x.blacklevel;
+        if (x.brightness) j["brightness"] = *x.brightness;
+        if (x.contrast) j["contrast"] = *x.contrast;
+        if (x.gain) j["gain"] = to_partial_json(*x.gain);
+        if (x.gamma) j["gamma"] = *x.gamma;
+        if (x.saturation) j["saturation"] = *x.saturation;
+        return j;
+    }
+
+    inline json to_partial_json(ShutterClass const & x) {
+        json j = json::object();
+        if (x.automatic) j["automatic"] = *x.automatic;
+        if (x.fixed_value) j["fixedValue"] = *x.fixed_value;
+        if (x.max_value) j["maxValue"] = *x.max_value;
+        if (x.min_value) j["minValue"] = *x.min_value;
+        return j;
+    }
+
+    inline json to_partial_json(ExposureIris const & x) {
+        json j = json::object();
+        if (x.automatic) j["automatic"] = *x.automatic;
+        if (x.fixed_value) j["fixedValue"] = *x.fixed_value;
+        return j;
+    }
+
+    inline json to_partial_json(Roi1Class const & x) {
+        json j = json::object();
+        if (x.enabled) j["enabled"] = *x.enabled;
+        if (x.x0) j["x0"] = *x.x0;
+        if (x.x1) j["x1"] = *x.x1;
+        if (x.x2) j["x2"] = *x.x2;
+        if (x.x3) j["x3"] = *x.x3;
+        if (x.y0) j["y0"] = *x.y0;
+        if (x.y1) j["y1"] = *x.y1;
+        if (x.y2) j["y2"] = *x.y2;
+        if (x.y3) j["y3"] = *x.y3;
+        return j;
+    }
+
+    inline json to_partial_json(Level const & x) {
+        json j = json::object();
+        if (x.hold_time) j["holdTime"] = *x.hold_time;
+        if (x.mode) j["mode"] = *x.mode;
+        if (x.roi) j["roi"] = to_partial_json(*x.roi);
+        if (x.target_value) j["targetValue"] = *x.target_value;
+        if (x.update_rate) j["updateRate"] = *x.update_rate;
+        return j;
+    }
+
+    inline json to_partial_json(Exposure const & x) {
+        json j = json::object();
+        if (x.gain) j["gain"] = to_partial_json(*x.gain);
+        if (x.iris) j["iris"] = to_partial_json(*x.iris);
+        if (x.level) j["level"] = to_partial_json(*x.level);
+        if (x.shutter) j["shutter"] = to_partial_json(*x.shutter);
+        return j;
+    }
+
+    inline json to_partial_json(Hdr const & x) {
+        json j = json::object();
+        if (x.enable) j["enable"] = *x.enable;
+        return j;
+    }
+
+    inline json to_partial_json(ProfileConfigLens const & x) {
+        json j = json::object();
+        if (x.exchanger) j["exchanger"] = *x.exchanger;
+        if (x.focus) j["focus"] = *x.focus;
+        if (x.zf_mirror_profile0) j["zfMirrorProfile0"] = *x.zf_mirror_profile0;
+        if (x.zoom) j["zoom"] = *x.zoom;
+        return j;
+    }
+
+    inline json to_partial_json(MovFilter const & x) {
+        json j = json::object();
+        if (x.enabled) j["enabled"] = *x.enabled;
+        if (x.only_check) j["onlyCheck"] = *x.only_check;
+        if (x.roi) j["roi"] = to_partial_json(*x.roi);
+        if (x.threshold) j["threshold"] = *x.threshold;
+        return j;
+    }
+
+    inline json to_partial_json(Power const & x) {
+        json j = json::object();
+        if (x.out) j["out"] = *x.out;
+        if (x.percent) j["percent"] = *x.percent;
+        return j;
+    }
+
+    inline json to_partial_json(Flash const & x) {
+        json j = json::object();
+        if (x.power) {
+            json arr = json::array();
+            for (auto const & e : *x.power) arr.push_back(to_partial_json(e));
+            j["power"] = std::move(arr);
+        }
+        return j;
+    }
+
+    inline json to_partial_json(SettingGain const & x) {
+        json j = json::object();
+        if (x.percentage_of_current) j["percentageOfCurrent"] = *x.percentage_of_current;
+        if (x.value) j["value"] = *x.value;
+        return j;
+    }
+
+    inline json to_partial_json(Shutter const & x) {
+        json j = json::object();
+        if (x.percentage_of_current) j["percentageOfCurrent"] = *x.percentage_of_current;
+        if (x.value) j["value"] = *x.value;
+        return j;
+    }
+
+    inline json to_partial_json(Something const & x) {
+        json j = json::object();
+        if (x.flash) j["flash"] = to_partial_json(*x.flash);
+        if (x.gain) j["gain"] = to_partial_json(*x.gain);
+        if (x.shutter) j["shutter"] = to_partial_json(*x.shutter);
+        return j;
+    }
+
+    inline json to_partial_json(MultipleExposures const & x) {
+        json j = json::object();
+        if (x.enabled) j["enabled"] = *x.enabled;
+        if (x.settings) {
+            json arr = json::array();
+            for (auto const & e : *x.settings) arr.push_back(to_partial_json(e));
+            j["settings"] = std::move(arr);
+        }
+        return j;
+    }
+
+    inline json to_partial_json(Overlay const & x) {
+        json j = json::object();
+        if (x.enable) j["enable"] = *x.enable;
+        if (x.text) j["text"] = *x.text;
+        return j;
+    }
+
+    inline json to_partial_json(Lower const & x) {
+        json j = json::object();
+        if (x.end_time) j["endTime"] = *x.end_time;
+        if (x.hold_time) j["holdTime"] = *x.hold_time;
+        if (x.level) j["level"] = *x.level;
+        if (x.profile) j["profile"] = *x.profile;
+        if (x.start_time) j["startTime"] = *x.start_time;
+        return j;
+    }
+
+    inline json to_partial_json(Transitions const & x) {
+        json j = json::object();
+        if (x.lower) j["lower"] = to_partial_json(*x.lower);
+        if (x.upper) j["upper"] = to_partial_json(*x.upper);
+        return j;
+    }
+
+    inline json to_partial_json(Trigger const & x) {
+        json j = json::object();
+        if (x.enabled) j["enabled"] = *x.enabled;
+        if (x.event) j["event"] = *x.event;
+        if (x.minimum_interval) j["minimumInterval"] = *x.minimum_interval;
+        if (x.port) j["port"] = *x.port;
+        if (x.roi) j["roi"] = to_partial_json(*x.roi);
+        if (x.threshold) j["threshold"] = *x.threshold;
+        return j;
+    }
+
+    inline json to_partial_json(ProfileConfigWhitebalance const & x) {
+        json j = json::object();
+        if (x.automatic) j["automatic"] = *x.automatic;
+        if (x.weights) j["weights"] = to_partial_json(*x.weights);
+        return j;
+    }
+
+    inline json to_partial_json(ProfileConfig const & x) {
+        json j = json::object();
+        if (x.active) j["active"] = *x.active;
+        if (x.advanced) j["advanced"] = to_partial_json(*x.advanced);
+        if (x.color) j["color"] = to_partial_json(*x.color);
+        if (x.description) j["description"] = *x.description;
+        if (x.exposure) j["exposure"] = to_partial_json(*x.exposure);
+        if (x.hdr) j["hdr"] = to_partial_json(*x.hdr);
+        j["id"] = x.id;
+        if (x.lens) j["lens"] = to_partial_json(*x.lens);
+        if (x.mov_filter) j["movFilter"] = to_partial_json(*x.mov_filter);
+        if (x.multiple_exposures) j["multipleExposures"] = to_partial_json(*x.multiple_exposures);
+        if (x.name) j["name"] = *x.name;
+        if (x.overlay) j["overlay"] = to_partial_json(*x.overlay);
+        if (x.transitions) j["transitions"] = to_partial_json(*x.transitions);
+        if (x.trigger) j["trigger"] = to_partial_json(*x.trigger);
+        if (x.whitebalance) j["whitebalance"] = to_partial_json(*x.whitebalance);
+        return j;
+    }
+
+    inline json to_partial_json(OcrConfigOcr const & x) {
+        json j = json::object();
+        if (x.avg_char_height) j["avgCharHeight"] = *x.avg_char_height;
+        if (x.avg_plate_angle) j["avgPlateAngle"] = *x.avg_plate_angle;
+        if (x.avg_plate_slant) j["avgPlateSlant"] = *x.avg_plate_slant;
+        if (x.classifier_expansion) j["classifierExpansion"] = *x.classifier_expansion;
+        if (x.country_code) j["countryCode"] = *x.country_code;
+        if (x.enabled) j["enabled"] = *x.enabled;
+        if (x.licensed) j["licensed"] = *x.licensed;
+        if (x.max_char_height) j["maxCharHeight"] = *x.max_char_height;
+        if (x.max_low_prob_chars) j["maxLowProbChars"] = *x.max_low_prob_chars;
+        if (x.max_plates) j["maxPlates"] = *x.max_plates;
+        if (x.min_char_height) j["minCharHeight"] = *x.min_char_height;
+        if (x.min_prob_per_char) j["minProbPerChar"] = *x.min_prob_per_char;
+        if (x.processing_mode) j["processingMode"] = *x.processing_mode;
+        if (x.processing_queue) j["processingQueue"] = *x.processing_queue;
+        if (x.processing_threads) j["processingThreads"] = *x.processing_threads;
+        if (x.processing_timeout) j["processingTimeout"] = *x.processing_timeout;
+        if (x.roi) j["roi"] = to_partial_json(*x.roi);
+        if (x.use_classifier_result) j["useClassifierResult"] = *x.use_classifier_result;
+        if (x.vehicle_type) j["vehicleType"] = *x.vehicle_type;
+        return j;
+    }
+
+    inline json to_partial_json(OcrConfig const & x) {
+        json j = json::object();
+        if (x.ocr) j["ocr"] = to_partial_json(*x.ocr);
+        return j;
+    }
+
+    inline json to_partial_json(Voting const & x) {
+        json j = json::object();
+        if (x.enabled) j["enabled"] = *x.enabled;
+        if (x.forward_without_plate_if_tracker) j["forwardWithoutPlateIfTracker"] = *x.forward_without_plate_if_tracker;
+        if (x.keep_best_only) j["keepBestOnly"] = *x.keep_best_only;
+        if (x.max_diff_chars) j["maxDiffChars"] = *x.max_diff_chars;
+        if (x.roi1) j["roi1"] = to_partial_json(*x.roi1);
+        if (x.roi2) j["roi2"] = to_partial_json(*x.roi2);
+        if (x.same_plate_debounce) j["samePlateDebounce"] = *x.same_plate_debounce;
+        if (x.use_classifier) j["useClassifier"] = *x.use_classifier;
+        return j;
+    }
+
+    inline json to_partial_json(AnalyticsConfig const & x) {
+        json j = json::object();
+        if (x.voting) j["voting"] = to_partial_json(*x.voting);
+        return j;
+    }
+
+    inline json to_partial_json(SpeedCalibrationRegion1 const & x) {
+        json j = json::object();
+        if (x.p0_top1_sz) j["p0top1sz"] = *x.p0_top1_sz;
+        if (x.x0) j["x0"] = *x.x0;
+        if (x.x1) j["x1"] = *x.x1;
+        if (x.x2) j["x2"] = *x.x2;
+        if (x.y0) j["y0"] = *x.y0;
+        if (x.y1) j["y1"] = *x.y1;
+        if (x.y2) j["y2"] = *x.y2;
+        return j;
+    }
+
+    inline json to_partial_json(TriggerRegion0 const & x) {
+        json j = json::object();
+        if (x.dir) j["dir"] = *x.dir;
+        if (x.x0) j["x0"] = *x.x0;
+        if (x.x1) j["x1"] = *x.x1;
+        if (x.y0) j["y0"] = *x.y0;
+        if (x.y1) j["y1"] = *x.y1;
+        return j;
+    }
+
+    inline json to_partial_json(ClassifierConfigClassifier const & x) {
+        json j = json::object();
+        if (x.enable_characteristics) j["enableCharacteristics"] = *x.enable_characteristics;
+        if (x.enabled) j["enabled"] = *x.enabled;
+        if (x.enable_speed) j["enableSpeed"] = *x.enable_speed;
+        if (x.first_only) j["firstOnly"] = *x.first_only;
+        if (x.licensed) j["licensed"] = *x.licensed;
+        if (x.min_probability) j["minProbability"] = *x.min_probability;
+        if (x.model_type) j["modelType"] = *x.model_type;
+        if (x.processing_queue) j["processingQueue"] = *x.processing_queue;
+        if (x.processing_threads) j["processingThreads"] = *x.processing_threads;
+        if (x.scene_type) j["sceneType"] = *x.scene_type;
+        if (x.speed_calibration_region1) j["speedCalibrationRegion1"] = to_partial_json(*x.speed_calibration_region1);
+        if (x.speed_calibration_region2) j["speedCalibrationRegion2"] = to_partial_json(*x.speed_calibration_region2);
+        if (x.trigger_enabled) j["triggerEnabled"] = *x.trigger_enabled;
+        if (x.trigger_region0) j["triggerRegion0"] = to_partial_json(*x.trigger_region0);
+        if (x.trigger_region1) j["triggerRegion1"] = to_partial_json(*x.trigger_region1);
+        if (x.trigger_region2) j["triggerRegion2"] = to_partial_json(*x.trigger_region2);
+        if (x.trigger_region3) j["triggerRegion3"] = to_partial_json(*x.trigger_region3);
+        return j;
+    }
+
+    inline json to_partial_json(ClassifierConfig const & x) {
+        json j = json::object();
+        if (x.classifier) j["classifier"] = to_partial_json(*x.classifier);
+        return j;
+    }
+
+    inline json to_partial_json(AutoFocusRoi const & x) {
+        json j = json::object();
+        if (x.center_x) j["centerX"] = *x.center_x;
+        if (x.center_y) j["centerY"] = *x.center_y;
+        if (x.height) j["height"] = *x.height;
+        if (x.width) j["width"] = *x.width;
+        return j;
+    }
+
+    inline json to_partial_json(AutoFocus const & x) {
+        json j = json::object();
+        if (x.coarse_step) j["coarseStep"] = *x.coarse_step;
+        if (x.contrast_threshold) j["contrastThreshold"] = *x.contrast_threshold;
+        if (x.roi) j["roi"] = to_partial_json(*x.roi);
+        if (x.run) j["run"] = *x.run;
+        if (x.update_rate) j["updateRate"] = *x.update_rate;
+        return j;
+    }
+
+    inline json to_partial_json(H264Main const & x) {
+        json j = json::object();
+        if (x.available) j["available"] = *x.available;
+        if (x.bitrate) j["bitrate"] = *x.bitrate;
+        if (x.control_rate) j["controlRate"] = *x.control_rate;
+        if (x.enabled) j["enabled"] = *x.enabled;
+        if (x.gop) j["gop"] = *x.gop;
+        if (x.profile) j["profile"] = *x.profile;
+        if (x.running) j["running"] = *x.running;
+        if (x.source) j["source"] = *x.source;
+        return j;
+    }
+
+    inline json to_partial_json(H264 const & x) {
+        json j = json::object();
+        if (x.available) j["available"] = *x.available;
+        if (x.encoder_type) j["encoder_type"] = *x.encoder_type;
+        if (x.main) j["main"] = to_partial_json(*x.main);
+        return j;
+    }
+
+    inline json to_partial_json(MjpegMain const & x) {
+        json j = json::object();
+        if (x.available) j["available"] = *x.available;
+        if (x.enabled) j["enabled"] = *x.enabled;
+        if (x.framerate) j["framerate"] = *x.framerate;
+        if (x.quality) j["quality"] = *x.quality;
+        return j;
+    }
+
+    inline json to_partial_json(Mjpeg const & x) {
+        json j = json::object();
+        if (x.available) j["available"] = *x.available;
+        if (x.main) j["main"] = to_partial_json(*x.main);
+        return j;
+    }
+
+    inline json to_partial_json(StreamConfig const & x) {
+        json j = json::object();
+        if (x.h264) j["h264"] = to_partial_json(*x.h264);
+        if (x.mjpeg) j["mjpeg"] = to_partial_json(*x.mjpeg);
+        return j;
+    }
+
+    inline json to_partial_json(Scenario1Crop const & x) {
+        json j = json::object();
+        if (x.x0) j["x0"] = *x.x0;
+        if (x.x1) j["x1"] = *x.x1;
+        if (x.y0) j["y0"] = *x.y0;
+        if (x.y1) j["y1"] = *x.y1;
+        return j;
+    }
+
+    inline json to_partial_json(Scenario2Crop const & x) {
+        json j = json::object();
+        if (x.x0) j["x0"] = *x.x0;
+        if (x.x1) j["x1"] = *x.x1;
+        if (x.y0) j["y0"] = *x.y0;
+        if (x.y1) j["y1"] = *x.y1;
+        return j;
+    }
+
+    inline json to_partial_json(SnapshotCrop const & x) {
+        json j = json::object();
+        if (x.enable) j["enable"] = *x.enable;
+        if (x.mode) j["mode"] = *x.mode;
+        if (x.x0) j["x0"] = *x.x0;
+        if (x.x1) j["x1"] = *x.x1;
+        if (x.y0) j["y0"] = *x.y0;
+        if (x.y1) j["y1"] = *x.y1;
+        return j;
+    }
+
+    inline json to_partial_json(Misc const & x) {
+        json j = json::object();
+        if (x.camera_orientation) j["cameraOrientation"] = *x.camera_orientation;
+        if (x.iris_hint) j["irisHint"] = *x.iris_hint;
+        if (x.jpeg_quality) j["jpegQuality"] = *x.jpeg_quality;
+        if (x.legacy_tsync_gpio) j["legacyTsyncGpio"] = *x.legacy_tsync_gpio;
+        if (x.scenario1_crop) j["scenario1Crop"] = to_partial_json(*x.scenario1_crop);
+        if (x.scenario1_overlay) j["scenario1Overlay"] = *x.scenario1_overlay;
+        if (x.scenario1_overlay_text_size) j["scenario1OverlayTextSize"] = *x.scenario1_overlay_text_size;
+        if (x.scenario2_crop) j["scenario2Crop"] = to_partial_json(*x.scenario2_crop);
+        if (x.scenario2_overlay) j["scenario2Overlay"] = *x.scenario2_overlay;
+        if (x.scenario2_overlay_text_size) j["scenario2OverlayTextSize"] = *x.scenario2_overlay_text_size;
+        if (x.scenario_overlay_color) j["scenarioOverlayColor"] = *x.scenario_overlay_color;
+        if (x.snapshot_crop) j["snapshotCrop"] = to_partial_json(*x.snapshot_crop);
+        return j;
+    }
+
+    inline json to_partial_json(Ae const & x) {
+        json j = json::object();
+        if (x.ctrl_mode) j["ctrlMode"] = *x.ctrl_mode;
+        if (x.last_run) j["lastRun"] = *x.last_run;
+        if (x.level) j["level"] = *x.level;
+        return j;
+    }
+
+    inline json to_partial_json(Fps const & x) {
+        json j = json::object();
+        if (x.mjpeg) j["mjpeg"] = *x.mjpeg;
+        return j;
+    }
+
+    inline json to_partial_json(Gps const & x) {
+        json j = json::object();
+        if (x.altitude) j["altitude"] = *x.altitude;
+        if (x.available) j["available"] = *x.available;
+        if (x.bearing) j["bearing"] = *x.bearing;
+        if (x.dop) j["dop"] = *x.dop;
+        if (x.fix) j["fix"] = *x.fix;
+        if (x.latitude) j["latitude"] = *x.latitude;
+        if (x.longitude) j["longitude"] = *x.longitude;
+        if (x.num_satellites) j["numSatellites"] = *x.num_satellites;
+        if (x.seconds_since_last_fix) j["secondsSinceLastFix"] = *x.seconds_since_last_fix;
+        if (x.speed) j["speed"] = *x.speed;
+        if (x.time) j["time"] = *x.time;
+        return j;
+    }
+
+    inline json to_partial_json(Isp const & x) {
+        json j = json::object();
+        if (x.free_buffers) j["freeBuffers"] = *x.free_buffers;
+        if (x.gain) j["gain"] = *x.gain;
+        if (x.iris) j["iris"] = *x.iris;
+        if (x.iris_model) j["irisModel"] = *x.iris_model;
+        if (x.shutter) j["shutter"] = *x.shutter;
+        return j;
+    }
+
+    inline json to_partial_json(MiscVolatileLens const & x) {
+        json j = json::object();
+        if (x.focus) j["focus"] = *x.focus;
+        if (x.zoom) j["zoom"] = *x.zoom;
+        return j;
+    }
+
+    inline json to_partial_json(Profile const & x) {
+        json j = json::object();
+        if (x.id) j["id"] = *x.id;
+        if (x.name) j["name"] = *x.name;
+        return j;
+    }
+
+    inline json to_partial_json(MiscVolatile const & x) {
+        json j = json::object();
+        if (x.ae) j["ae"] = to_partial_json(*x.ae);
+        if (x.fps) j["fps"] = to_partial_json(*x.fps);
+        if (x.gps) j["gps"] = to_partial_json(*x.gps);
+        if (x.isp) j["isp"] = to_partial_json(*x.isp);
+        if (x.lens) j["lens"] = to_partial_json(*x.lens);
+        if (x.profile) j["profile"] = to_partial_json(*x.profile);
+        if (x.whitebalance) j["whitebalance"] = to_partial_json(*x.whitebalance);
+        return j;
+    }
+
+    inline json to_partial_json(Itscampro const & x) {
+        json j = json::object();
+        if (x.address) j["address"] = *x.address;
+        if (x.debug) j["debug"] = *x.debug;
+        if (x.enable) j["enable"] = *x.enable;
+        if (x.port) j["port"] = *x.port;
+        return j;
+    }
+
+    inline json to_partial_json(ItscamproConfig const & x) {
+        json j = json::object();
+        if (x.itscampro) j["itscampro"] = to_partial_json(*x.itscampro);
+        return j;
+    }
+
+    inline json to_partial_json(ItscamproStatus const & x) {
+        json j = json::object();
+        if (x.status) j["status"] = *x.status;
+        return j;
+    }
+
+    inline json to_partial_json(Sign const & x) {
+        json j = json::object();
+        if (x.append_mode) j["appendMode"] = *x.append_mode;
+        if (x.enabled) j["enabled"] = *x.enabled;
+        if (x.loaded) j["loaded"] = *x.loaded;
+        if (x.update) j["update"] = *x.update;
+        return j;
+    }
+
+    inline json to_partial_json(ImageSignConfig const & x) {
+        json j = json::object();
+        if (x.sign) j["sign"] = to_partial_json(*x.sign);
+        return j;
+    }
+
+    inline json to_partial_json(Local const & x) {
+        json j = json::object();
+        if (x.buffer_size_kb) j["bufferSizeKb"] = *x.buffer_size_kb;
+        if (x.ttl) j["ttl"] = *x.ttl;
+        return j;
+    }
+
+    inline json to_partial_json(Transfer const & x) {
+        json j = json::object();
+        if (x.poll_interval) j["pollInterval"] = *x.poll_interval;
+        if (x.timeout) j["timeout"] = *x.timeout;
+        return j;
+    }
+
+    inline json to_partial_json(Ftp const & x) {
+        json j = json::object();
+        if (x.address) j["address"] = *x.address;
+        if (x.anonymous) j["anonymous"] = *x.anonymous;
+        if (x.enable) j["enable"] = *x.enable;
+        if (x.filename) j["filename"] = *x.filename;
+        if (x.local) j["local"] = to_partial_json(*x.local);
+        if (x.password) j["password"] = *x.password;
+        if (x.port) j["port"] = *x.port;
+        if (x.protocol) j["protocol"] = *x.protocol;
+        if (x.quality) j["quality"] = *x.quality;
+        if (x.transfer) j["transfer"] = to_partial_json(*x.transfer);
+        if (x.username) j["username"] = *x.username;
+        return j;
+    }
+
+    inline json to_partial_json(FtpConfig const & x) {
+        json j = json::object();
+        if (x.ftp) j["ftp"] = to_partial_json(*x.ftp);
+        return j;
+    }
+
+    inline json to_partial_json(LinceConfig const & x) {
+        json j = json::object();
+        if (x.auth_code) j["authCode"] = *x.auth_code;
+        if (x.client_endpoint) j["clientEndpoint"] = *x.client_endpoint;
+        if (x.client_id) j["clientId"] = *x.client_id;
+        if (x.enabled) j["enabled"] = *x.enabled;
+        if (x.environment) j["environment"] = *x.environment;
+        if (x.send_recs_none) j["sendRecsNone"] = *x.send_recs_none;
+        if (x.timeout_response) j["timeoutResponse"] = *x.timeout_response;
+        return j;
+    }
+
+    inline json to_partial_json(LinceStatus const & x) {
+        json j = json::object();
+        if (x.lince_status) j["linceStatus"] = *x.lince_status;
+        return j;
+    }
+
+    inline json to_partial_json(VehicleIndicator const & x) {
+        json j = json::object();
+        if (x.vehicle_counter_active_high) j["vehicleCounterActiveHigh"] = *x.vehicle_counter_active_high;
+        if (x.vehicle_counter_enabled) j["vehicleCounterEnabled"] = *x.vehicle_counter_enabled;
+        if (x.vehicle_counter_gpio) j["vehicleCounterGpio"] = *x.vehicle_counter_gpio;
+        if (x.vehicle_counter_pulse_width_ms) j["vehicleCounterPulseWidthMs"] = *x.vehicle_counter_pulse_width_ms;
+        if (x.vehicle_counter_type) j["vehicleCounterType"] = *x.vehicle_counter_type;
+        if (x.vehicle_counter_udp_port) j["vehicleCounterUdpPort"] = *x.vehicle_counter_udp_port;
+        if (x.vehicle_counter_udp_sample_time_ms) j["vehicleCounterUdpSampleTimeMs"] = *x.vehicle_counter_udp_sample_time_ms;
+        if (x.vehicle_counter_udp_server) j["vehicleCounterUdpServer"] = *x.vehicle_counter_udp_server;
+        return j;
+    }
+
+    inline json to_partial_json(VehicleIndicatorConfig const & x) {
+        json j = json::object();
+        if (x.vehicle_indicator) j["vehicleIndicator"] = to_partial_json(*x.vehicle_indicator);
+        return j;
+    }
+
+    inline json to_partial_json(ConfigCgi const & x) {
+        json j = json::object();
+        if (x.block_api) j["blockAPI"] = *x.block_api;
+        return j;
+    }
+
+    inline json to_partial_json(Auth const & x) {
+        json j = json::object();
+        if (x.password) j["password"] = *x.password;
+        if (x.require) j["require"] = *x.require;
+        return j;
+    }
+
+    inline json to_partial_json(Cougar const & x) {
+        json j = json::object();
+        if (x.auth) j["auth"] = to_partial_json(*x.auth);
+        return j;
+    }
+
+    inline json to_partial_json(Itscamprotocol const & x) {
+        json j = json::object();
+        if (x.legacy_mode) j["legacyMode"] = *x.legacy_mode;
+        return j;
+    }
+
+    inline json to_partial_json(ProtocolsConfig const & x) {
+        json j = json::object();
+        if (x.config_cgi) j["configCgi"] = to_partial_json(*x.config_cgi);
+        if (x.cougar) j["cougar"] = to_partial_json(*x.cougar);
+        if (x.itscamprotocol) j["itscamprotocol"] = to_partial_json(*x.itscamprotocol);
+        return j;
+    }
+
+    inline json to_partial_json(ProfileTransitioner const & x) {
+        json j = json::object();
+        if (x.automatic) j["automatic"] = *x.automatic;
+        if (x.level_smoothing) j["levelSmoothing"] = *x.level_smoothing;
+        if (x.reset_profiles) j["resetProfiles"] = *x.reset_profiles;
+        if (x.smoothing_time) j["smoothingTime"] = *x.smoothing_time;
+        return j;
+    }
+
+    inline json to_partial_json(Region0 const & x) {
+        json j = json::object();
+        if (x.name) j["name"] = *x.name;
+        if (x.x0) j["x0"] = *x.x0;
+        if (x.x1) j["x1"] = *x.x1;
+        if (x.x2) j["x2"] = *x.x2;
+        if (x.x3) j["x3"] = *x.x3;
+        if (x.y0) j["y0"] = *x.y0;
+        if (x.y1) j["y1"] = *x.y1;
+        if (x.y2) j["y2"] = *x.y2;
+        if (x.y3) j["y3"] = *x.y3;
+        return j;
+    }
+
+    inline json to_partial_json(LanesConfig const & x) {
+        json j = json::object();
+        if (x.enabled) j["enabled"] = *x.enabled;
+        if (x.region0) j["region0"] = to_partial_json(*x.region0);
+        if (x.region1) j["region1"] = to_partial_json(*x.region1);
+        if (x.region2) j["region2"] = to_partial_json(*x.region2);
+        return j;
+    }
+
+    inline json to_partial_json(IoConfig const & x) {
+        json j = json::object();
+        if (x.can_flash) j["canFlash"] = *x.can_flash;
+        if (x.can_trigger) j["canTrigger"] = *x.can_trigger;
+        if (x.early_us) j["earlyUs"] = *x.early_us;
+        if (x.group) j["group"] = *x.group;
+        if (x.identifier) j["identifier"] = *x.identifier;
+        if (x.is_input) j["isInput"] = *x.is_input;
+        if (x.is_on) j["isOn"] = *x.is_on;
+        j["port"] = x.port;
+        if (x.protection) j["protection"] = *x.protection;
+        if (x.type) j["type"] = *x.type;
+        return j;
+    }
+
+    inline json to_partial_json(IoBasic const & x) {
+        json j = json::object();
+        if (x.is_input) j["isInput"] = *x.is_input;
+        if (x.is_on) j["isOn"] = *x.is_on;
+        j["port"] = x.port;
+        return j;
+    }
+
+    inline json to_partial_json(Part const & x) {
+        json j = json::object();
+        j["content"] = x.content;
+        j["name"] = x.name;
+        j["type"] = x.type;
+        return j;
+    }
+
+    inline json to_partial_json(Body const & x) {
+        json j = json::object();
+        j["parts"] = x.parts;
+        j["variant"] = x.variant;
+        return j;
+    }
+
+    inline json to_partial_json(Header const & x) {
+        json j = json::object();
+        j["name"] = x.name;
+        j["value"] = x.value;
+        return j;
+    }
+
+    inline json to_partial_json(Resolution const & x) {
+        json j = json::object();
+        j["height"] = x.height;
+        j["width"] = x.width;
+        return j;
+    }
+
+    inline json to_partial_json(Jpeg const & x) {
+        json j = json::object();
+        j["quality"] = x.quality;
+        j["resolution"] = to_partial_json(x.resolution);
+        return j;
+    }
+
+    inline json to_partial_json(Persistency const & x) {
+        json j = json::object();
+        j["enabled"] = x.enabled;
+        j["maxDiskUsage"] = x.max_disk_usage;
+        j["maxFileAge"] = x.max_file_age;
+        j["newestFirst"] = x.newest_first;
+        return j;
+    }
+
+    inline json to_partial_json(Url const & x) {
+        json j = json::object();
+        j["host"] = x.host;
+        j["path"] = x.path;
+        j["query"] = x.query;
+        j["scheme"] = x.scheme;
+        return j;
+    }
+
+    inline json to_partial_json(RestApiClientConfig const & x) {
+        json j = json::object();
+        j["body"] = to_partial_json(x.body);
+        j["enabled"] = x.enabled;
+        j["headers"] = x.headers;
+        j["jpeg"] = to_partial_json(x.jpeg);
+        j["method"] = x.method;
+        j["persistency"] = to_partial_json(x.persistency);
+        j["retries"] = x.retries;
+        j["sendIndividualRequests"] = x.send_individual_requests;
+        j["sendWithoutOcr"] = x.send_without_ocr;
+        j["timeout"] = x.timeout;
+        j["url"] = to_partial_json(x.url);
+        return j;
+    }
+
+    inline json to_partial_json(RestApiClientStatus const & x) {
+        json j = json::object();
+        j["code"] = x.code;
+        j["diskUsage"] = x.disk_usage;
+        j["fileCount"] = x.file_count;
+        j["message"] = x.message;
+        return j;
+    }
+
+    inline json to_partial_json(AnalyticsClassifier const & x) {
+        json j = json::object();
+        if (x.customer) j["customer"] = *x.customer;
+        if (x.max_connections) j["maxConnections"] = *x.max_connections;
+        if (x.max_threads) j["maxThreads"] = *x.max_threads;
+        if (x.serial) j["serial"] = *x.serial;
+        if (x.sha1) j["sha1"] = *x.sha1;
+        if (x.state) j["state"] = *x.state;
+        if (x.ttl) j["ttl"] = *x.ttl;
+        if (x.version) j["version"] = *x.version;
+        return j;
+    }
+
+    inline json to_partial_json(AnalyticsOcr const & x) {
+        json j = json::object();
+        if (x.customer) j["customer"] = *x.customer;
+        if (x.max_connections) j["maxConnections"] = *x.max_connections;
+        if (x.max_threads) j["maxThreads"] = *x.max_threads;
+        if (x.serial) j["serial"] = *x.serial;
+        if (x.sha1) j["sha1"] = *x.sha1;
+        if (x.state) j["state"] = *x.state;
+        if (x.ttl) j["ttl"] = *x.ttl;
+        if (x.version) j["version"] = *x.version;
+        return j;
+    }
+
+    inline json to_partial_json(Analytics const & x) {
+        json j = json::object();
+        if (x.classifier) j["classifier"] = to_partial_json(*x.classifier);
+        if (x.ocr) j["ocr"] = to_partial_json(*x.ocr);
+        return j;
+    }
+
+    inline json to_partial_json(DeviceId const & x) {
+        json j = json::object();
+        if (x.serial) j["serial"] = *x.serial;
+        return j;
+    }
+
+    inline json to_partial_json(Licenses const & x) {
+        json j = json::object();
+        if (x.analytics) j["analytics"] = to_partial_json(*x.analytics);
+        if (x.device_id) j["deviceId"] = to_partial_json(*x.device_id);
+        return j;
+    }
+
 }
 }

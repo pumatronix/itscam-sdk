@@ -11,7 +11,7 @@ name: Build and release SDK
 # `make docker-sdk-dist`, which keeps CI artefacts reproducible and
 # avoids breakage when GitHub bumps `ubuntu-latest` (e.g. Ubuntu 24.04
 # ships MinGW 13, whose libstdc++ collides with our win32-threads STL
-# shim in src/core/impl/itscam_mingw_stl_sync.hpp).
+# shim in src/core/impl/itscam_mingw_stl_sync.h).
 #
 # Docker layers are cached in the GitHub Actions cache so subsequent
 # runs skip the slow apt/.NET/Go/Node installation steps.
@@ -73,6 +73,9 @@ jobs:
             -e XDG_CACHE_HOME=/tmp/.cache \
             -e NPM_CONFIG_CACHE=/tmp/.npm \
             -e DOTNET_CLI_HOME=/tmp/dotnet \
+            -e GOPATH=/tmp/go \
+            -e GOMODCACHE=/tmp/go/pkg/mod \
+            -e GOCACHE=/tmp/go/build-cache \
             itscam-sdk-builder:ci \
             make sdk-dist
 

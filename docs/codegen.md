@@ -7,7 +7,7 @@ A REST surface do ITSCAM (e os wrappers irmãos C# / Python / Go) entrega data s
 ```
 tools/codegen/spec/itscam-<version>.yaml          # snapshot(s) versionado(s)
 tools/codegen/spec/default.yaml                   # ponteiro para o ativo
-src/core/itscam_rest_types.hpp                    # C++ gerado
+src/core/itscam_rest_types.h                    # C++ gerado
 src/wrappers/csharp/Itscam.Sdk/RestTypes/RestTypes.g.cs   # C# gerado
 src/wrappers/python/itscam/rest_types.py          # Python gerado
 src/wrappers/go/itscam/rest_types.go              # Go gerado
@@ -94,7 +94,7 @@ make codegen OUT_DIR=/tmp/itscam-gen
 ## Compatibility expectations
 
 * **Reads forward-compatible.** Os quatro targets (`nlohmann::json`, `System.Text.Json`, `dataclasses` Python, structs Go) toleram **fields JSON desconhecidos**, então uma câmera rodando firmware mais novo que o snapshot bundled ainda deserializa para os types do SDK -- os fields novos são silenciosamente descartados.
-* **Cuidado em writes.** Setters tipados fazem round-trip do objeto inteiro, então fields que o SDK não conhece são perdidos numa chamada `setXxxConfig()`. Se isso é importante (por exemplo, você está fazendo PUT de partial update), caia para o escape hatch genérico `httpGet`/`httpPut` ou regenere types contra seu firmware.
+* **Cuidado em writes.** Setters tipados usam serialização parcial -- fields unset/nullopt são omitidos do body PUT. Entretanto, fields que o SDK não *conhece* (ou seja, fields adicionados por firmware mais novo mas ausentes no snapshot bundled) não podem ser preservados por um setter tipado. Se você precisa manter fields desconhecidos intactos, caia para o escape hatch genérico `httpGet`/`httpPut` ou regenere types contra seu firmware.
 * **Reads backward-compatible.** Uma câmera rodando firmware mais antigo funciona enquanto nenhum dos fields que o SDK *usa* tiver sumido. Se um field obrigatório está ausente, o getter tipado expõe `Error::Code::InvalidParameter` com mensagem `schema mismatch: ...` -- a deixa para regerar, ou para consultar o JSON cru via os verbos genéricos.
 
 ## Gaps e patches no snapshot

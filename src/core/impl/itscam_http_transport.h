@@ -18,7 +18,6 @@
  *  This is an INTERNAL header.  It is not installed and not part of the
  *  public SDK surface.
  *
- *  Requires: cpp-httplib 0.18+ (header-only).
  */
 #pragma once
 
@@ -41,9 +40,9 @@ struct Result;
 namespace itscam {
 namespace detail {
 
-// ============================================================================
-//  Plain wire-level HTTP response
-// ============================================================================
+//=========================================================================
+// Plain wire-level HTTP response
+//=========================================================================
 
 /// Raw HTTP response surfaced to higher-level clients.  The body is a byte
 /// buffer so that binary payloads (JPEG, PNG, multipart bodies) are not
@@ -56,9 +55,9 @@ struct HttpResponse {
                                                          // read
 };
 
-// ============================================================================
-//  HTTP request options
-// ============================================================================
+//=========================================================================
+// HTTP request options
+//=========================================================================
 
 struct HttpRequest {
     std::string                        method = "GET";   // GET/PUT/POST/DELETE
@@ -68,18 +67,18 @@ struct HttpRequest {
     std::map<std::string, std::string> headers;          // extra headers
 };
 
-// ============================================================================
-//  Streaming response handler
-// ============================================================================
+//=========================================================================
+// Streaming response handler
+//=========================================================================
 
 /// Called for each chunk of a streamed response (e.g. multipart MJPEG).
 /// Return false to abort the transfer.
 using ContentReceiver =
     std::function<bool(const uint8_t* data, size_t length)>;
 
-// ============================================================================
-//  TLS configuration
-// ============================================================================
+//=========================================================================
+// TLS configuration
+//=========================================================================
 
 struct TlsConfig {
     bool        verifyServerCert = true;   // verify the server certificate
@@ -89,9 +88,9 @@ struct TlsConfig {
     std::string clientKeyPem;              // client key  (mTLS)
 };
 
-// ============================================================================
-//  Auth configuration
-// ============================================================================
+//=========================================================================
+// Auth configuration
+//=========================================================================
 
 struct AuthConfig {
     std::string bearerToken;     // Authorization: Bearer <token>
@@ -99,9 +98,9 @@ struct AuthConfig {
     std::string basicPassword;
 };
 
-// ============================================================================
-//  HttpTransport
-// ============================================================================
+//=========================================================================
+// HttpTransport
+//=========================================================================
 
 class HttpTransport {
 public:
@@ -187,9 +186,9 @@ private:
     std::unique_ptr<Impl> mImpl;
 };
 
-// ============================================================================
-//  HTTP status -> itscam::Error mapping
-// ============================================================================
+//=========================================================================
+// HTTP status -> itscam::Error mapping
+//=========================================================================
 
 /// Map an HTTP status code (plus an optional JSON-decoded "message" field)
 /// onto an itscam::Error.  Used by both REST and CGI clients to provide a

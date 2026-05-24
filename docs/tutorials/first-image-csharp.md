@@ -12,6 +12,8 @@ Walkthrough do zero: criar um projeto .NET console, referenciar o SDK e salvar a
 
 ## 2. Extrair o SDK
 
+Baixe `itscam-sdk-<version>.tar.gz` na [página de releases](https://github.com/pumatronix/itscam-sdk/releases):
+
 ```bash
 tar xzf itscam-sdk-<version>.tar.gz
 export SDK=$PWD/itscam-sdk-<version>

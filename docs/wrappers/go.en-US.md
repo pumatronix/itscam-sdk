@@ -10,7 +10,7 @@ The Go wrapper lives at [`src/wrappers/go/`](../../src/wrappers/go/) and uses **
 
 ### From the pre-compiled SDK package (recommended)
 
-The distribution package (`itscam-sdk-<version>.tar.gz`) includes a Go module with native lib and pre-configured cgo directives:
+The distribution package (`itscam-sdk-<version>.tar.gz`) includes a Go module with native lib and pre-configured cgo directives. Download from the [releases page](https://github.com/pumatronix/itscam-sdk/releases):
 
 ```bash
 tar xzf itscam-sdk-<version>.tar.gz
@@ -103,10 +103,10 @@ cgi.StopMjpegStream()
 
 Two coexisting surfaces:
 
-* **Typed helpers** (preferred) -- `rest.GetOcrConfig`, `rest.SetOcrConfig`, `rest.GetProfiles` etc. return Go structs generated from the camera's OpenAPI document. See [`docs/codegen.md`](../codegen.md) for the maintainer / downstream refresh workflow.
+* **Typed helpers** (preferred) -- `rest.GetOcrConfig`, `rest.SetOcrConfig`, `rest.GetProfiles` etc. return Go structs generated from the camera's OpenAPI document. They use partial serialization -- nil/zero-value fields are omitted from the PUT body. See [`docs/codegen.md`](../codegen.md) for the maintainer / downstream refresh workflow.
 * **Generic verbs** (escape hatch) -- `rest.Get`, `rest.Put`, `rest.Post`, `rest.Delete` return the raw JSON response body as a string.
 
-* **Partial PUT** -- `rest.PatchJSON(path, patch)` sends only the fields being changed. Required for image profiles and recommended for most configuration updates. See [`docs/api/rest-client.md`](../api/rest-client.md).
+* **Generic partial PUT** -- `rest.PatchJSON(path, patch)` sends only the fields supplied. Available for untyped payloads or endpoints without a typed helper. See [`docs/api/rest-client.md`](../api/rest-client.md).
 
 ```go
 rest, _ := itscam.NewRestClient()
@@ -118,10 +118,14 @@ _, _ = rest.Login("admin", "1234", 10000)
 // Read-only: typed struct is convenient.
 profiles, _ := rest.GetProfiles(10000)
 
-// Write: partial PUT (do not round-trip the full profile object).
-_, _ = rest.PatchJSON("/api/image/profiles/0", map[string]interface{}{
-    "trigger": map[string]interface{}{"enabled": false},
-}, 10000)
+// Write: typed setter with partial serialization (preferred).
+patch := &itscam.ProfileConfig{Trigger: &itscam.TriggerConfig{Enabled: boolPtr(false)}}
+_, _ = rest.UpdateProfileById(0, patch, 10000)
+
+// Alternative: generic patchJson for untyped payloads.
+// _, _ = rest.PatchJSON("/api/image/profiles/0", map[string]interface{}{
+//     "trigger": map[string]interface{}{"enabled": false},
+// }, 10000)
 
 // Generic verbs:
 body, _ := rest.Get("/api/equipment/misc/readonly/constants", 10000)

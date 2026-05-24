@@ -8,9 +8,11 @@
 //   * Generic verbs -- Get / Put / Post / Delete return raw JSON.
 //
 // Partial PUT: the ITSCAM daemon merges PUT bodies into the existing
-// configuration.  Send only changed fields via PatchJSON / Put.  Typed
-// setters and UpdateProfileById serialise full objects and fail with
-// HTTP 500 on several endpoints (notably PUT /api/image/profiles/{id}).
+// configuration.  Typed setters (e.g. UpdateProfileById, SetOcrConfig)
+// use partial serialization: nil pointer fields are omitted from the
+// PUT body via Go's omitempty tags.  Construct a struct with only the
+// fields you want to change.  PatchJSON / Put remain available for
+// untyped payloads.
 //
 // HTTPS is supported through the statically-linked mbedTLS backend; set
 // the scheme to "https" in SetBaseUrl and configure CA certificates as
@@ -22,7 +24,7 @@ package itscam
 #cgo !static LDFLAGS: -litscam_sdk
 #cgo static,linux LDFLAGS: ${SRCDIR}/../../../core/build/linux/libitscam_sdk.a -lstdc++ -lpthread -lm
 #cgo static,windows CFLAGS: -DITSCAM_SDK_STATIC
-#cgo static,windows LDFLAGS: ${SRCDIR}/../../../core/build/win-x64/libitscam_sdk_static.a -lws2_32 -lstdc++ -lm -static
+#cgo static,windows LDFLAGS: ${SRCDIR}/../../../core/build/win-x64/libitscam_sdk_static.a -lws2_32 -lbcrypt -lcrypt32 -lstdc++ -lm -static
 #include <stdlib.h>
 #include "../../../core/c_api/itscam_rest_client_c.h"
 */
@@ -219,9 +221,9 @@ func (r *RestClient) Put(path, jsonBody string, timeoutMs uint32) (string, error
 	return body, nil
 }
 
-// PatchJSON PUTs a partial JSON document.  The daemon merges the supplied
-// fields.  Prefer this over UpdateProfileById when changing a subset of
-// fields on an existing configuration.
+// PatchJSON PUTs a partial JSON document.  Typed setters already use
+// partial serialization (nil fields omitted), so PatchJSON is mainly
+// useful for endpoints without a typed helper or for hand-built patches.
 func (r *RestClient) PatchJSON(path string, patch interface{}, timeoutMs uint32) (string, error) {
 	return r.putJSON(path, patch, timeoutMs)
 }
@@ -336,9 +338,9 @@ func (r *RestClient) CreateProfile(p ProfileConfig, timeoutMs uint32) (ProfileCo
 
 // UpdateProfileById -> PUT /api/image/profiles/{id}.
 //
-// Warning: sends a full ProfileConfig document.  The daemon rejects
-// full-document PUT on this endpoint (HTTP 500).  Use PatchJSON with
-// only the fields you want to change.
+// Only non-nil pointer fields are included in the PUT body (partial
+// serialization via omitempty).  Construct a ProfileConfig with only
+// the fields you want to change.
 func (r *RestClient) UpdateProfileById(id int, p ProfileConfig, timeoutMs uint32) (ProfileConfig, error) {
 	body, err := r.putJSON(
 		fmt.Sprintf("/api/image/profiles/%d", id), p, timeoutMs)
@@ -351,7 +353,7 @@ func (r *RestClient) UpdateProfileById(id int, p ProfileConfig, timeoutMs uint32
 
 // UpdateProfiles -> PUT /api/image/profiles (bulk update).
 //
-// Warning: same partial-PUT caveat as UpdateProfileById.
+// Each profile is partially serialized (nil fields omitted).
 func (r *RestClient) UpdateProfiles(ps []ProfileConfig, timeoutMs uint32) (ProfileConfig, error) {
 	body, err := r.putJSON("/api/image/profiles", ps, timeoutMs)
 	if err != nil {

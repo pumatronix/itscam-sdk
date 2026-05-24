@@ -17,27 +17,30 @@
 #include <cstdio>
 #include <cstring>
 #include <ctime>
+#include <cerrno>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
 #include <string>
 #include <sys/stat.h>
-#include <thread>
 #include <vector>
+#if defined(_WIN32)
+#include <direct.h>
+#endif
 #include "itscam_sdk.h"
 #include "itscam_jpeg_utils.h"
 
-// ============================================================================
-//  Global state
-// ============================================================================
+//=========================================================================
+// Global state
+//=========================================================================
 
 static std::atomic<bool> g_running{true};
 static std::atomic<uint64_t> g_savedCount{0};
 
-// ============================================================================
-//  Signal handler
-// ============================================================================
+//=========================================================================
+// Signal handler
+//=========================================================================
 
 static void signalHandler(int signum) {
     if (signum == SIGINT || signum == SIGTERM) {
@@ -46,9 +49,9 @@ static void signalHandler(int signum) {
     }
 }
 
-// ============================================================================
-//  Logging helpers
-// ============================================================================
+//=========================================================================
+// Logging helpers
+//=========================================================================
 
 static void log(const std::string& msg) {
     auto now = std::chrono::system_clock::now();
@@ -72,13 +75,21 @@ static void logErr(const std::string& msg) {
               << " [ERROR] " << msg << std::endl;
 }
 
-// ============================================================================
-//  Filesystem helpers
-// ============================================================================
+//=========================================================================
+// Filesystem helpers
+//=========================================================================
 
 static bool directoryExists(const std::string& path) {
     struct stat info;
     return stat(path.c_str(), &info) == 0 && (info.st_mode & S_IFDIR);
+}
+
+static bool createDirectoryOne(const std::string& path) {
+#if defined(_WIN32)
+    return _mkdir(path.c_str()) == 0 || errno == EEXIST;
+#else
+    return mkdir(path.c_str(), 0755) == 0 || errno == EEXIST;
+#endif
 }
 
 /**
@@ -99,12 +110,12 @@ static bool createDirectoryRecursive(const std::string& path) {
     }
 
     // Create this directory
-    return mkdir(path.c_str(), 0755) == 0 || errno == EEXIST;
+    return createDirectoryOne(path);
 }
 
-// ============================================================================
-//  Filename formatting
-// ============================================================================
+//=========================================================================
+// Filename formatting
+//=========================================================================
 
 /**
  * Format a filename using the provided template.
@@ -143,7 +154,7 @@ static bool parseDatetimeMs(const std::string& dtStr,
     if (dtStr.length() < 23) return false;
 
     // Parse: "2026-02-18 12:44:52.123"
-    //         0123456789...
+    //        0123456789...
     char dash1, dash2, space, colon1, colon2, dot;
     int n = std::sscanf(dtStr.c_str(), "%d%c%d%c%d%c%d%c%d%c%d%c%d",
                         &year, &dash1, &month, &dash2, &day, &space,
@@ -255,9 +266,9 @@ static std::string formatFilename(const std::string& format,
     return result;
 }
 
-// ============================================================================
-//  Image saving
-// ============================================================================
+//=========================================================================
+// Image saving
+//=========================================================================
 
 static bool saveImage(const std::string& folder,
                       const std::string& filename,
@@ -285,9 +296,9 @@ static bool saveImage(const std::string& folder,
     return true;
 }
 
-// ============================================================================
-//  Connection state helper
-// ============================================================================
+//=========================================================================
+// Connection state helper
+//=========================================================================
 
 static const char* connectionStateName(itscam::ConnectionState cs) {
     switch (cs) {
@@ -299,9 +310,9 @@ static const char* connectionStateName(itscam::ConnectionState cs) {
     }
 }
 
-// ============================================================================
-//  Usage / help
-// ============================================================================
+//=========================================================================
+// Usage / help
+//=========================================================================
 
 static void printUsage(const char* progName) {
     std::cerr << "ITSCAM Trigger Recorder - Save trigger events to disk\n\n";
@@ -333,9 +344,9 @@ static void printUsage(const char* progName) {
     std::cerr << "  " << progName << " 192.168.254.254 ./images -f \"{date}/{rid}_{exp}.jpg\"\n";
 }
 
-// ============================================================================
-//  Command-line argument parsing
-// ============================================================================
+//=========================================================================
+// Command-line argument parsing
+//=========================================================================
 
 struct Config {
     std::string cameraIp;
@@ -390,9 +401,9 @@ static bool parseArgs(int argc, char* argv[], Config& cfg) {
     return true;
 }
 
-// ============================================================================
-//  Main
-// ============================================================================
+//=========================================================================
+// Main
+//=========================================================================
 
 int main(int argc, char* argv[]) {
     using namespace itscam;
@@ -514,7 +525,7 @@ int main(int argc, char* argv[]) {
     log("Recording started. Waiting for trigger events...");
 
     while (g_running) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        itscam_os::sleepForMs(100);
     }
 
     // --- Cleanup ------------------------------------------------------------
