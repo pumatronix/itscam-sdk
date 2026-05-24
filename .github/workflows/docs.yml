@@ -26,6 +26,20 @@ on:
       - "tools/docs/**"
       - "Dockerfile"
       - ".github/workflows/docs.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "docs/**"
+      - "docs-site/**"
+      - "README.md"
+      - "README.en-US.md"
+      - "AGENTS.md"
+      - "src/core/**"
+      - "src/wrappers/**"
+      - "src/**/examples/**"
+      - "tools/docs/**"
+      - "Dockerfile"
+      - ".github/workflows/docs.yml"
   workflow_dispatch:
 
 permissions:
@@ -33,9 +47,13 @@ permissions:
   pages: write
   id-token: write
 
+# Per-ref concurrency so PR builds don't queue behind each other or
+# behind main. The global `pages` concurrency lives on the deploy job
+# only (see below), which is the single resource that genuinely cannot
+# run twice in parallel.
 concurrency:
-  group: pages
-  cancel-in-progress: false
+  group: docs-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build:
@@ -103,7 +121,9 @@ jobs:
   # Node + the aws CLI from aws-actions/configure-aws-credentials.
   sync-r2-corpus:
     runs-on: ubuntu-latest
-    if: vars.R2_BUCKET_NAME != ''
+    # Push events only: PRs and manual dispatches from feature branches
+    # must not overwrite the production R2 corpus.
+    if: github.event_name == 'push' && vars.R2_BUCKET_NAME != ''
     steps:
       - uses: actions/checkout@v4
 
@@ -133,7 +153,15 @@ jobs:
 
   deploy:
     needs: build
+    # PR runs validate the build but must not publish to Pages.
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
+    # Serialize Pages deploys across all runs of this workflow so two
+    # main pushes (or a main push + a workflow_dispatch) never race
+    # against each other on the single Pages target.
+    concurrency:
+      group: pages
+      cancel-in-progress: false
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
