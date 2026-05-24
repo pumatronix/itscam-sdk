@@ -10,7 +10,7 @@ Header: [`src/core/itscam_rest_client.h`](../../src/core/itscam_rest_client.h). 
 
 The REST client exposes two coexisting surfaces:
 
-* **Typed helpers** (preferred). `getOcrConfig()` returns `Result<OcrConfig>`, `setOcrConfig(OcrConfig)` accepts and returns the typed struct. The types live in [`src/core/itscam_rest_types.hpp`](../../src/core/itscam_rest_types.hpp) and are **auto-generated** from the camera's OpenAPI document. See [`docs/codegen.md`](../codegen.md) for the refresh / regeneration workflow.
+* **Typed helpers** (preferred). `getOcrConfig()` returns `Result<OcrConfig>`, `setOcrConfig(OcrConfig)` accepts and returns the typed struct. The types live in [`src/core/itscam_rest_types.h`](../../src/core/itscam_rest_types.h) and are **auto-generated** from the camera's OpenAPI document. See [`docs/codegen.md`](../codegen.md) for the refresh / regeneration workflow.
 * **Generic HTTP verbs** (escape hatch). `httpGet` / `httpPut` / `httpPost` / `httpDelete` return `Result<nlohmann::json>` for endpoints that aren't typed yet, partial-update bodies, or fields outside the current schema snapshot.
 
 > **Breaking change:** prior to the typed surface, `getOcrConfig()` and friends returned `Result<nlohmann::json>`. Migrate to either the typed overloads (preferred) or the generic `httpGet("/api/equipment/ocr")` escape hatch when you specifically want raw JSON.

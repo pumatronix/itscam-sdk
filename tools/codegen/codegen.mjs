@@ -110,7 +110,7 @@ const TARGETS = [
       wstring: "use-string",
       boost: "false",
     },
-    outRel: "src/core/itscam_rest_types.hpp",
+    outRel: "src/core/itscam_rest_types.h",
     notice: NOTICE_HEAD,
     postProcess: (text) => addCppPartialJson(fixCppOptionalInit(text)),
   },

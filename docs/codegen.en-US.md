@@ -7,7 +7,7 @@ The ITSCAM REST surface (and its sibling C# / Python / Go wrappers) ships **type
 ```
 tools/codegen/spec/itscam-<version>.yaml          # versioned snapshot(s)
 tools/codegen/spec/default.yaml                   # pointer to the active one
-src/core/itscam_rest_types.hpp                    # generated C++
+src/core/itscam_rest_types.h                    # generated C++
 src/wrappers/csharp/Itscam.Sdk/RestTypes/RestTypes.g.cs   # generated C#
 src/wrappers/python/itscam/rest_types.py          # generated Python
 src/wrappers/go/itscam/rest_types.go              # generated Go

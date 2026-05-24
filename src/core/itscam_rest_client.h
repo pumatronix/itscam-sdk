@@ -10,7 +10,7 @@
  *  Copyright (c) 2026 Pumatronix
  *
  *  Typed REST helpers (e.g. `getOcrConfig() -> Result<OcrConfig>`) are
- *  generated from the camera's OpenAPI document into `itscam_rest_types.hpp`.
+ *  generated from the camera's OpenAPI document into `itscam_rest_types.h`.
  *  See [`tools/codegen/`](../../tools/codegen/) for the refresh / regeneration
  *  workflow.
  *
@@ -25,7 +25,7 @@
 #pragma once
 
 #include "itscam_types.h"
-#include "itscam_rest_types.hpp"
+#include "itscam_rest_types.h"
 
 #ifndef INCLUDE_NLOHMANN_JSON_HPP_
 #include "3rdparty/nlohmann/json.hpp"
@@ -111,7 +111,7 @@ public:
     //=========================================================================
     // Image profiles                                    Endpoint: /image/profiles
     //
-    // ProfileConfig and friends live in itscam_rest_types.hpp (auto-generated).
+    // ProfileConfig and friends live in itscam_rest_types.h (auto-generated).
     //=========================================================================
 
     /// GET /api/image/profiles -- list all profiles.

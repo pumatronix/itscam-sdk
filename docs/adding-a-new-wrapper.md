@@ -129,7 +129,7 @@ Status atual:
 
 | Wrapper | Typed REST POCOs |
 | ------- | ---------------- |
-| C++ | sim (`itscam_rest_types.hpp`) |
+| C++ | sim (`itscam_rest_types.h`) |
 | C# | sim (`RestTypes/RestTypes.g.cs`) |
 | Python | sim (`itscam/rest_types.py`) |
 | Go | sim (`itscam/rest_types.go`) |

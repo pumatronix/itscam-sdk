@@ -1,6 +1,6 @@
 name: Codegen drift check
 
-# Ensures the committed REST type files (src/core/itscam_rest_types.hpp,
+# Ensures the committed REST type files (src/core/itscam_rest_types.h,
 # RestTypes.g.cs, rest_types.py, rest_types.go) stay in lockstep with the
 # OpenAPI snapshot at tools/codegen/spec/default.yaml.
 #
@@ -12,7 +12,7 @@ on:
     branches: [main]
     paths:
       - "tools/codegen/**"
-      - "src/core/itscam_rest_types.hpp"
+      - "src/core/itscam_rest_types.h"
       - "src/wrappers/csharp/Itscam.Sdk/RestTypes/**"
       - "src/wrappers/python/itscam/rest_types.py"
       - "src/wrappers/go/itscam/rest_types.go"
@@ -20,7 +20,7 @@ on:
   pull_request:
     paths:
       - "tools/codegen/**"
-      - "src/core/itscam_rest_types.hpp"
+      - "src/core/itscam_rest_types.h"
       - "src/wrappers/csharp/Itscam.Sdk/RestTypes/**"
       - "src/wrappers/python/itscam/rest_types.py"
       - "src/wrappers/go/itscam/rest_types.go"

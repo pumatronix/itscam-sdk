@@ -39,7 +39,7 @@ static std::string jsonPreview(const nlohmann::json& j, size_t maxLen = 300) {
 
 /// Render a typed config (or any nlohmann-serialisable value) the same way.
 /// Routes through nlohmann::json's adl_serializer for the generated types
-/// in itscam_rest_types.hpp.
+/// in itscam_rest_types.h.
 template <typename T>
 static std::string preview(const T& v, size_t maxLen = 300) {
     return jsonPreview(nlohmann::json(v), maxLen);

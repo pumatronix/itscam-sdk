@@ -102,7 +102,7 @@ stage_cpp_headers() {
         itscam_os.h
         itscam_jpeg_utils.h
         itscam_sdk_utils.h
-        itscam_rest_types.hpp
+        itscam_rest_types.h
     )
     for h in "${headers[@]}"; do
         cp "$CORE/$h" "$dest/"
