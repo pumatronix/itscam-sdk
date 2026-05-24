@@ -270,27 +270,6 @@ module.exports = {{
 """)
 
 
-def patch_package_json(path: Path, version: str) -> None:
-    """Update the "version" field of a package.json in place.
-
-    Hand-written line-based rewrite so we do not need to import the json
-    package and risk dropping comments / formatting on round-trip.
-    """
-    if not path.exists():
-        return
-    text = path.read_text(encoding="utf-8")
-    new_text, count = re.subn(
-        r'("version"\s*:\s*)"[^"]*"',
-        f'\\1"{version}"',
-        text,
-        count=1,
-    )
-    if count == 0:
-        return
-    if new_text != text:
-        safe_write(path, new_text)
-
-
 def patch_parent_pom_version(path: Path, version: str) -> None:
     """Replace the <version> of the <itscam-sdk-parent> POM."""
     if not path.exists():
@@ -306,19 +285,18 @@ def patch_parent_pom_version(path: Path, version: str) -> None:
         safe_write(path, new_text)
 
 
-# Sync Maven POMs and the npm package.json with the computed versions
-# so plain `mvn package` / `npm pack` produce correctly-versioned
-# artefacts even outside the canonical Makefile flow. Both child POMs
-# inherit groupId/version from itscam-sdk-parent via <parent>, so we only
-# need to keep the parent coordinate in sync everywhere it is mentioned.
+# Sync Maven POMs with the computed version so plain `mvn package` produces
+# correctly-versioned artefacts even outside the canonical Makefile flow.
+# Both child POMs inherit groupId/version from itscam-sdk-parent via
+# <parent>, so we only need to keep the parent coordinate in sync everywhere
+# it is mentioned. npm package.json keeps a stable placeholder version;
+# tools/packaging/npm-pack-versioned.sh injects npmVersion at pack time.
 for pom in [
     root / "src/wrappers/java/pom.xml",
     root / "src/wrappers/java/itscam-sdk/pom.xml",
     root / "src/wrappers/java/examples/pom.xml",
 ]:
     patch_parent_pom_version(pom, info["maven_version"])
-
-patch_package_json(root / "src/wrappers/nodejs/package.json", info["npm_version"])
 
 def mk_escape(value: str) -> str:
     return value.replace("\\", "\\\\").replace("$", "$$")

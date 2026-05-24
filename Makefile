@@ -399,7 +399,7 @@ nodejs: lib
 nodejs-pack: nodejs
 	@echo "=== Packing Node.js wrapper (npm pack) ==="
 	@if command -v $(NPM) > /dev/null; then \
-		cd $(NODEJS_DIR) && $(NPM) pack; \
+		$(CURDIR)/tools/packaging/npm-pack-versioned.sh; \
 		echo "Tarball:"; \
 		ls -1 $(NODEJS_DIR)/pumatronix-itscam-sdk-*.tgz 2>/dev/null || true; \
 	else \

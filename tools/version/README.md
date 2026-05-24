@@ -28,6 +28,10 @@ make version    # regenerate all version artefacts
 | `src/wrappers/go/itscam/version.go` | `GetSDKVersion()` / `GetSDKVersionFull()` |
 | `VERSION.json` | CI, release tooling, sdk-dist archive |
 
+The npm `package.json` / `package-lock.json` keep a stable `0.0.0-dev`
+placeholder; `tools/packaging/npm-pack-versioned.sh` injects `npmVersion`
+from `VERSION.json` only for `npm pack`, then restores the manifest.
+
 ## Runtime API
 
 - C/C++: `ITSCAM_getVersion()` → `"0.0.1+<sha> (YYYY-MM-DD)"`
