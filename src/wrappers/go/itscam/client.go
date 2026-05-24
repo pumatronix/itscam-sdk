@@ -12,7 +12,7 @@
 //	}
 //	defer client.Close()
 //
-//	if err := client.Connect("192.168.1.100", 50000, 5*time.Second); err != nil {
+//	if err := client.Connect("192.168.1.100", 60000, 5*time.Second); err != nil {
 //	    log.Fatal(err)
 //	}
 //

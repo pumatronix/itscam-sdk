@@ -34,7 +34,7 @@ import (
 
 func main() {
     // Create client
-    client, err := itscam.NewClient("192.168.1.100", 50000)
+    client, err := itscam.NewClient("192.168.1.100", 60000)
     if err != nil {
         log.Fatal(err)
     }
@@ -81,7 +81,7 @@ func main() {
 
 ```go
 // Create and connect
-client, _ := itscam.NewClient("192.168.1.100", 50000)
+client, _ := itscam.NewClient("192.168.1.100", 60000)
 defer client.Close()
 
 client.Connect(5 * time.Second)
@@ -191,7 +191,7 @@ A command-line example that connects to a camera, subscribes to events, and save
 
 ```bash
 cd examples
-go run capture_example.go 192.168.1.100 50000
+go run capture_example.go 192.168.1.100 60000
 ```
 
 ### GUI Example (Wails)
