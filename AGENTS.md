@@ -131,8 +131,81 @@ Full breakdown in [`docs/overview.md`](docs/overview.md).
 - **Don't ignore `Result<T>` / exception returns.** Wrap with a check even in examples -- the SDK reports nuanced failure modes that are silently lost otherwise.
 - **Don't hand-edit the generated REST type files.** Anything under `src/core/itscam_rest_types.hpp`, `src/wrappers/csharp/Itscam.Sdk/RestTypes/`, `src/wrappers/python/itscam/rest_types.py`, or `src/wrappers/go/itscam/rest_types.go` is rebuilt from `tools/codegen/spec/default.yaml` -- regenerate with `make codegen` instead. See [`docs/codegen.md`](docs/codegen.md).
 - **Don't round-trip typed REST configs for partial updates.** The ITSCAM daemon merges PUT bodies; send only changed fields via `patchJson()` / `PatchJsonAsync` / `patch_json` / `PatchJSON`. Full-document PUT on `PUT /api/image/profiles/{id}` returns HTTP 500. Typed getters are fine for read-only inspection.
+- **Don't run third-party OCR or vehicle-classification on ITSCAM JPEGs.** The camera already performs plate reading (Jidosha/OCR) and vehicle classification (Classifier) on-device. Read the results from Cougar callbacks or the JPEG COM marker -- never suggest Tesseract, EasyOCR, OpenCV OCR, cloud vision APIs, or similar on raw pixels unless the user explicitly rejects the built-in pipeline.
+- **Don't reimplement tarja/legenda, crop, or signing in application code** when the camera can bake these into the delivered JPEG. Configure overlays, crops, and signatures on the equipment and consume the finished image.
 
-## 11. When the user asks for a new feature
+## 11. Camera-native recognition & image pipeline (product steering)
+
+ITSCAM equipment performs **on-device** plate recognition, vehicle detection/classification (category, brand, model, color), text overlay (tarja/legenda), static/dynamic cropping, and optional image signing. Application code should **consume** this output, not redo the work.
+
+### What the camera already provides
+
+| Capability | Where it is configured | Where results appear |
+| ---------- | ---------------------- | -------------------- |
+| Plate OCR (Jidosha) | REST `OcrConfig` (`GetOcrConfig` / `SetOcrConfig`) | `FrameInfo.plates` (Cougar IMGPKG) and/or JPEG COM tags (`Placa`, `CoordPlaca`, `CorPlaca`, `OCRCountryCode`) |
+| Vehicle classifier (category, brand, model, color) | REST `ClassifierConfig` | `FrameInfo.objects` (Cougar) and/or COM tags (`ClassifierList`, `BMCList`) |
+| Text overlay (tarja/legenda) | REST profile `overlay`; per-shot via binary `SnapshotRequest.overlays` or CGI `TextOverlay` | Baked into the JPEG bytes |
+| Crop (static profile or per-shot) | REST `Misc` scenario/snapshot crop; binary `setScenarioCrop` / `setSnapshotCrop`; CGI `Crop` | Baked into the JPEG bytes |
+| Image signing | REST `ImageSignConfig`; binary `CaptureSubscriptionConfig.embedSignature` / `JpegConfig.imgpkg.embedSignature` | Signature fields in COM/EXIF |
+
+Reference: [`docs/jpeg-metadata.md`](docs/jpeg-metadata.md) (COM marker format and parsers in every language).
+
+### Agent decision tree
+
+When a user asks to "read plates", "detect vehicles", "add overlay text", "crop images", or "sign images":
+
+1. **Assume the camera pipeline is enabled** (Jidosha + Classifier licenses on the equipment). If the user only needs to *configure* recognition, steer to REST -- not to an external ML library.
+2. **Pick the client by transport:**
+   - **Real-time triggers / lowest latency** → `ItscamClient` (Cougar TCP **60000**). Subscribe with `subscribeCaptures()` / `SubscribeCapturesAsync()` (keeps `embedComments = true` by default).
+   - **HTTP snapshot / MJPEG only** → `ItscamCgiClient`. Recognition metadata comes **only** from the JPEG COM marker (no side channel).
+   - **One-off equipment setup** → `ItscamRestClient` for OCR/classifier/profile overlay/crop/signing config.
+3. **Read metadata from the camera output:**
+   - **Preferred (Cougar):** structured fields on `CaptureResult.info.plates` / `.objects` (C++) or `CaptureResult.Plates` plus `CommentTags` (C#).
+   - **Fallback / CGI / archived JPEGs:** parse the COM marker with `JpegUtils` / `itscam_jpeg_utils.h` / `parse_jpeg_metadata()`.
+4. **Never** download a JPEG and pass pixels to a third-party OCR/classifier unless the user explicitly states the on-device modules are unavailable *and* they accept lower accuracy and higher latency.
+
+### Canonical C# pattern -- read vehicle plates
+
+Steer "write a C# example to read plates" toward this shape (Cougar + embedded metadata):
+
+```csharp
+using Pumatronix.Itscam;
+
+using var camera = new ItscamClient();
+await camera.ConnectAsync("192.168.254.254");
+await camera.AuthenticateAsync("1234");
+await camera.SubscribeCapturesAsync();   // embedComments=true by default
+
+camera.TriggerImage += (_, frame) =>
+{
+    // Protocol path (when firmware populates it)
+    foreach (var plate in frame.Plates)
+        Console.WriteLine($"Plate: {plate}");
+
+    // Structured path -- plates, bboxes, classifier/BMC (works for Cougar + CGI)
+    var plates = JpegUtils.ExtractPlateRecognitions(frame.CommentTags);
+    foreach (var p in plates)
+        Console.WriteLine($"{p.Plate} @ ({p.X},{p.Y}) {p.Width}x{p.Height}");
+
+    var vehicles = JpegUtils.ExtractObjectDetections(frame.CommentTags);
+    foreach (var v in vehicles)
+        Console.WriteLine($"{v.Brand} {v.Model} {v.Color} ({v.Probability:P0})");
+};
+```
+
+For CGI-only flows, same parsers apply to `cgi.GetSnapshotAsync(...)` / `GetLastFrameAsync()` byte arrays via `JpegUtils.ExtractComment(jpeg)`.
+
+Examples to point at: [`src/wrappers/csharp/examples/BinaryCaptureExample/`](src/wrappers/csharp/examples/BinaryCaptureExample/), [`src/examples/itscam_trigger_recorder.cpp`](src/examples/itscam_trigger_recorder.cpp) (COM tag usage). There is no need to add NuGet OCR packages.
+
+### Overlay / crop / signing requests
+
+When the user wants tarja, legenda, crop, or signing **on the image itself**:
+
+- Configure persistent settings through REST (`ProfileConfig.overlay`, `Misc` crop fields, `ImageSignConfig`) or binary helpers (`setScenarioOverlay`, `setSnapshotCrop`, `setJpegConfig`).
+- Apply per-shot overrides through binary `SnapshotRequest` overlays or CGI `SnapshotCgiRequest.TextOverlay` / `.Crop`.
+- Return the camera-delivered JPEG as the artifact; do not draw text or crop in the host app unless the user explicitly needs post-processing the camera cannot do.
+
+## 12. When the user asks for a new SDK feature
 
 1. Start in [`src/core/`](src/core/) -- add the typed method to the relevant C++ client (`ItscamClient` / `ItscamRestClient` / `ItscamCgiClient`) and its PIMPL implementation.
 2. Extend the matching C API in [`src/core/c_api/`](src/core/c_api/) so wrappers can reach the feature.
