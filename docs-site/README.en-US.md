@@ -26,9 +26,9 @@ Editing the README or the files under `docs/` is the only way to change the site
 
 ### Enable the AI Assistant Locally
 
-1. Create an AI Search instance in the [Cloudflare dashboard](https://dash.cloudflare.com/?to=/:account/ai/ai-search).
-2. Enable **Settings -> Public Endpoint** and add `http://localhost:5173` to **Authorized hosts**.
-3. Run the dev server with your public endpoint URL:
+The production instance (`https://252e40ae-0329-4b41-94f3-ed7ec9885d7f.search.ai.cloudflare.com/`) is hardcoded as the default in [`.vitepress/config.ts`](.vitepress/config.ts), so `npm run dev` already loads the widget — just add `http://localhost:5173` under **Settings -> Public Endpoint -> Authorized hosts** in the [Cloudflare dashboard](https://dash.cloudflare.com/?to=/:account/ai/ai-search).
+
+To point at a different instance (fork, staging, etc.), export `VITE_AI_SEARCH_API_URL` with the base URL **without the `/search` suffix**:
 
 ```bash
 VITE_AI_SEARCH_API_URL=https://<INSTANCE_ID>.search.ai.cloudflare.com/ npm run dev
@@ -41,34 +41,37 @@ The GitHub Actions workflow [`.github/workflows/docs.yml`](../.github/workflows/
 ### One-Time GitHub Setup
 
 1. **Enable GitHub Pages**: Settings -> Pages -> Source: **GitHub Actions**.
-2. **Repository variables**: Settings -> Secrets and variables -> Actions -> Variables.
+2. **Create an R2 bucket** (e.g. `itscam-sdk-docs-bucket`) in Cloudflare and generate an **R2 API token / Access Key** pair scoped to that bucket with **Object Read & Write** permissions.
+3. **Repository variables** (Settings -> Secrets and variables -> Actions -> Variables):
 
 | Variable | Example | Purpose |
 | -------- | ------- | ------- |
-| `VITE_AI_SEARCH_API_URL` | `https://abc123.search.ai.cloudflare.com/` | Embeds chat/search UI snippets |
-| `AI_SEARCH_INSTANCE_ID` | `itscam-sdk-docs` | Triggers the corpus sync job |
-| `AI_SEARCH_NAMESPACE` | `default` | Optional namespace |
+| `R2_BUCKET_NAME` | `itscam-sdk-docs-bucket` | Enables the `sync-r2-corpus` job and selects the target bucket |
+| `VITE_AI_SEARCH_API_URL` | `https://abc123.search.ai.cloudflare.com/` | **Optional** override for the search/chat widget. The default in [`.vitepress/config.ts`](.vitepress/config.ts) already points at the production instance; only set this to switch to a different one. |
 
-3. **Repository secrets**:
+4. **Repository secrets**:
 
 | Secret | Purpose |
 | ------ | ------- |
-| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account ID |
-| `CLOUDFLARE_API_TOKEN` | Token with **AI Search:Edit** and **AI Search:Run** |
+| `CF_ACCOUNT_ID` | Cloudflare account ID (used in the `https://<id>.r2.cloudflarestorage.com` endpoint) |
+| `R2_ACCESS_KEY_ID` | R2 API token Access Key ID |
+| `R2_SECRET_ACCESS_KEY` | R2 API token Secret Access Key |
 
-4. **Cloudflare AI Search public endpoint**: add your GitHub Pages origin to **Authorized hosts**, for example `https://pumatronix.github.io`.
+5. **Cloudflare AI Search public endpoint**: add your GitHub Pages origin to **Authorized hosts**, for example `https://pumatronix.github.io`.
 
 ### AI Search Instance Configuration
 
 Recommended settings for the `itscam-sdk-docs` instance:
 
-- **Data source:** built-in storage, populated by CI through `scripts/sync-ai-search.mjs`.
+- **Data source:** R2 bucket `R2_BUCKET_NAME`. The `sync-r2-corpus` job in [`docs.yml`](../.github/workflows/docs.yml) uploads the corpus on every push to `main` via `scripts/stage-corpus.mjs` + `aws s3 sync --delete`. AI Search auto-reindexes whenever the bucket changes.
 - **Search mode:** hybrid search.
 - **Query rewriting:** enabled.
 - **Custom metadata schema:** `type`, `client`, `language`, `source` as text fields.
 - **Generation system prompt:** paste the rules from [`AGENTS.md`](../AGENTS.md), especially REST auth required, CGI auth optional, and the three client surfaces.
 
 See [system prompt configuration](https://developers.cloudflare.com/ai-search/configuration/retrieval/system-prompt/).
+
+> Alternative API-based sync (no R2): the legacy `scripts/sync-ai-search.mjs` script is still available for setups that use AI Search **built-in storage** instead of R2. It is no longer wired into CI; run it manually with `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN`, and `AI_SEARCH_INSTANCE_ID` set if you prefer that path.
 
 ## Markdown style
 
@@ -87,7 +90,8 @@ The script preserves fenced code blocks, tables, lists, blockquotes (including f
 | Script | Description |
 | ------ | ----------- |
 | `npm run sync-content` | Copies docs and examples into `content/` for VitePress |
-| `npm run sync-ai-search` | Uploads the corpus to Cloudflare AI Search (requires env vars) |
+| `npm run stage-corpus` | Stages the corpus in `.corpus-staging/` (consumed by CI before `aws s3 sync` to R2) |
+| `npm run sync-ai-search` | Manual fallback uploader straight to AI Search built-in storage (requires env vars) |
 | `npm run build` | Production build in `.vitepress/dist/` |
 
 ## Site Features

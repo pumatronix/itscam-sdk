@@ -85,9 +85,13 @@ jobs:
         with:
           path: docs-site/.vitepress/dist
 
-  sync-ai-search:
+  # Uploads the documentation corpus (docs/, READMEs, AGENTS.md, and the
+  # curated example sources) to a Cloudflare R2 bucket connected to the
+  # AI Search instance as its data source. Cloudflare AI Search auto-syncs
+  # the bucket, so we only need to keep R2 in lockstep with `main`.
+  sync-r2-corpus:
     runs-on: ubuntu-latest
-    if: vars.AI_SEARCH_INSTANCE_ID != ''
+    if: vars.R2_BUCKET_NAME != ''
     steps:
       - uses: actions/checkout@v4
 
@@ -95,14 +99,25 @@ jobs:
         with:
           node-version: 22
 
-      - name: Sync corpus to Cloudflare AI Search
+      - name: Stage documentation corpus
         working-directory: docs-site
+        run: node scripts/stage-corpus.mjs
+
+      - name: Configure R2 credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.R2_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          aws-region: auto
+
+      - name: Sync corpus to R2
         env:
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          AI_SEARCH_INSTANCE_ID: ${{ vars.AI_SEARCH_INSTANCE_ID }}
-          AI_SEARCH_NAMESPACE: ${{ vars.AI_SEARCH_NAMESPACE }}
-        run: node scripts/sync-ai-search.mjs
+          R2_BUCKET_NAME: ${{ vars.R2_BUCKET_NAME }}
+          R2_ENDPOINT: https://${{ secrets.CF_ACCOUNT_ID }}.r2.cloudflarestorage.com
+        run: |
+          aws s3 sync docs-site/.corpus-staging "s3://${R2_BUCKET_NAME}/" \
+            --endpoint-url "${R2_ENDPOINT}" \
+            --delete
 
   deploy:
     needs: build

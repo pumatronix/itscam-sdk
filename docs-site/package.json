@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "sync-content": "node scripts/sync-content.mjs",
+    "stage-corpus": "node scripts/stage-corpus.mjs",
     "sync-ai-search": "node scripts/sync-ai-search.mjs",
     "predev": "npm run sync-content",
     "dev": "vitepress dev",

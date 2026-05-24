@@ -2,7 +2,17 @@ import { defineConfig } from "vitepress";
 import { withMermaid } from "vitepress-plugin-mermaid";
 
 const base = process.env.VITEPRESS_BASE ?? "/itscam-sdk/";
-const aiSearchUrl = process.env.VITE_AI_SEARCH_API_URL ?? "";
+
+// Cloudflare AI Search public endpoint that backs the embedded chat/search
+// widgets (search-modal-snippet, chat-bubble-snippet, chat-page-snippet).
+// The widget appends /search, /chat/completions and /assets/<version>/...
+// internally, so this MUST be the base URL with a trailing slash, never
+// the /search API endpoint. Override per-environment with the
+// VITE_AI_SEARCH_API_URL env var (or repo variable in CI).
+const DEFAULT_AI_SEARCH_API_URL =
+  "https://252e40ae-0329-4b41-94f3-ed7ec9885d7f.search.ai.cloudflare.com/";
+const aiSearchUrl =
+  process.env.VITE_AI_SEARCH_API_URL || DEFAULT_AI_SEARCH_API_URL;
 
 /** Prefix a path under content/public/ with the VitePress base URL.
  *  Required for sidebar links to static .html API refs: VITE_EXTRA_EXTENSIONS
