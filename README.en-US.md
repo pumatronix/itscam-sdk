@@ -2,6 +2,8 @@
 
 [Português (Brasil)](README.md) | [English (US)](README.en-US.md)
 
+**Documentation:** [pumatronix.github.io/itscam-sdk](https://pumatronix.github.io/itscam-sdk/)
+
 A cross-platform C++17 library for integrating [Pumatronix](https://www.pumatronix.com) ITSCAM cameras (ITSCAM450 / ITSCAM600), with idiomatic bindings for **C# / .NET**, **Python**, and **Go**. HTTPS support and the mbedTLS backend are bundled with the SDK, so no system TLS dependency is required beyond a C++ compiler.
 
 The SDK exposes three independent client classes across C++, C#, Python, and Go. Choose the client by protocol and task. They can run side by side in the same process. The binary client uses the **Cougar** protocol on TCP port **60000**. REST and CGI use HTTP/HTTPS on ports **80/443**.
