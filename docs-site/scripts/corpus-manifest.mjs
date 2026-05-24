@@ -2,7 +2,7 @@
  * Canonical list of files indexed by Cloudflare AI Search and the doc site.
  * Keys use forward-slash paths relative to the repository root.
  */
-import { readdirSync, statSync } from "node:fs";
+import { existsSync, readdirSync, statSync } from "node:fs";
 import { dirname, join, relative, extname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -34,6 +34,31 @@ const EXAMPLE_GLOBS = [
   "src/wrappers/csharp/examples/SoftwareTriggerSnapshotExample/Program.cs",
 ];
 
+const CPP_API_REF_DIR = join(
+  REPO_ROOT,
+  "docs-site/content/public/api-ref/cpp",
+);
+
+// Public C/C++ SDK surface -- keep in sync with tools/docs/Doxyfile INPUT.
+const CORE_API_HEADERS = [
+  "src/core/itscam_sdk.h",
+  "src/core/itscam_client.h",
+  "src/core/itscam_rest_client.h",
+  "src/core/itscam_cgi_client.h",
+  "src/core/itscam_types.h",
+  "src/core/itscam_sdk_utils.h",
+  "src/core/itscam_jpeg_utils.h",
+  "src/core/itscam_rest_types.hpp",
+];
+
+const CORE_API_SOURCES = [
+  "src/core/itscam_client.cpp",
+  "src/core/itscam_rest_client.cpp",
+  "src/core/itscam_cgi_client.cpp",
+];
+
+const CORE_C_API_DIR = join(REPO_ROOT, "src/core/c_api");
+
 function walkDocs() {
   const docsDir = join(REPO_ROOT, "docs");
   const entries = [];
@@ -57,6 +82,64 @@ function walkDocs() {
   return entries;
 }
 
+/** Doxygen HTML under docs-site/content/public/api-ref/cpp/ (from `make docs-api-cpp`). */
+function walkApiRefCpp() {
+  if (!existsSync(CPP_API_REF_DIR)) {
+    return [];
+  }
+
+  /** @param {string} dir */
+  function walk(dir) {
+    /** @type {string[]} */
+    const found = [];
+    for (const name of readdirSync(dir)) {
+      const full = join(dir, name);
+      const stat = statSync(full);
+      if (stat.isDirectory()) {
+        found.push(...walk(full));
+      } else if (name.endsWith(".html")) {
+        found.push(relative(REPO_ROOT, full));
+      }
+    }
+    return found;
+  }
+
+  return walk(CPP_API_REF_DIR);
+}
+
+/** Public headers and sources under src/core/c_api/ (excludes c_api/impl/). */
+function walkCoreCApi() {
+  if (!existsSync(CORE_C_API_DIR)) {
+    return [];
+  }
+
+  /** @param {string} dir */
+  function walk(dir) {
+    /** @type {string[]} */
+    const found = [];
+    for (const name of readdirSync(dir)) {
+      const full = join(dir, name);
+      const rel = relative(REPO_ROOT, full).replace(/\\/g, "/");
+      if (rel.includes("/impl/")) continue;
+
+      const stat = statSync(full);
+      if (stat.isDirectory()) {
+        found.push(...walk(full));
+      } else if (/\.(h|hpp|cpp)$/.test(name)) {
+        found.push(rel);
+      }
+    }
+    return found;
+  }
+
+  return walk(CORE_C_API_DIR);
+}
+
+function collectCoreApiSourcePaths() {
+  const paths = [...CORE_API_HEADERS, ...CORE_API_SOURCES, ...walkCoreCApi()];
+  return paths.filter((repoPath) => existsSync(resolveRepoPath(repoPath)));
+}
+
 /** @param {string} repoPath */
 export function inferMetadata(repoPath) {
   const normalized = repoPath.replace(/\\/g, "/");
@@ -76,6 +159,12 @@ export function inferMetadata(repoPath) {
     meta.type = "example";
   } else if (normalized.startsWith("docs/tutorials/")) {
     meta.type = "tutorial";
+  } else if (normalized.includes("/api-ref/cpp/") && normalized.endsWith(".html")) {
+    meta.type = "reference";
+    meta.language = "cpp";
+  } else if (normalized.startsWith("src/core/")) {
+    meta.type = "reference";
+    meta.language = "cpp";
   }
 
   const ext = extname(normalized);
@@ -101,6 +190,20 @@ export function inferMetadata(repoPath) {
   if (normalized.startsWith("docs/api/binary")) meta.client = "binary";
   if (normalized.startsWith("docs/api/rest")) meta.client = "rest";
   if (normalized.startsWith("docs/api/cgi")) meta.client = "cgi";
+
+  if (normalized.includes("/api-ref/cpp/")) {
+    if (lower.includes("itscamrestclient")) meta.client = "rest";
+    else if (lower.includes("itscamcgiclient")) meta.client = "cgi";
+    else if (lower.includes("itscamclient")) meta.client = "binary";
+  }
+
+  if (normalized.startsWith("src/core/")) {
+    if (lower.includes("rest")) meta.client = "rest";
+    else if (lower.includes("cgi")) meta.client = "cgi";
+    else if (lower.includes("itscam_client") || lower.includes("itscam_sdk")) {
+      meta.client = "binary";
+    }
+  }
 
   if (normalized.startsWith("docs/wrappers/cpp")) meta.language = "cpp";
   else if (normalized.startsWith("docs/wrappers/python")) meta.language = "python";
@@ -128,6 +231,8 @@ export function collectCorpusPaths() {
     ...STATIC_ENTRIES,
     ...walkDocs(),
     ...EXAMPLE_GLOBS,
+    ...walkApiRefCpp(),
+    ...collectCoreApiSourcePaths(),
   ]);
   return [...paths].sort();
 }

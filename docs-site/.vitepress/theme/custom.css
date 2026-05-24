@@ -4,10 +4,8 @@
   z-index: 100;
 }
 
-.assistant-page chat-full-page-snippet {
-  display: block;
-  min-height: 520px;
-  margin-top: 1.5rem;
+.assistant-page chat-page-snippet {
+  --search-snippet-border-radius: 12px;
 }
 
 /* Justified paragraphs; hyphenation reduces uneven word gaps (pt-BR / en-US). */

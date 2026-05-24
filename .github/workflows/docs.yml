@@ -13,7 +13,10 @@ name: Deploy documentation
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+      # TEMP: allow end-to-end R2 corpus testing on this branch only.
+      - ITSCAMSDK-000-fix-r2-corpus-sync
     paths:
       - "docs/**"
       - "docs-site/**"
@@ -60,6 +63,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # docs/images/ is tracked via Git LFS (README banner). Without
+          # this, sync copies the ~130-byte pointer file and Pages serves
+          # a broken image even though the URL path is correct.
+          lfs: true
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -100,6 +108,7 @@ jobs:
             -e VITE_AI_SEARCH_API_URL \
             itscam-sdk-builder:ci \
             bash -euxc '
+              git config --global --add safe.directory /sdk
               make lib
               make docs-sync-check
               make docs-api
@@ -112,20 +121,46 @@ jobs:
         with:
           path: docs-site/.vitepress/dist
 
-  # Uploads the documentation corpus (docs/, READMEs, AGENTS.md, and the
-  # curated example sources) to a Cloudflare R2 bucket connected to the
-  # AI Search instance as its data source. Cloudflare AI Search auto-syncs
+      - name: Upload C++ API ref for R2 corpus
+        uses: actions/upload-artifact@v4
+        with:
+          name: docs-api-cpp
+          path: docs-site/content/public/api-ref/cpp/
+          if-no-files-found: error
+          retention-days: 1
+
+  # Uploads the documentation corpus (docs/, READMEs, AGENTS.md, example
+  # sources, and generated C++ Doxygen HTML) to a Cloudflare R2 bucket
+  # connected to the AI Search instance as its data source. Cloudflare AI Search auto-syncs
   # the bucket, so we only need to keep R2 in lockstep with `main`.
   #
   # Runs on the host (not in the builder image) because it only needs
   # Node + the aws CLI from aws-actions/configure-aws-credentials.
   sync-r2-corpus:
+    needs: build
     runs-on: ubuntu-latest
-    # Push events only: PRs and manual dispatches from feature branches
-    # must not overwrite the production R2 corpus.
-    if: github.event_name == 'push' && vars.R2_BUCKET_NAME != ''
+    # Production: push to `main` only. TEMP exception for
+    # ITSCAMSDK-000-fix-r2-corpus-sync so we can validate R2 + AI Search
+    # before merge. PRs still skip (must not overwrite production corpus).
+    if: >-
+      vars.R2_BUCKET_NAME != '' &&
+      (
+        (github.event_name == 'push' &&
+          (github.ref == 'refs/heads/main' ||
+           github.ref == 'refs/heads/ITSCAMSDK-000-fix-r2-corpus-sync')) ||
+        (github.event_name == 'workflow_dispatch' &&
+          github.ref == 'refs/heads/ITSCAMSDK-000-fix-r2-corpus-sync')
+      )
     steps:
       - uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Download C++ API ref from docs build
+        uses: actions/download-artifact@v4
+        with:
+          name: docs-api-cpp
+          path: docs-site/content/public/api-ref/cpp
 
       - uses: actions/setup-node@v4
         with:
@@ -135,15 +170,19 @@ jobs:
         working-directory: docs-site
         run: node scripts/stage-corpus.mjs
 
-      - name: Configure R2 credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.R2_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          aws-region: auto
-
       - name: Sync corpus to R2
+        # aws-actions/configure-aws-credentials@v4 cannot be used here:
+        # it always validates the credentials by calling
+        # sts.${aws-region}.amazonaws.com, and with R2's `auto` region
+        # that resolves to the non-existent sts.auto.amazonaws.com host.
+        # Cloudflare R2 doesn't use STS at all -- the AWS CLI talks to
+        # R2 over the `--endpoint-url` we pass below and never hits STS,
+        # so passing the credentials as env vars is the canonical pattern.
         env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          AWS_REGION: auto
           R2_BUCKET_NAME: ${{ vars.R2_BUCKET_NAME }}
           R2_ENDPOINT: https://${{ secrets.CF_ACCOUNT_ID }}.r2.cloudflarestorage.com
         run: |
@@ -153,8 +192,9 @@ jobs:
 
   deploy:
     needs: build
-    # PR runs validate the build but must not publish to Pages.
-    if: github.event_name == 'push'
+    # PR runs validate the build but must not publish to Pages. Feature-branch
+    # pushes (including the temporary R2 test branch) also skip Pages deploy.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     # Serialize Pages deploys across all runs of this workflow so two
     # main pushes (or a main push + a workflow_dispatch) never race

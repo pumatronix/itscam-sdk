@@ -37,9 +37,16 @@ def run(*args: str, cwd: Path = root) -> str:
     return subprocess.check_output(args, cwd=cwd, stderr=subprocess.DEVNULL, text=True).strip()
 
 
+def try_run(*args: str, cwd: Path = root) -> str | None:
+    try:
+        return run(*args, cwd=cwd)
+    except subprocess.CalledProcessError:
+        return None
+
+
 def git_available() -> bool:
     try:
-        run("git", "rev-parse", "--git-dir")
+        run("git", "rev-parse", "HEAD")
         return True
     except (subprocess.CalledProcessError, FileNotFoundError):
         return False
@@ -74,12 +81,16 @@ def compute() -> dict[str, str | int]:
     if git_available():
         git_sha = run("git", "rev-parse", "HEAD")
         git_sha_short = run("git", "rev-parse", "--short=12", "HEAD")
-        dirty = run("git", "status", "--porcelain") != ""
-        try:
-            tag = run("git", "describe", "--tags", "--match", "v*", "--abbrev=0")
+        # `git status` can fail with exit 128 inside Docker bind mounts when
+        # the repo is owned by a different uid (Git "dubious ownership").
+        porcelain = try_run("git", "status", "--porcelain")
+        dirty = porcelain is not None and porcelain != ""
+        tag = try_run("git", "describe", "--tags", "--match", "v*", "--abbrev=0")
+        if tag is not None:
             base_version = tag[1:] if tag.startswith("v") else tag
-            commits_since = int(run("git", "rev-list", "--count", f"{tag}..HEAD"))
-        except subprocess.CalledProcessError:
+            count = try_run("git", "rev-list", "--count", f"{tag}..HEAD")
+            commits_since = int(count) if count is not None else 0
+        else:
             base_version = fallback_from_header()
             commits_since = 0
     else:

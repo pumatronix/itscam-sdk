@@ -1,30 +1,15 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { computed } from "vue";
+import { useRoute } from "vitepress";
+import { useAiSearchScript } from "./useAiSearchScript";
 
-declare const __AI_SEARCH_API_URL__: string;
-declare const __AI_SEARCH_SNIPPET_VERSION__: string;
+const route = useRoute();
+const { apiUrl, ready: loaded } = useAiSearchScript();
 
-const apiUrl = __AI_SEARCH_API_URL__;
-const snippetVersion = __AI_SEARCH_SNIPPET_VERSION__;
-const loaded = ref(false);
-
-onMounted(() => {
-  if (!apiUrl) return;
-
-  const scriptId = "cf-ai-search-snippet";
-  if (document.getElementById(scriptId)) {
-    loaded.value = true;
-    return;
-  }
-
-  const script = document.createElement("script");
-  script.id = scriptId;
-  script.type = "module";
-  script.src = `${apiUrl.replace(/\/$/, "")}/assets/${snippetVersion}/search-snippet.es.js`;
-  script.onload = () => {
-    loaded.value = true;
-  };
-  document.head.appendChild(script);
+/** Full-page chat lives on /assistant; skip the floating bubble there. */
+const showChatBubble = computed(() => {
+  const path = route.path.replace(/\/$/, "") || "/";
+  return path !== "/assistant";
 });
 </script>
 
@@ -36,6 +21,7 @@ onMounted(() => {
       max-results="10"
     />
     <chat-bubble-snippet
+      v-if="showChatBubble"
       :api-url="apiUrl"
       title="SDK Assistant"
     />

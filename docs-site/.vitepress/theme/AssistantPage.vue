@@ -1,63 +1,72 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { useAiSearchScript } from "./useAiSearchScript";
 
-declare const __AI_SEARCH_API_URL__: string;
-declare const __AI_SEARCH_SNIPPET_VERSION__: string;
-
-const apiUrl = __AI_SEARCH_API_URL__;
-const snippetVersion = __AI_SEARCH_SNIPPET_VERSION__;
-const ready = ref(false);
-
-onMounted(() => {
-  if (!apiUrl) return;
-
-  const scriptId = "cf-ai-search-snippet";
-  if (document.getElementById(scriptId)) {
-    ready.value = true;
-    return;
-  }
-
-  const script = document.createElement("script");
-  script.id = scriptId;
-  script.type = "module";
-  script.src = `${apiUrl.replace(/\/$/, "")}/assets/${snippetVersion}/search-snippet.es.js`;
-  script.onload = () => {
-    ready.value = true;
-  };
-  document.head.appendChild(script);
-});
+const { apiUrl, ready } = useAiSearchScript();
 </script>
 
 <template>
   <div class="assistant-page">
-    <h1>SDK Assistant</h1>
-    <p>
-      Ask questions about the ITSCAM SDK or request implementation examples.
-      Answers are grounded in the indexed documentation and example sources.
+    <p class="assistant-page__lead">
+      Converse com a documentação do ITSCAM SDK — clients binary, REST e CGI,
+      wrappers, tutoriais, exemplos e <code>AGENTS.md</code>. As respostas são
+      ancoradas no corpus indexado via Cloudflare AI Search.
     </p>
+
     <p v-if="!apiUrl" class="assistant-page__notice">
-      The assistant is not configured for this build. Set
-      <code>VITE_AI_SEARCH_API_URL</code> to your Cloudflare AI Search public
-      endpoint (for example
+      O assistant não está configurado neste build. Defina
+      <code>VITE_AI_SEARCH_API_URL</code> com o public endpoint da instância
+      (por exemplo
       <code>https://&lt;instance-id&gt;.search.ai.cloudflare.com/</code>).
     </p>
-    <chat-full-page-snippet
+
+    <div
       v-else-if="ready"
-      :api-url="apiUrl"
-      title="ITSCAM SDK Assistant"
-    />
-    <p v-else class="assistant-page__notice">Loading assistant…</p>
+      class="assistant-page__chat"
+      aria-label="ITSCAM SDK Assistant"
+    >
+      <chat-page-snippet
+        :api-url="apiUrl"
+        placeholder="Pergunte sobre o SDK ou peça um exemplo de implementação…"
+      />
+    </div>
+
+    <p v-else class="assistant-page__notice">Carregando assistant…</p>
+
     <p class="assistant-page__warning">
-      Do not paste camera passwords or production credentials into the chat.
+      Não cole senhas de câmera nem credenciais de produção no chat.
     </p>
   </div>
 </template>
 
 <style scoped>
 .assistant-page {
-  max-width: 960px;
-  margin: 0 auto;
-  padding: 1rem 0 3rem;
+  max-width: none;
+  margin: 0;
+  padding: 0 0 2rem;
+}
+
+.assistant-page__lead {
+  max-width: 52rem;
+  margin: 0 0 1.25rem;
+  color: var(--vp-c-text-2);
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+.assistant-page__chat {
+  display: block;
+  width: 100%;
+  min-height: min(720px, calc(100vh - var(--vp-nav-height, 64px) - 11rem));
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--vp-c-bg-soft);
+}
+
+.assistant-page__chat chat-page-snippet {
+  display: block;
+  width: 100%;
+  height: min(720px, calc(100vh - var(--vp-nav-height, 64px) - 11rem));
 }
 
 .assistant-page__notice {
@@ -66,8 +75,8 @@ onMounted(() => {
 }
 
 .assistant-page__warning {
-  margin-top: 1.5rem;
-  color: var(--vp-c-text-2);
+  margin-top: 1rem;
+  color: var(--vp-c-text-3);
   font-size: 0.875rem;
 }
 </style>
