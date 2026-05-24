@@ -209,6 +209,10 @@ When the user wants tarja, legenda, crop, or signing **on the image itself**:
 
 ## 12. When the user asks for a new SDK feature
 
+**New language bindings** (Rust, Ruby, Swift, Kotlin, PHP, ...): read and follow [`docs/adding-a-new-wrapper.md`](docs/adding-a-new-wrapper.md) end-to-end before writing code. It covers FFI strategy, the full C API surface, examples, `make sdk-dist` packaging, docs, and CI gates. English mirror: [`docs/adding-a-new-wrapper.en-US.md`](docs/adding-a-new-wrapper.en-US.md).
+
+For **new methods on existing wrappers**, use the flow below:
+
 1. Start in [`src/core/`](src/core/) -- add the typed method to the relevant C++ client (`ItscamClient` / `ItscamRestClient` / `ItscamCgiClient`) and its PIMPL implementation.
 2. Extend the matching C API in [`src/core/c_api/`](src/core/c_api/) so wrappers can reach the feature.
 3. Mirror the surface in each wrapper:

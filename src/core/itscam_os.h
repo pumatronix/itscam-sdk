@@ -230,10 +230,22 @@ int threadDetach(ThreadHandle thread);
 bool threadJoinable(ThreadHandle thread);
 
 /**
- * @brief Sleep the current thread.
+ * @brief Sleep the current thread (low-level OS call).
  * @param ms Milliseconds to sleep.
  */
 void sleepMs(uint32_t ms);
+
+/**
+ * @brief Sleep the current thread.
+ * @param ms Milliseconds to sleep.
+ *
+ * Prefer this over std::this_thread::sleep_for in application code: it
+ * works on every supported platform, including MinGW builds that use the
+ * win32 (not posix) threading model.
+ */
+inline void sleepForMs(uint32_t ms) {
+    sleepMs(ms);
+}
 
 /** @brief Yield the current thread's time slice. */
 void threadYield();
@@ -599,13 +611,6 @@ private:
         delete wrapper;
     }
 };
-
-/**
- * @brief Sleep for the specified duration.
- */
-inline void sleepForMs(uint32_t ms) {
-    sleepMs(ms);
-}
 
 /**
  * @brief Yield current thread.

@@ -211,6 +211,6 @@ Antes de abrir o PR adicionando o wrapper novo:
 
 - [`AGENTS.md`](../AGENTS.md) — briefing curto para coding agents; §3-§6 explicam auth, threading, errors e wrapper layout.
 - [`docs/codegen.md`](codegen.md) — workflow de codegen para typed REST helpers.
-- [`docs/wrappers/`](wrappers/) — wrapper guides existentes (use como referência).
+- [Wrapper guides](README.md#language-wrappers) — guias existentes em `docs/wrappers/` (use como referência).
 - [`tools/codegen/codegen.mjs`](../tools/codegen/codegen.mjs) — pipeline de geração de POCOs.
 - [`tools/version/gen-version.sh`](../tools/version/gen-version.sh) — single source of truth para versionamento.

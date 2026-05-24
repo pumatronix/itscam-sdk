@@ -18,6 +18,7 @@ src/wrappers/go/vendor/
 src/wrappers/go/examples/capture_example
 src/wrappers/go/examples/rest_example
 src/wrappers/go/examples/cgi_snapshot_example
+src/wrappers/go/examples/build/
 src/wrappers/go/examples/gui/build/
 
 # C# wrapper

@@ -3,7 +3,7 @@
   ITSCAM Client SDK - Java examples.
 
   Three runnable demos that mirror the Python / Go / C# examples:
-    - CaptureExample      (binary client -- TCP 60000)
+    - CaptureExample      (binary client, TCP 60000)
     - RestExample         (REST API on 80/443; login required)
     - CgiSnapshotExample  (CGI on 80/443; auth optional)
 

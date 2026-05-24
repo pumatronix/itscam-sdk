@@ -21,12 +21,10 @@
 #include "itscam_sdk.h"
 
 #include <atomic>
-#include <chrono>
 #include <cstdio>
 #include <fstream>
 #include <iostream>
 #include <string>
-#include <thread>
 
 using itscam::CgiImage;
 using itscam::ItscamCgiClient;
@@ -155,7 +153,7 @@ int main(int argc, char* argv[]) {
                       << f.data.size() << " bytes)\n";
         }
     });
-    std::this_thread::sleep_for(std::chrono::seconds(5));
+    itscam_os::sleepForMs(5000);
     cgi.stopMjpegStream();
     std::cout << "  stopped after " << frameCount.load() << " frame(s)\n";
 

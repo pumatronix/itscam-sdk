@@ -14,12 +14,10 @@
  */
 
 #include <atomic>
-#include <chrono>
 #include <cstring>
 #include <fstream>
 #include <iostream>
 #include <string>
-#include <thread>
 #include <vector>
 #include "itscam_sdk.h"
 
@@ -310,7 +308,7 @@ int main(int argc, char* argv[]) {
         }
 
         log("Waiting 15s for trigger images (multi-exposure groups)...");
-        std::this_thread::sleep_for(std::chrono::seconds(15));
+        itscam_os::sleepForMs(15000);
 
         log("Received " + std::to_string(triggerImageCount.load()) +
             " individual trigger frame(s), " +

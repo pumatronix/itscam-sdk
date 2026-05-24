@@ -22,7 +22,7 @@ package itscam
 #cgo !static LDFLAGS: -litscam_sdk
 #cgo static,linux LDFLAGS: ${SRCDIR}/../../../core/build/linux/libitscam_sdk.a -lstdc++ -lpthread -lm
 #cgo static,windows CFLAGS: -DITSCAM_SDK_STATIC
-#cgo static,windows LDFLAGS: ${SRCDIR}/../../../core/build/win-x64/libitscam_sdk_static.a -lws2_32 -lstdc++ -lm -static
+#cgo static,windows LDFLAGS: ${SRCDIR}/../../../core/build/win-x64/libitscam_sdk_static.a -lws2_32 -lbcrypt -lcrypt32 -lstdc++ -lm -static
 #include <stdlib.h>
 #include "../../../core/c_api/itscam_rest_client_c.h"
 */

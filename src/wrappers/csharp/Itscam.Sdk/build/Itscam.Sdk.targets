@@ -123,22 +123,36 @@
           DependsOnTargets="_ItscamSdkResolveNative">
     <ItemGroup>
       <ResolvedFileToPublish
-        Include="@(_ItscamSdkNativeLinuxX64);@(_ItscamSdkNativeLinuxArm);@(_ItscamSdkNativeLinuxArm64)"
-        Condition="'@(_ItscamSdkNativeLinuxX64)' != '' or '@(_ItscamSdkNativeLinuxArm)' != '' or '@(_ItscamSdkNativeLinuxArm64)' != ''">
+        Include="@(_ItscamSdkNativeLinuxX64)"
+        Condition="'@(_ItscamSdkNativeLinuxX64)' != '' and '$(RuntimeIdentifier)' == 'linux-x64'">
+        <RelativePath>libitscam_sdk.so</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+        <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+      </ResolvedFileToPublish>
+      <ResolvedFileToPublish
+        Include="@(_ItscamSdkNativeLinuxArm)"
+        Condition="'@(_ItscamSdkNativeLinuxArm)' != '' and '$(RuntimeIdentifier)' == 'linux-arm'">
+        <RelativePath>libitscam_sdk.so</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+        <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+      </ResolvedFileToPublish>
+      <ResolvedFileToPublish
+        Include="@(_ItscamSdkNativeLinuxArm64)"
+        Condition="'@(_ItscamSdkNativeLinuxArm64)' != '' and '$(RuntimeIdentifier)' == 'linux-arm64'">
         <RelativePath>libitscam_sdk.so</RelativePath>
         <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
         <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
       </ResolvedFileToPublish>
       <ResolvedFileToPublish
         Include="@(_ItscamSdkNativeWinX64)"
-        Condition="'@(_ItscamSdkNativeWinX64)' != ''">
+        Condition="'@(_ItscamSdkNativeWinX64)' != '' and '$(RuntimeIdentifier)' == 'win-x64'">
         <RelativePath>itscam_sdk.dll</RelativePath>
         <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
         <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
       </ResolvedFileToPublish>
       <ResolvedFileToPublish
         Include="@(_ItscamSdkNativeWinX86)"
-        Condition="'@(_ItscamSdkNativeWinX86)' != ''">
+        Condition="'@(_ItscamSdkNativeWinX86)' != '' and '$(RuntimeIdentifier)' == 'win-x86'">
         <RelativePath>itscam_sdk.dll</RelativePath>
         <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
         <ExcludeFromSingleFile>true</ExcludeFromSingleFile>

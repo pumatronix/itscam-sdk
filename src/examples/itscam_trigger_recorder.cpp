@@ -17,14 +17,17 @@
 #include <cstdio>
 #include <cstring>
 #include <ctime>
+#include <cerrno>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
 #include <string>
 #include <sys/stat.h>
-#include <thread>
 #include <vector>
+#if defined(_WIN32)
+#include <direct.h>
+#endif
 #include "itscam_sdk.h"
 #include "itscam_jpeg_utils.h"
 
@@ -81,6 +84,14 @@ static bool directoryExists(const std::string& path) {
     return stat(path.c_str(), &info) == 0 && (info.st_mode & S_IFDIR);
 }
 
+static bool createDirectoryOne(const std::string& path) {
+#if defined(_WIN32)
+    return _mkdir(path.c_str()) == 0 || errno == EEXIST;
+#else
+    return mkdir(path.c_str(), 0755) == 0 || errno == EEXIST;
+#endif
+}
+
 /**
  * Recursively create directories for the given path.
  * Handles nested paths like "a/b/c" by creating each component.
@@ -99,7 +110,7 @@ static bool createDirectoryRecursive(const std::string& path) {
     }
 
     // Create this directory
-    return mkdir(path.c_str(), 0755) == 0 || errno == EEXIST;
+    return createDirectoryOne(path);
 }
 
 // ============================================================================
@@ -514,7 +525,7 @@ int main(int argc, char* argv[]) {
     log("Recording started. Waiting for trigger events...");
 
     while (g_running) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        itscam_os::sleepForMs(100);
     }
 
     // --- Cleanup ------------------------------------------------------------

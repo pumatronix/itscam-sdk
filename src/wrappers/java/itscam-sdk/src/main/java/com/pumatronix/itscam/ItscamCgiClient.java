@@ -214,8 +214,8 @@ public final class ItscamCgiClient implements AutoCloseable {
         // GC doesn't reclaim the buffers mid-call.
         if (shuttersBuf != null) shuttersBuf.clear(0);
         if (gainsBuf != null) gainsBuf.clear(0);
-        if (keysArr != null) keysArr.getPointer();
-        if (valsArr != null) valsArr.getPointer();
+        if (keysArr != null) keysArr.getPointer(0);
+        if (valsArr != null) valsArr.getPointer(0);
         ItscamException.throwIfFailed(rc, "getSnapshot");
 
         Pointer arr = out.getValue();
