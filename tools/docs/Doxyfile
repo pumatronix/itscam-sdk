@@ -1,0 +1,83 @@
+# Doxyfile for the ITSCAM Client SDK -- C/C++ API reference.
+#
+# Generated HTML lands under docs-site/content/public/api-ref/cpp/, which
+# VitePress copies verbatim into the deployed site so the generated pages
+# are reachable at /api-ref/cpp/.  Run via `make docs-api-cpp`.
+#
+# Only the keys that differ from Doxygen's defaults are listed here.
+# Compatible with Doxygen 1.9+.
+
+PROJECT_NAME           = "ITSCAM Client SDK"
+PROJECT_BRIEF          = "C and C++ API reference"
+PROJECT_NUMBER         =
+
+# Outputs are placed relative to the directory in which Doxygen runs.
+# Both `make docs-api-cpp` and `docker-docs-api-cpp` invoke Doxygen from
+# the repository root, so OUTPUT_DIRECTORY is repo-relative.
+OUTPUT_DIRECTORY       = docs-site/content/public/api-ref/cpp
+CREATE_SUBDIRS         = NO
+OUTPUT_LANGUAGE        = English
+
+# Public surface of the SDK only.  We deliberately exclude the PIMPL
+# implementation files and the vendored 3rdparty headers (httplib,
+# nlohmann/json, mbedTLS) -- they are not user API.
+INPUT                  = src/core/itscam_sdk.h \
+                         src/core/itscam_client.h \
+                         src/core/itscam_rest_client.h \
+                         src/core/itscam_cgi_client.h \
+                         src/core/itscam_types.h \
+                         src/core/itscam_sdk_utils.h \
+                         src/core/itscam_jpeg_utils.h \
+                         src/core/c_api
+FILE_PATTERNS          = *.h *.hpp
+RECURSIVE              = YES
+EXCLUDE_PATTERNS       = */3rdparty/* */impl/*
+
+# Show every public symbol even when it lacks a docstring; this keeps the
+# generated reference comprehensive while we incrementally add Doxygen
+# comments to the headers.
+EXTRACT_ALL            = YES
+EXTRACT_PRIVATE        = NO
+EXTRACT_STATIC         = NO
+HIDE_UNDOC_MEMBERS     = NO
+HIDE_UNDOC_CLASSES     = NO
+SHOW_INCLUDE_FILES     = YES
+
+# C and C++ source treatment.
+JAVADOC_AUTOBRIEF      = YES
+QT_AUTOBRIEF           = YES
+MULTILINE_CPP_IS_BRIEF = NO
+INHERIT_DOCS           = YES
+SEPARATE_MEMBER_PAGES  = NO
+TAB_SIZE               = 4
+
+# Markdown enables more natural-looking docstrings; useful when we copy
+# code-block examples from the per-client guides into the headers.
+MARKDOWN_SUPPORT       = YES
+
+# Output formats -- only HTML, generated XML can be added later if/when we
+# integrate with Sphinx/Breathe or feed the AI Search corpus.
+GENERATE_HTML          = YES
+GENERATE_LATEX         = NO
+GENERATE_RTF           = NO
+GENERATE_MAN           = NO
+GENERATE_XML           = NO
+
+HTML_OUTPUT            = .
+HTML_FILE_EXTENSION    = .html
+HTML_DYNAMIC_SECTIONS  = YES
+DISABLE_INDEX          = NO
+GENERATE_TREEVIEW      = YES
+
+# Treat the C API as its own group so the sidebar can distinguish C from
+# C++.  The `\defgroup` block lives in src/core/c_api/itscam_sdk_c.h.
+ENABLED_SECTIONS       = c_api
+
+# Diagrams -- left at defaults (only renders if Graphviz is present).
+HAVE_DOT               = NO
+
+# Less console noise in CI.
+QUIET                  = YES
+WARNINGS               = YES
+WARN_IF_UNDOCUMENTED   = NO
+WARN_AS_ERROR          = NO

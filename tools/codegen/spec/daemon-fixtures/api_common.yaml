@@ -1,0 +1,146 @@
+components:
+  schemas:
+    # Util Types
+    ApiResponse:
+      type: object
+      description: Common API response structure
+      properties:
+        code:
+          type: integer
+          format: int32
+        message:
+          type: string
+    RGBColorF:
+      type: object
+      description: Single RGB value in float format
+      properties:
+        red:
+          type: number
+          format: float
+        green:
+          type: number
+          format: float
+        blue:
+          type: number
+          format: float
+    # Common Types
+    ControlValue:
+      type: object
+      description: Single control algorithm parameter
+      properties:
+        minValue:
+          type: integer
+          format: int32
+        maxValue:
+          type: integer
+          format: int32
+          default: -1
+        optimalValue:
+          type: integer
+          format: int32
+        fixedValue:
+          type: integer
+          format: int32
+        isFixed:
+          type: boolean
+    MinMaxFixedValue:
+      type: object
+      description: Shutter attributes
+      properties:
+        minValue:
+          type: integer
+          format: int32
+        maxValue:
+          type: integer
+          format: int32
+        fixedValue:
+          type: integer
+          format: int32
+        automatic:
+          type: boolean
+    ControlAlgorithmConfig:
+      type: object
+      description: Control algorithm general rules
+      properties:
+        mode:
+          type: string
+          enum:
+            - fast
+            - slow
+            - normal
+            - disabled
+          default: normal
+        updateRate:
+          type: integer
+          format: int32
+          default: 100
+        targetValue:
+          type: number
+          format: float
+          default: 0.0
+        holdTime:
+          type: integer
+          format: int32
+          default: 0
+    Ipv4Config:
+      type: string
+      description: "IPv4 address (ex: 192.168.0.1)"
+      pattern: '^\d{1,3}\.\d{1,3}.\d{1,3}.\d{1,3}$'
+    Ipv6Config:
+      type: string
+      description: "IPv6 address (ex: 2001:0db8:85a3:0000:0000:8a2e:0370:7334)"
+      pattern: '[0-9a-fA-F:]+'
+    NetworkPort:
+      type: integer
+      description: "Network port (0-65535)"
+      minimum: 0
+      maximum: 65535
+    TuplePercent:
+      type: object
+      description: "Pair of points (x,y). Each coordinate is within the range of [0.0, 100.0]"
+      properties:
+        x:
+          type: number
+          format: float
+          minimum: 0.0
+          maximum: 100.0
+        y:
+          type: number
+          format: float
+          minimum: 0.0
+          maximum: 100.0
+    RectRoiWithEnable:
+      type: object
+      description: "Pair of points that describes the boundary of a rectangular ROI"
+      properties:
+        enable:
+          type: boolean
+        x0:
+          type: integer
+        x1:
+          type: integer
+        y0:
+          type: integer
+        y1:
+          type: integer
+    RoiWithEnable:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+        x0:
+          type: integer
+        x1:
+          type: integer
+        x2:
+          type: integer
+        x3:
+          type: integer
+        y0:
+          type: integer
+        y1:
+          type: integer
+        y2:
+          type: integer
+        y3:
+          type: integer

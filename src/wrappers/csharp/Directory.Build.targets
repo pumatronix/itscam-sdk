@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Local development: copy libitscam_sdk.so next to every build/publish
+  output under src/wrappers/csharp/.  NuGet consumers get the same logic
+  via buildTransitive/Pumatronix.Itscam.Sdk.targets inside the package.
+-->
+<Project>
+  <Import Project="$(MSBuildThisFileDirectory)Itscam.Sdk\build\Itscam.Sdk.targets"
+          Condition="Exists('$(MSBuildThisFileDirectory)Itscam.Sdk\build\Itscam.Sdk.targets')" />
+</Project>

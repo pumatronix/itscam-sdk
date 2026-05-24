@@ -1,0 +1,56 @@
+name: Codegen drift check
+
+# Ensures the committed REST type files (src/core/itscam_rest_types.hpp,
+# RestTypes.g.cs, rest_types.py, rest_types.go) stay in lockstep with the
+# OpenAPI snapshot at tools/codegen/spec/default.yaml.
+#
+# If you change either side without regenerating, this job fails and tells
+# you to run `make codegen` (or `make docker-codegen`).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "tools/codegen/**"
+      - "src/core/itscam_rest_types.hpp"
+      - "src/wrappers/csharp/Itscam.Sdk/RestTypes/**"
+      - "src/wrappers/python/itscam/rest_types.py"
+      - "src/wrappers/go/itscam/rest_types.go"
+      - ".github/workflows/codegen-check.yml"
+  pull_request:
+    paths:
+      - "tools/codegen/**"
+      - "src/core/itscam_rest_types.hpp"
+      - "src/wrappers/csharp/Itscam.Sdk/RestTypes/**"
+      - "src/wrappers/python/itscam/rest_types.py"
+      - "src/wrappers/go/itscam/rest_types.go"
+      - ".github/workflows/codegen-check.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  codegen-check:
+    name: Verify typed REST helpers match the snapshot
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install codegen dependencies
+        working-directory: tools/codegen
+        run: npm ci --no-audit --no-fund || npm install --no-audit --no-fund
+
+      - name: Run make codegen-check
+        run: make codegen-check
+
+      - name: Show drift hint on failure
+        if: failure()
+        run: |
+          echo "::error::Generated REST type files drift from tools/codegen/spec/default.yaml."
+          echo "Run 'make codegen' (or 'make docker-codegen') and commit the regenerated files."

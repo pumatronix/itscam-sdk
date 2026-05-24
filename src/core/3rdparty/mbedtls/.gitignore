@@ -1,0 +1,6 @@
+# mbedTLS sources are vendored and committed under include/, library/,
+# 3rdparty/ and LICENSE.  The SDK overlay (itscam_mbedtls_config.h,
+# mbedtls.cmake, README.md) is also tracked.
+# Only stray build artifacts and local download caches are excluded.
+.cache/
+*.o

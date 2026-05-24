@@ -1,0 +1,7 @@
+apiRules:
+  - exclude:
+      uidRegex: ^Pumatronix\.Itscam\.Native
+      type: Namespace
+  - exclude:
+      uidRegex: ^Pumatronix\.Itscam\.RestTypes
+      type: Namespace

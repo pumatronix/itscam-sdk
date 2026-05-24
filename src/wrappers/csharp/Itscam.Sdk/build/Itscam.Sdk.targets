@@ -1,0 +1,149 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Itscam.Sdk.targets
+
+    Auto-imported by consuming projects via the NuGet package and (for
+    SDK-style projects) via ProjectReference.  Ensures the correct native
+    library ends up next to the output assembly for both `dotnet build`
+    and `dotnet publish` (self-contained).
+
+    Resolution priority for each RID:
+      1. Staged runtimes/ layout  (produced by `make csharp-pack`)
+      2. Core build output        (produced by `make lib`)
+-->
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+
+  <PropertyGroup>
+    <!-- Staged NuGet runtimes layout: built by `make csharp-pack`. -->
+    <_ItscamSdkRuntimesDir>$(MSBuildThisFileDirectory)..\runtimes\</_ItscamSdkRuntimesDir>
+    <!-- Built-from-source layout: built by `make lib` / `make csharp-examples`. -->
+    <_ItscamSdkCoreDir>$(MSBuildThisFileDirectory)..\..\..\..\core\build\</_ItscamSdkCoreDir>
+  </PropertyGroup>
+
+  <!--
+    Resolve the best available native library for each supported RID.
+    Items are added to the global item store so both the build and publish
+    targets below can share them without running resolution twice.
+  -->
+  <Target Name="_ItscamSdkResolveNative">
+    <ItemGroup>
+
+      <!-- linux-x64 -->
+      <_ItscamSdkNativeLinuxX64
+        Include="$(_ItscamSdkRuntimesDir)linux-x64\native\libitscam_sdk.so"
+        Condition="Exists('$(_ItscamSdkRuntimesDir)linux-x64\native\libitscam_sdk.so')" />
+      <_ItscamSdkNativeLinuxX64
+        Include="$(_ItscamSdkCoreDir)linux\libitscam_sdk.so"
+        Condition="'@(_ItscamSdkNativeLinuxX64)' == '' and Exists('$(_ItscamSdkCoreDir)linux\libitscam_sdk.so')" />
+      <_ItscamSdkNativeLinuxX64
+        Include="$(_ItscamSdkCoreDir)linux\libitscam_sdk.so.1.0.0"
+        Condition="'@(_ItscamSdkNativeLinuxX64)' == '' and Exists('$(_ItscamSdkCoreDir)linux\libitscam_sdk.so.1.0.0')" />
+
+      <!-- linux-arm (ITSCAM450) -->
+      <_ItscamSdkNativeLinuxArm
+        Include="$(_ItscamSdkRuntimesDir)linux-arm\native\libitscam_sdk.so"
+        Condition="Exists('$(_ItscamSdkRuntimesDir)linux-arm\native\libitscam_sdk.so')" />
+      <_ItscamSdkNativeLinuxArm
+        Include="$(_ItscamSdkCoreDir)linux-arm\libitscam_sdk.so"
+        Condition="'@(_ItscamSdkNativeLinuxArm)' == '' and Exists('$(_ItscamSdkCoreDir)linux-arm\libitscam_sdk.so')" />
+      <_ItscamSdkNativeLinuxArm
+        Include="$(_ItscamSdkCoreDir)linux-arm\libitscam_sdk.so.1.0.0"
+        Condition="'@(_ItscamSdkNativeLinuxArm)' == '' and Exists('$(_ItscamSdkCoreDir)linux-arm\libitscam_sdk.so.1.0.0')" />
+
+      <!-- linux-arm64 (ITSCAM600) -->
+      <_ItscamSdkNativeLinuxArm64
+        Include="$(_ItscamSdkRuntimesDir)linux-arm64\native\libitscam_sdk.so"
+        Condition="Exists('$(_ItscamSdkRuntimesDir)linux-arm64\native\libitscam_sdk.so')" />
+      <_ItscamSdkNativeLinuxArm64
+        Include="$(_ItscamSdkCoreDir)linux-arm64\libitscam_sdk.so"
+        Condition="'@(_ItscamSdkNativeLinuxArm64)' == '' and Exists('$(_ItscamSdkCoreDir)linux-arm64\libitscam_sdk.so')" />
+      <_ItscamSdkNativeLinuxArm64
+        Include="$(_ItscamSdkCoreDir)linux-arm64\libitscam_sdk.so.1.0.0"
+        Condition="'@(_ItscamSdkNativeLinuxArm64)' == '' and Exists('$(_ItscamSdkCoreDir)linux-arm64\libitscam_sdk.so.1.0.0')" />
+
+      <!-- win-x64 -->
+      <_ItscamSdkNativeWinX64
+        Include="$(_ItscamSdkRuntimesDir)win-x64\native\itscam_sdk.dll"
+        Condition="Exists('$(_ItscamSdkRuntimesDir)win-x64\native\itscam_sdk.dll')" />
+      <_ItscamSdkNativeWinX64
+        Include="$(_ItscamSdkCoreDir)win-x64\itscam_sdk.dll"
+        Condition="'@(_ItscamSdkNativeWinX64)' == '' and Exists('$(_ItscamSdkCoreDir)win-x64\itscam_sdk.dll')" />
+
+      <!-- win-x86 -->
+      <_ItscamSdkNativeWinX86
+        Include="$(_ItscamSdkRuntimesDir)win-x86\native\itscam_sdk.dll"
+        Condition="Exists('$(_ItscamSdkRuntimesDir)win-x86\native\itscam_sdk.dll')" />
+      <_ItscamSdkNativeWinX86
+        Include="$(_ItscamSdkCoreDir)win-x86\itscam_sdk.dll"
+        Condition="'@(_ItscamSdkNativeWinX86)' == '' and Exists('$(_ItscamSdkCoreDir)win-x86\itscam_sdk.dll')" />
+
+    </ItemGroup>
+  </Target>
+
+  <!--
+    Copy the native library to the build output directory
+    (e.g. bin/Release/net8.0/) so `dotnet run` and framework-dependent
+    deployments work without setting LD_LIBRARY_PATH.
+  -->
+  <Target Name="_ItscamSdkCopyNative" BeforeTargets="Build"
+          DependsOnTargets="_ItscamSdkResolveNative">
+    <Copy SourceFiles="@(_ItscamSdkNativeLinuxX64)"
+          DestinationFiles="$(OutDir)libitscam_sdk.so"
+          SkipUnchangedFiles="true"
+          Condition="'@(_ItscamSdkNativeLinuxX64)' != ''" />
+    <Copy SourceFiles="@(_ItscamSdkNativeLinuxArm)"
+          DestinationFiles="$(OutDir)libitscam_sdk.so"
+          SkipUnchangedFiles="true"
+          Condition="'@(_ItscamSdkNativeLinuxArm)' != ''" />
+    <Copy SourceFiles="@(_ItscamSdkNativeLinuxArm64)"
+          DestinationFiles="$(OutDir)libitscam_sdk.so"
+          SkipUnchangedFiles="true"
+          Condition="'@(_ItscamSdkNativeLinuxArm64)' != ''" />
+    <Copy SourceFiles="@(_ItscamSdkNativeWinX64)"
+          DestinationFiles="$(OutDir)itscam_sdk.dll"
+          SkipUnchangedFiles="true"
+          Condition="'@(_ItscamSdkNativeWinX64)' != '' and '$(RuntimeIdentifier)' != 'win-x86'" />
+    <Copy SourceFiles="@(_ItscamSdkNativeWinX86)"
+          DestinationFiles="$(OutDir)itscam_sdk.dll"
+          SkipUnchangedFiles="true"
+          Condition="'@(_ItscamSdkNativeWinX86)' != '' and '$(RuntimeIdentifier)' == 'win-x86'" />
+  </Target>
+
+  <!--
+    Inject the native library into the publish output
+    (e.g. bin/Release/net8.0/linux-x64/publish/) so self-contained
+    single-file publishing (self-contained PublishSingleFile=true)
+    produces a runnable artifact.
+
+    ExcludeFromSingleFile=true keeps the .so / .dll as a separate file
+    alongside the bundle instead of being embedded, which is required
+    because native code cannot be loaded from a memory-mapped bundle.
+  -->
+  <Target Name="_ItscamSdkPublishNative" BeforeTargets="PrepareForPublish"
+          DependsOnTargets="_ItscamSdkResolveNative">
+    <ItemGroup>
+      <ResolvedFileToPublish
+        Include="@(_ItscamSdkNativeLinuxX64);@(_ItscamSdkNativeLinuxArm);@(_ItscamSdkNativeLinuxArm64)"
+        Condition="'@(_ItscamSdkNativeLinuxX64)' != '' or '@(_ItscamSdkNativeLinuxArm)' != '' or '@(_ItscamSdkNativeLinuxArm64)' != ''">
+        <RelativePath>libitscam_sdk.so</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+        <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+      </ResolvedFileToPublish>
+      <ResolvedFileToPublish
+        Include="@(_ItscamSdkNativeWinX64)"
+        Condition="'@(_ItscamSdkNativeWinX64)' != ''">
+        <RelativePath>itscam_sdk.dll</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+        <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+      </ResolvedFileToPublish>
+      <ResolvedFileToPublish
+        Include="@(_ItscamSdkNativeWinX86)"
+        Condition="'@(_ItscamSdkNativeWinX86)' != ''">
+        <RelativePath>itscam_sdk.dll</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+        <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+      </ResolvedFileToPublish>
+    </ItemGroup>
+  </Target>
+
+</Project>

@@ -1,0 +1,146 @@
+name: Build and release SDK
+
+# Builds the consumer SDK distribution tarball (itscam-sdk-<version>.tar.gz)
+# on every push to main, pull request, and version tag. When a v* tag is
+# pushed, the tarball is also attached to a GitHub Release for permanent,
+# downloadable distribution.
+#
+# The build runs **inside the project's own Dockerfile** (image
+# `itscam-sdk-builder`, Ubuntu 20.04 + MinGW 9 + .NET 8 + Go 1.25 +
+# Node 20). This is the same toolchain maintainers use locally via
+# `make docker-sdk-dist`, which keeps CI artefacts reproducible and
+# avoids breakage when GitHub bumps `ubuntu-latest` (e.g. Ubuntu 24.04
+# ships MinGW 13, whose libstdc++ collides with our win32-threads STL
+# shim in src/core/impl/itscam_mingw_stl_sync.hpp).
+#
+# Docker layers are cached in the GitHub Actions cache so subsequent
+# runs skip the slow apt/.NET/Go/Node installation steps.
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sdk-release-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build:
+    name: Build SDK distribution
+    runs-on: ubuntu-latest
+    outputs:
+      sdk_version: ${{ steps.version.outputs.sdk_version }}
+      archive_name: ${{ steps.version.outputs.archive_name }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # fetch-depth: 0 is required so tools/version/gen-version.sh can
+          # run `git describe --tags` and count commits since the last tag.
+          fetch-depth: 0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build itscam-sdk-builder image (cached in GHA)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          load: true
+          tags: itscam-sdk-builder:ci
+          cache-from: type=gha,scope=itscam-sdk-builder
+          cache-to: type=gha,mode=max,scope=itscam-sdk-builder
+
+      - name: Build SDK distribution archive (inside builder image)
+        # Mirrors the $(DOCKER_RUN) recipe used by `make docker-sdk-dist`.
+        # We invoke `docker run` directly instead of `make docker-sdk-dist`
+        # so we can reuse the buildx-loaded image without triggering an
+        # uncached `docker build` from the Makefile's `docker-build` dep.
+        run: |
+          docker run --rm \
+            -v "$PWD:/sdk" \
+            -w /sdk \
+            -u "$(id -u):$(id -g)" \
+            -e HOME=/tmp \
+            -e XDG_CACHE_HOME=/tmp/.cache \
+            -e NPM_CONFIG_CACHE=/tmp/.npm \
+            -e DOTNET_CLI_HOME=/tmp/dotnet \
+            itscam-sdk-builder:ci \
+            make sdk-dist
+
+      - name: Extract version metadata
+        id: version
+        run: |
+          sdk_version=$(python3 -c 'import json; print(json.load(open("VERSION.json"))["version"])')
+          archive_name="itscam-sdk-${sdk_version}.tar.gz"
+          echo "sdk_version=${sdk_version}" >> "$GITHUB_OUTPUT"
+          echo "archive_name=${archive_name}" >> "$GITHUB_OUTPUT"
+          echo "Built ${archive_name}"
+          ls -la "dist/${archive_name}"
+
+      - name: Upload SDK tarball as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: itscam-sdk-${{ steps.version.outputs.sdk_version }}
+          path: dist/${{ steps.version.outputs.archive_name }}
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Upload VERSION.json as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: itscam-sdk-${{ steps.version.outputs.sdk_version }}-metadata
+          path: VERSION.json
+          if-no-files-found: error
+          retention-days: 90
+
+  release:
+    name: Publish GitHub Release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download SDK tarball artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: itscam-sdk-${{ needs.build.outputs.sdk_version }}
+          path: dist/
+
+      - name: Download VERSION.json artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: itscam-sdk-${{ needs.build.outputs.sdk_version }}-metadata
+          path: dist/
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_NAME: ${{ github.ref_name }}
+          ARCHIVE_NAME: ${{ needs.build.outputs.archive_name }}
+        run: |
+          # Mark as pre-release when the tag contains a hyphen
+          # (e.g. v1.0.0-rc.1, v1.0.0-beta.2).
+          prerelease_flag=""
+          if [[ "${TAG_NAME}" == *-* ]]; then
+            prerelease_flag="--prerelease"
+          fi
+
+          gh release create "${TAG_NAME}" \
+            "dist/${ARCHIVE_NAME}" \
+            "dist/VERSION.json" \
+            --title "${TAG_NAME}" \
+            --generate-notes \
+            ${prerelease_flag}

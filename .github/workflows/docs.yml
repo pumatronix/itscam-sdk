@@ -1,0 +1,170 @@
+name: Deploy documentation
+
+# Builds the VitePress documentation site (with Doxygen / pdoc / DocFX /
+# gomarkdoc API references) inside the project's own builder image
+# (itscam-sdk-builder, Ubuntu 20.04 + Doxygen + .NET 8/DocFX + Go 1.25 +
+# gomarkdoc + Python/pdoc + Node 20). Same image and GHA cache scope as
+# `sdk-release.yml`, so a warm Docker cache from either workflow benefits
+# the other.
+#
+# The sync-r2-corpus job stays on the runner because it only needs Node
+# + the aws CLI (provided by aws-actions/configure-aws-credentials) and
+# would gain nothing from going through Docker.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/**"
+      - "docs-site/**"
+      - "README.md"
+      - "README.en-US.md"
+      - "AGENTS.md"
+      - "src/core/**"
+      - "src/wrappers/**"
+      - "src/**/examples/**"
+      - "tools/docs/**"
+      - "Dockerfile"
+      - ".github/workflows/docs.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "docs/**"
+      - "docs-site/**"
+      - "README.md"
+      - "README.en-US.md"
+      - "AGENTS.md"
+      - "src/core/**"
+      - "src/wrappers/**"
+      - "src/**/examples/**"
+      - "tools/docs/**"
+      - "Dockerfile"
+      - ".github/workflows/docs.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Per-ref concurrency so PR builds don't queue behind each other or
+# behind main. The global `pages` concurrency lives on the deploy job
+# only (see below), which is the single resource that genuinely cannot
+# run twice in parallel.
+concurrency:
+  group: docs-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build itscam-sdk-builder image (cached in GHA)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          load: true
+          tags: itscam-sdk-builder:ci
+          # Shared scope with sdk-release.yml so the Docker layer cache
+          # is reused across both workflows.
+          cache-from: type=gha,scope=itscam-sdk-builder
+          cache-to: type=gha,mode=max,scope=itscam-sdk-builder
+
+      - name: Build docs site inside builder image
+        # Combines docs-sync-check + docs-api + VitePress build into one
+        # `docker run` so the bind-mount setup is declared once and the
+        # whole pipeline fails fast on any error. Mirrors the
+        # $(DOCKER_RUN) recipe in the Makefile (mounts $PWD as /sdk,
+        # runs as the runner's UID/GID, sandboxes HOME/caches under
+        # /tmp). VITEPRESS_BASE / VITE_AI_SEARCH_API_URL are forwarded
+        # so the VitePress build picks them up.
+        env:
+          VITEPRESS_BASE: /${{ github.event.repository.name }}/
+          VITE_AI_SEARCH_API_URL: ${{ vars.VITE_AI_SEARCH_API_URL }}
+        run: |
+          docker run --rm \
+            -v "$PWD:/sdk" \
+            -w /sdk \
+            -u "$(id -u):$(id -g)" \
+            -e HOME=/tmp \
+            -e XDG_CACHE_HOME=/tmp/.cache \
+            -e NPM_CONFIG_CACHE=/tmp/.npm \
+            -e DOTNET_CLI_HOME=/tmp/dotnet \
+            -e VITEPRESS_BASE \
+            -e VITE_AI_SEARCH_API_URL \
+            itscam-sdk-builder:ci \
+            bash -euxc '
+              make lib
+              make docs-sync-check
+              make docs-api
+              cd docs-site
+              npm install --no-audit --no-fund
+              node node_modules/.bin/vitepress build
+            '
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs-site/.vitepress/dist
+
+  # Uploads the documentation corpus (docs/, READMEs, AGENTS.md, and the
+  # curated example sources) to a Cloudflare R2 bucket connected to the
+  # AI Search instance as its data source. Cloudflare AI Search auto-syncs
+  # the bucket, so we only need to keep R2 in lockstep with `main`.
+  #
+  # Runs on the host (not in the builder image) because it only needs
+  # Node + the aws CLI from aws-actions/configure-aws-credentials.
+  sync-r2-corpus:
+    runs-on: ubuntu-latest
+    # Push events only: PRs and manual dispatches from feature branches
+    # must not overwrite the production R2 corpus.
+    if: github.event_name == 'push' && vars.R2_BUCKET_NAME != ''
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Stage documentation corpus
+        working-directory: docs-site
+        run: node scripts/stage-corpus.mjs
+
+      - name: Configure R2 credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.R2_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          aws-region: auto
+
+      - name: Sync corpus to R2
+        env:
+          R2_BUCKET_NAME: ${{ vars.R2_BUCKET_NAME }}
+          R2_ENDPOINT: https://${{ secrets.CF_ACCOUNT_ID }}.r2.cloudflarestorage.com
+        run: |
+          aws s3 sync docs-site/.corpus-staging "s3://${R2_BUCKET_NAME}/" \
+            --endpoint-url "${R2_ENDPOINT}" \
+            --delete
+
+  deploy:
+    needs: build
+    # PR runs validate the build but must not publish to Pages.
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    # Serialize Pages deploys across all runs of this workflow so two
+    # main pushes (or a main push + a workflow_dispatch) never race
+    # against each other on the single Pages target.
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/deploy-pages@v4
+        id: deployment

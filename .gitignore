@@ -1,18 +1,55 @@
 # Core build artifacts
-core/build
+src/core/build
 
 # Examples build artifacts
-examples/build
-examples/images
+src/examples/build
+src/examples/images
 
 # Python wrapper
-wrappers/python/*.egg-info/
-wrappers/python/dist/
-wrappers/python/build/
+src/wrappers/python/*.egg-info/
+src/wrappers/python/dist/
+src/wrappers/python/build/
 __pycache__/
 *.pyc
 *.pyo
 
 # Go wrapper
-wrappers/go/vendor/
-wrappers/go/examples/gui/build/
+src/wrappers/go/vendor/
+src/wrappers/go/examples/capture_example
+src/wrappers/go/examples/rest_example
+src/wrappers/go/examples/cgi_snapshot_example
+src/wrappers/go/examples/gui/build/
+
+# C# wrapper
+src/wrappers/csharp/Itscam.Sdk/bin/
+src/wrappers/csharp/Itscam.Sdk/obj/
+src/wrappers/csharp/examples/CaptureExample/bin/
+src/wrappers/csharp/examples/CaptureExample/obj/
+src/wrappers/csharp/examples/MjpegGrabberExample/bin/
+src/wrappers/csharp/examples/MjpegGrabberExample/obj/
+src/wrappers/csharp/examples/SoftwareTriggerSnapshotExample/bin/
+src/wrappers/csharp/examples/SoftwareTriggerSnapshotExample/obj/
+src/wrappers/csharp/examples/BinaryCaptureExample/bin/
+src/wrappers/csharp/examples/BinaryCaptureExample/obj/
+src/wrappers/csharp/nupkg/
+
+# Codegen tool
+tools/codegen/node_modules/
+tools/codegen/build/
+
+# Documentation tools (DocFX intermediate output for C# API ref)
+tools/docs/obj/
+
+# Live-camera regression runs (tools/regression/run-examples.sh)
+.regression/
+
+# SDK consumer distribution (tools/packaging/make-sdk-dist.sh)
+dist/
+
+# Generated version metadata (tools/version/gen-version.sh)
+tools/version/sdk-version.mk
+src/core/itscam_sdk_version.h
+src/wrappers/python/itscam/_version.py
+src/wrappers/csharp/Version.props
+src/wrappers/go/itscam/version.go
+VERSION.json
