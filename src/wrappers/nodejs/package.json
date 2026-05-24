@@ -1,6 +1,6 @@
 {
   "name": "@pumatronix/itscam-sdk",
-  "version": "0.2.0-dev.4",
+  "version": "0.2.0-dev.7",
   "description": "Idiomatic Node.js wrapper for the Pumatronix ITSCAM Client SDK -- binary, REST and CGI clients backed by the native libitscam_sdk through koffi.",
   "main": "src/index.js",
   "types": "types/index.d.ts",

@@ -3,25 +3,23 @@
 //
 // Example: Simple MJPEG Frame-Rate Grabber
 //
-// Demonstrates the SDK's REST surfaces:
+// Demonstrates the SDK's typed REST surface with partial serialization:
 //
-//   * GetProfilesAsync() (typed) -- read-only inspection of profile names
-//     and ids.
-//   * PatchJsonAsync() (partial PUT) -- the correct way to change camera
-//     configuration.  The ITSCAM daemon merges only the supplied fields;
-//     sending back a full GET response body is rejected with HTTP 500 on
-//     PUT /api/image/profiles/{id}.
+//   * GetProfilesAsync() -- read profile names and ids.
+//   * UpdateProfileByIdAsync() -- disable trigger with a partial struct.
+//   * SetStreamConfigAsync() -- configure MJPEG stream parameters.
+//   * SetAnalyticsConfigAsync() / SetOcrConfigAsync() -- typed config updates.
 //
 // Steps performed (all via REST, which always requires authentication):
 //
 //   1. Login to the camera.
 //   2. Fetch all image profiles, locate the "day" and "night" profiles
-//      (by name, case-insensitive) and disable trigger.enabled on each
-//      one via PatchJsonAsync.
-//   3. PatchJsonAsync("/api/video/streams", ...) to set
-//      mjpeg.main.useTriggerFrames = false and mjpeg.main.framerate (default 30).
-//   4. PatchJsonAsync("/api/equipment/analytics", ...) to disable voting.
-//   5. PatchJsonAsync("/api/equipment/ocr", ...) to disable OCR.
+//      (by name, case-insensitive) and disable trigger on each using
+//      a typed partial UpdateProfileByIdAsync call.
+//   3. SetStreamConfigAsync to set mjpeg.main.useTriggerFrames = false
+//      and mjpeg.main.framerate (default 30).
+//   4. SetAnalyticsConfigAsync to disable voting.
+//   5. SetOcrConfigAsync to disable OCR.
 //   6. Open the MJPEG stream via the CGI client (auth is optional on the
 //      camera's defaults), count frames for a configurable measurement
 //      window, and print the measured frames-per-second to the console.
@@ -152,9 +150,9 @@ class Program
             targeted.AddRange(profiles);
         }
 
-        var triggerOff = new JsonObject
+        var patch = new ProfileConfig
         {
-            ["trigger"] = new JsonObject { ["enabled"] = false },
+            Trigger = new Trigger { Enabled = false },
         };
 
         foreach (var profile in targeted)
@@ -162,8 +160,7 @@ class Program
             string name = profile.Name ?? "(unnamed)";
             Console.WriteLine($"  Disabling trigger on profile '{name}' (id={profile.Id})...");
 
-            await rest.PatchJsonAsync(
-                $"/api/image/profiles/{profile.Id}", triggerOff);
+            await rest.UpdateProfileByIdAsync((int)profile.Id, patch);
             Console.WriteLine("    -> done.");
         }
     }
@@ -172,14 +169,14 @@ class Program
     {
         Console.WriteLine($"\n[REST] Configuring MJPEG stream "
             + $"(useTriggerFrames=false, framerate={framerate})...");
-        await rest.PatchJsonAsync("/api/video/streams", new JsonObject
+        await rest.SetStreamConfigAsync(new StreamConfig
         {
-            ["mjpeg"] = new JsonObject
+            Mjpeg = new Mjpeg
             {
-                ["main"] = new JsonObject
+                Main = new MjpegMain
                 {
-                    ["useTriggerFrames"] = false,
-                    ["framerate"]        = framerate,
+                    UseTriggerFrames = false,
+                    Framerate = framerate,
                 },
             },
         });
@@ -189,16 +186,16 @@ class Program
     static async Task DisableAnalyticsAndOcr(ItscamRestClient rest)
     {
         Console.WriteLine("\n[REST] Disabling analytics (majority voting)...");
-        await rest.PatchJsonAsync("/api/equipment/analytics", new JsonObject
+        await rest.SetAnalyticsConfigAsync(new AnalyticsConfig
         {
-            ["voting"] = new JsonObject { ["enabled"] = false },
+            Voting = new Voting { Enabled = false },
         });
         Console.WriteLine("  -> voting.enabled = false");
 
         Console.WriteLine("\n[REST] Disabling OCR...");
-        await rest.PatchJsonAsync("/api/equipment/ocr", new JsonObject
+        await rest.SetOcrConfigAsync(new OcrConfig
         {
-            ["ocr"] = new JsonObject { ["enabled"] = false },
+            Ocr = new OcrConfigOcr { Enabled = false },
         });
         Console.WriteLine("  -> ocr.enabled = false");
     }

@@ -102,15 +102,19 @@ await rest.LoginAsync("admin", "1234");
 // Read-only inspection: typed POCO is convenient.
 List<ProfileConfig> profiles = await rest.GetProfilesAsync();
 
-// Configuration changes: partial PUT (send only what you change).
-await rest.PatchJsonAsync("/api/image/profiles/0",
-    new JsonObject { ["trigger"] = new JsonObject { ["enabled"] = false } });
+// Configuration changes: typed setter with partial serialization (preferred).
+var patch = new ProfileConfig { Trigger = new TriggerConfig { Enabled = false } };
+await rest.UpdateProfileByIdAsync(0, patch);
+
+// Alternative: generic patchJson for untyped payloads.
+// await rest.PatchJsonAsync("/api/image/profiles/0",
+//     new JsonObject { ["trigger"] = new JsonObject { ["enabled"] = false } });
 
 // Raw JSON for endpoints not yet promoted to typed helpers:
 string json = await rest.GetAsync("/api/equipment/misc/readonly/volatile");
 ```
 
-`PatchJsonAsync` PUTs a partial JSON document; the daemon merges the supplied fields into the existing config. Do **not** GET a full profile and PUT it back -- `PUT /api/image/profiles/{id}` rejects full-document bodies with HTTP 500. See `docs/api/rest-client.md` for details.
+Typed setters use **partial serialization** -- only fields explicitly set on the struct are included in the PUT body. The daemon merges the supplied fields into the existing config. The generic `PatchJsonAsync` remains available for untyped payloads or endpoints without a typed helper. See `docs/api/rest-client.md` for details.
 
 ## Example project
 

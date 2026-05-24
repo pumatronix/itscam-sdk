@@ -89,10 +89,10 @@ with ItscamCgiClient() as cgi:
 
 O REST client expõe duas superfícies que coexistem:
 
-* **Typed helpers** (preferencial) -- `rest.get_ocr_config()`, `rest.set_ocr_config(cfg)`, `rest.get_profiles()` etc. retornam dataclasses geradas a partir do documento OpenAPI da câmera. Veja [`docs/codegen.md`](../codegen.md) para o workflow de regeneração (maintainer e downstream).
+* **Typed helpers** (preferencial) -- `rest.get_ocr_config()`, `rest.set_ocr_config(cfg)`, `rest.get_profiles()` etc. retornam dataclasses geradas a partir do documento OpenAPI da câmera. Usam serialização parcial -- fields `None`/não setados são omitidos do body PUT. Veja [`docs/codegen.md`](../codegen.md) para o workflow de regeneração (maintainer e downstream).
 * **Generic verbs** (escape hatch) -- `rest.get(path)`, `rest.put(path, body)`, `rest.post`, `rest.delete` retornam JSON já parseado (`dict` / `list`).
 
-* **Partial PUT** -- `rest.patch_json(path, patch)` envia somente os campos que mudaram. Obrigatório para image profiles e recomendado para a maioria das configuration updates. Veja [`docs/api/rest-client.md`](../api/rest-client.md).
+* **Generic partial PUT** -- `rest.patch_json(path, patch)` envia somente os campos fornecidos. Disponível para payloads não tipados ou endpoints sem typed helper. Veja [`docs/api/rest-client.md`](../api/rest-client.md).
 
 ```python
 from itscam import ItscamRestClient, ProfileConfig
@@ -104,9 +104,14 @@ with ItscamRestClient() as rest:
     # Read-only: typed POCO é conveniente.
     profiles = rest.get_profiles()
 
-    # Write: partial PUT (não faça round-trip do profile completo).
-    rest.patch_json("/api/image/profiles/0",
-                    {"trigger": {"enabled": False}})
+    # Write: setter tipado com serialização parcial (preferencial).
+    from itscam import ProfileConfig, TriggerConfig
+    patch = ProfileConfig(trigger=TriggerConfig(enabled=False))
+    rest.update_profile_by_id(0, patch)
+
+    # Alternativa: patch_json genérico para payloads não tipados.
+    # rest.patch_json("/api/image/profiles/0",
+    #                 {"trigger": {"enabled": False}})
 
     # Generic verbs:
     print(rest.get("/api/equipment/misc/readonly/constants"))

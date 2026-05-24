@@ -237,14 +237,16 @@ Result<rt::ProfileConfig> ItscamRestClient::updateProfileById(
     std::string path =
         mImpl->apiPrefix + "/image/profiles/" + std::to_string(id);
     return mapTyped<rt::ProfileConfig>(
-        mImpl->doPut(path, json(profile), timeoutMs));
+        mImpl->doPut(path, rt::to_partial_json(profile), timeoutMs));
 }
 
 Result<rt::ProfileConfig> ItscamRestClient::updateProfiles(
     const std::vector<rt::ProfileConfig>& profiles, uint32_t timeoutMs) {
+    json arr = json::array();
+    for (auto const& p : profiles) arr.push_back(rt::to_partial_json(p));
     return mapTyped<rt::ProfileConfig>(
         mImpl->doPut(mImpl->apiPrefix + "/image/profiles",
-                     json(profiles), timeoutMs));
+                     arr, timeoutMs));
 }
 
 Result<nlohmann::json> ItscamRestClient::deleteProfile(int id,
@@ -292,7 +294,8 @@ Result<rt::AnalyticsConfig> ItscamRestClient::getAnalyticsConfig(
 Result<rt::AnalyticsConfig> ItscamRestClient::setAnalyticsConfig(
     const rt::AnalyticsConfig& config, uint32_t timeoutMs) {
     return mapTyped<rt::AnalyticsConfig>(mImpl->doPut(
-        mImpl->apiPrefix + "/equipment/analytics", json(config), timeoutMs));
+        mImpl->apiPrefix + "/equipment/analytics",
+        rt::to_partial_json(config), timeoutMs));
 }
 
 //=========================================================================
@@ -307,7 +310,8 @@ Result<rt::OcrConfig> ItscamRestClient::getOcrConfig(uint32_t timeoutMs) {
 Result<rt::OcrConfig> ItscamRestClient::setOcrConfig(
     const rt::OcrConfig& config, uint32_t timeoutMs) {
     return mapTyped<rt::OcrConfig>(mImpl->doPut(
-        mImpl->apiPrefix + "/equipment/ocr", json(config), timeoutMs));
+        mImpl->apiPrefix + "/equipment/ocr",
+        rt::to_partial_json(config), timeoutMs));
 }
 
 //=========================================================================
@@ -323,7 +327,8 @@ Result<rt::ClassifierConfig> ItscamRestClient::getClassifierConfig(
 Result<rt::ClassifierConfig> ItscamRestClient::setClassifierConfig(
     const rt::ClassifierConfig& config, uint32_t timeoutMs) {
     return mapTyped<rt::ClassifierConfig>(mImpl->doPut(
-        mImpl->apiPrefix + "/equipment/classifier", json(config), timeoutMs));
+        mImpl->apiPrefix + "/equipment/classifier",
+        rt::to_partial_json(config), timeoutMs));
 }
 
 //=========================================================================
@@ -338,7 +343,8 @@ Result<rt::LanesConfig> ItscamRestClient::getLanesConfig(uint32_t timeoutMs) {
 Result<rt::LanesConfig> ItscamRestClient::setLanesConfig(
     const rt::LanesConfig& config, uint32_t timeoutMs) {
     return mapTyped<rt::LanesConfig>(mImpl->doPut(
-        mImpl->apiPrefix + "/equipment/lanes", json(config), timeoutMs));
+        mImpl->apiPrefix + "/equipment/lanes",
+        rt::to_partial_json(config), timeoutMs));
 }
 
 //=========================================================================
@@ -354,8 +360,8 @@ Result<rt::ItscamproConfig> ItscamRestClient::getItscamproConfig(
 Result<rt::ItscamproConfig> ItscamRestClient::setItscamproConfig(
     const rt::ItscamproConfig& config, uint32_t timeoutMs) {
     return mapTyped<rt::ItscamproConfig>(mImpl->doPut(
-        mImpl->apiPrefix + "/equipment/servers/itscampro", json(config),
-        timeoutMs));
+        mImpl->apiPrefix + "/equipment/servers/itscampro",
+        rt::to_partial_json(config), timeoutMs));
 }
 
 Result<rt::ItscamproStatus> ItscamRestClient::getItscamproStatus(
@@ -376,7 +382,8 @@ Result<rt::AutoFocus> ItscamRestClient::getAutoFocus(uint32_t timeoutMs) {
 Result<rt::AutoFocus> ItscamRestClient::setAutoFocus(
     const rt::AutoFocus& config, uint32_t timeoutMs) {
     return mapTyped<rt::AutoFocus>(mImpl->doPut(
-        mImpl->apiPrefix + "/equipment/autofocus", json(config), timeoutMs));
+        mImpl->apiPrefix + "/equipment/autofocus",
+        rt::to_partial_json(config), timeoutMs));
 }
 
 //=========================================================================
@@ -391,7 +398,8 @@ Result<rt::StreamConfig> ItscamRestClient::getStreamConfig(uint32_t timeoutMs) {
 Result<rt::StreamConfig> ItscamRestClient::setStreamConfig(
     const rt::StreamConfig& config, uint32_t timeoutMs) {
     return mapTyped<rt::StreamConfig>(mImpl->doPut(
-        mImpl->apiPrefix + "/video/streams", json(config), timeoutMs));
+        mImpl->apiPrefix + "/video/streams",
+        rt::to_partial_json(config), timeoutMs));
 }
 
 //=========================================================================
@@ -406,7 +414,8 @@ Result<rt::Misc> ItscamRestClient::getMisc(uint32_t timeoutMs) {
 Result<rt::Misc> ItscamRestClient::setMisc(const rt::Misc& config,
                                            uint32_t timeoutMs) {
     return mapTyped<rt::Misc>(mImpl->doPut(
-        mImpl->apiPrefix + "/equipment/misc", json(config), timeoutMs));
+        mImpl->apiPrefix + "/equipment/misc",
+        rt::to_partial_json(config), timeoutMs));
 }
 
 //=========================================================================
@@ -431,7 +440,8 @@ Result<rt::FtpConfig> ItscamRestClient::getFtpConfig(uint32_t timeoutMs) {
 Result<rt::FtpConfig> ItscamRestClient::setFtpConfig(
     const rt::FtpConfig& config, uint32_t timeoutMs) {
     return mapTyped<rt::FtpConfig>(mImpl->doPut(
-        mImpl->apiPrefix + "/equipment/servers/ftp", json(config), timeoutMs));
+        mImpl->apiPrefix + "/equipment/servers/ftp",
+        rt::to_partial_json(config), timeoutMs));
 }
 
 //=========================================================================
@@ -446,8 +456,8 @@ Result<rt::LinceConfig> ItscamRestClient::getLinceConfig(uint32_t timeoutMs) {
 Result<rt::LinceConfig> ItscamRestClient::setLinceConfig(
     const rt::LinceConfig& config, uint32_t timeoutMs) {
     return mapTyped<rt::LinceConfig>(mImpl->doPut(
-        mImpl->apiPrefix + "/equipment/servers/lince", json(config),
-        timeoutMs));
+        mImpl->apiPrefix + "/equipment/servers/lince",
+        rt::to_partial_json(config), timeoutMs));
 }
 
 Result<rt::LinceStatus> ItscamRestClient::getLinceStatus(uint32_t timeoutMs) {
@@ -469,8 +479,8 @@ Result<rt::VehicleIndicatorConfig>
 ItscamRestClient::setVehicleIndicatorConfig(
     const rt::VehicleIndicatorConfig& config, uint32_t timeoutMs) {
     return mapTyped<rt::VehicleIndicatorConfig>(mImpl->doPut(
-        mImpl->apiPrefix + "/equipment/vehicleIndicator", json(config),
-        timeoutMs));
+        mImpl->apiPrefix + "/equipment/vehicleIndicator",
+        rt::to_partial_json(config), timeoutMs));
 }
 
 //=========================================================================
@@ -486,8 +496,8 @@ Result<rt::ProtocolsConfig> ItscamRestClient::getProtocolsConfig(
 Result<rt::ProtocolsConfig> ItscamRestClient::setProtocolsConfig(
     const rt::ProtocolsConfig& config, uint32_t timeoutMs) {
     return mapTyped<rt::ProtocolsConfig>(mImpl->doPut(
-        mImpl->apiPrefix + "/equipment/servers/protocols", json(config),
-        timeoutMs));
+        mImpl->apiPrefix + "/equipment/servers/protocols",
+        rt::to_partial_json(config), timeoutMs));
 }
 
 //=========================================================================
@@ -503,8 +513,8 @@ Result<rt::ProfileTransitioner> ItscamRestClient::getProfileTransitioner(
 Result<rt::ProfileTransitioner> ItscamRestClient::setProfileTransitioner(
     const rt::ProfileTransitioner& config, uint32_t timeoutMs) {
     return mapTyped<rt::ProfileTransitioner>(mImpl->doPut(
-        mImpl->apiPrefix + "/equipment/transitioner", json(config),
-        timeoutMs));
+        mImpl->apiPrefix + "/equipment/transitioner",
+        rt::to_partial_json(config), timeoutMs));
 }
 
 //=========================================================================
@@ -519,8 +529,10 @@ Result<std::vector<rt::IoConfig>> ItscamRestClient::getIoPorts(
 
 Result<std::vector<rt::IoConfig>> ItscamRestClient::setIoPorts(
     const std::vector<rt::IoConfig>& ports, uint32_t timeoutMs) {
+    json arr = json::array();
+    for (auto const& p : ports) arr.push_back(rt::to_partial_json(p));
     return mapTyped<std::vector<rt::IoConfig>>(mImpl->doPut(
-        mImpl->apiPrefix + "/equipment/ioPorts", json(ports), timeoutMs));
+        mImpl->apiPrefix + "/equipment/ioPorts", arr, timeoutMs));
 }
 
 Result<rt::IoConfig> ItscamRestClient::getIoPort(int id,
@@ -535,7 +547,8 @@ Result<rt::IoConfig> ItscamRestClient::setIoPort(int id,
                                                  uint32_t timeoutMs) {
     std::string path = mImpl->apiPrefix + "/equipment/ioPorts/"
                        + std::to_string(id);
-    return mapTyped<rt::IoConfig>(mImpl->doPut(path, json(port), timeoutMs));
+    return mapTyped<rt::IoConfig>(
+        mImpl->doPut(path, rt::to_partial_json(port), timeoutMs));
 }
 
 Result<std::vector<rt::IoBasic>> ItscamRestClient::getIoBasic(
@@ -546,8 +559,10 @@ Result<std::vector<rt::IoBasic>> ItscamRestClient::getIoBasic(
 
 Result<std::vector<rt::IoBasic>> ItscamRestClient::setIoBasic(
     const std::vector<rt::IoBasic>& ports, uint32_t timeoutMs) {
+    json arr = json::array();
+    for (auto const& p : ports) arr.push_back(rt::to_partial_json(p));
     return mapTyped<std::vector<rt::IoBasic>>(mImpl->doPut(
-        mImpl->apiPrefix + "/equipment/ioBasic", json(ports), timeoutMs));
+        mImpl->apiPrefix + "/equipment/ioBasic", arr, timeoutMs));
 }
 
 //=========================================================================
@@ -566,7 +581,7 @@ Result<rt::RestApiClientConfig> ItscamRestClient::setRestApiClientConfig(
     std::string path = mImpl->apiPrefix + "/equipment/servers/restapiclient/"
                        + std::to_string(id) + "/config";
     return mapTyped<rt::RestApiClientConfig>(
-        mImpl->doPut(path, json(config), timeoutMs));
+        mImpl->doPut(path, rt::to_partial_json(config), timeoutMs));
 }
 
 Result<rt::RestApiClientStatus> ItscamRestClient::getRestApiClientStatus(

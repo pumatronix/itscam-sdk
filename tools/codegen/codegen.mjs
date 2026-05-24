@@ -112,7 +112,7 @@ const TARGETS = [
     },
     outRel: "src/core/itscam_rest_types.hpp",
     notice: NOTICE_HEAD,
-    postProcess: fixCppOptionalInit,
+    postProcess: (text) => addCppPartialJson(fixCppOptionalInit(text)),
   },
   {
     name: "C#",
@@ -164,6 +164,136 @@ function info(message) {
 /// from_json array helpers.
 function fixCppOptionalInit(text) {
   return text.replace(/return std::optional<T>\(\);/g, "return std::nullopt;")
+}
+
+/// Generate `to_partial_json()` free functions for every struct that has a
+/// `to_json()`.  The partial variant omits keys whose `std::optional<T>`
+/// member is `nullopt`, and recurses into nested structs via their own
+/// `to_partial_json()`.  Required (non-optional) fields are always emitted.
+///
+/// This enables typed partial PUT: construct a struct with only the fields
+/// you want to change, serialize with `to_partial_json(cfg)`, and the
+/// daemon receives only those keys.
+function addCppPartialJson(text) {
+  // 1. Parse struct declarations → { StructName: { cppMember: { optional, innerType } } }
+  const structFields = new Map()
+  const structRe = /struct\s+(\w+)\s*\{([^}]*)\}/g
+  let m
+  while ((m = structRe.exec(text)) !== null) {
+    const name = m[1]
+    const body = m[2]
+    const fields = new Map()
+    const fieldRe = /^\s*(?:std::optional<(.+?)>|(.+?))\s+(\w+)\s*;/gm
+    let fm
+    while ((fm = fieldRe.exec(body)) !== null) {
+      const optInner = fm[1] // e.g. "bool", "Advanced", "std::vector<Power>"
+      const plainType = fm[2] // e.g. "int64_t", "bool", "std::string"
+      const member = fm[3]
+      fields.set(member, {
+        optional: !!optInner,
+        innerType: optInner || plainType,
+      })
+    }
+    structFields.set(name, fields)
+  }
+
+  // 2. Collect the set of struct names that have to_json (i.e. non-enum types)
+  const structsWithToJson = new Set()
+  const toJsonSigRe = /inline void to_json\(json & j, (\w+) const & x\) \{/g
+  while ((m = toJsonSigRe.exec(text)) !== null) {
+    if (structFields.has(m[1])) structsWithToJson.add(m[1])
+  }
+
+  // 3. Parse each struct-type to_json() body and build to_partial_json()
+  //    Match: inline void to_json(json & j, TypeName const & x) { ... }
+  const toJsonBlockRe =
+    /inline void to_json\(json & j, (\w+) const & x\) \{\s*\n\s*j = json::object\(\);\n([\s\S]*?)\n\s*\}/g
+
+  const partialFns = []
+  const partialDecls = []
+
+  while ((m = toJsonBlockRe.exec(text)) !== null) {
+    const typeName = m[1]
+    const assignBlock = m[2]
+    const fields = structFields.get(typeName)
+    if (!fields) continue // enum to_json — skip
+
+    const lines = []
+    // Parse assignments: j["jsonKey"] = x.cppMember;
+    const assignRe = /j\["(\w+)"\]\s*=\s*x\.(\w+);/g
+    let am
+    while ((am = assignRe.exec(assignBlock)) !== null) {
+      const jsonKey = am[1]
+      const cppMember = am[2]
+      const fi = fields.get(cppMember)
+      if (!fi) {
+        lines.push(`        j["${jsonKey}"] = x.${cppMember};`)
+        continue
+      }
+      if (!fi.optional) {
+        // Required field — always write.
+        if (structsWithToJson.has(fi.innerType)) {
+          lines.push(`        j["${jsonKey}"] = to_partial_json(x.${cppMember});`)
+        } else {
+          lines.push(`        j["${jsonKey}"] = x.${cppMember};`)
+        }
+      } else {
+        // Optional field — skip when nullopt; recurse for struct types.
+        const inner = fi.innerType
+        // Check if innerType is a known struct (possibly wrapped in vector).
+        const vecMatch = inner.match(/^std::vector<(\w+)>$/)
+        const elementType = vecMatch ? vecMatch[1] : inner
+        const isStructType = structsWithToJson.has(elementType)
+
+        if (vecMatch && isStructType) {
+          // std::optional<std::vector<StructType>>
+          lines.push(`        if (x.${cppMember}) {`)
+          lines.push(`            json arr = json::array();`)
+          lines.push(`            for (auto const & e : *x.${cppMember}) arr.push_back(to_partial_json(e));`)
+          lines.push(`            j["${jsonKey}"] = std::move(arr);`)
+          lines.push(`        }`)
+        } else if (isStructType) {
+          // std::optional<StructType>
+          lines.push(`        if (x.${cppMember}) j["${jsonKey}"] = to_partial_json(*x.${cppMember});`)
+        } else {
+          // std::optional<scalar|string|enum|vector<scalar>>
+          lines.push(`        if (x.${cppMember}) j["${jsonKey}"] = *x.${cppMember};`)
+        }
+      }
+    }
+
+    partialFns.push(
+      `    inline json to_partial_json(${typeName} const & x) {\n` +
+      `        json j = json::object();\n` +
+      lines.join("\n") + "\n" +
+      `        return j;\n` +
+      `    }`
+    )
+    partialDecls.push(`    json to_partial_json(${typeName} const & x);`)
+  }
+
+  if (partialFns.length === 0) return text
+
+  // 4. Insert forward declarations after the to_json forward declarations.
+  //    Find the last `void to_json(...)` forward-decl line and append after
+  //    its subsequent blank line.
+  const partialDeclBlock =
+    "\n    // Partial-JSON serializers (omit nullopt fields for typed partial PUT)\n" +
+    partialDecls.join("\n") + "\n"
+
+  // Find the boundary: last forward-decl to_json line before the inline impls
+  const lastFwdRe = /( {4}void to_json\(json & j, \w+ const & x\);\n)\n( {4}inline void from_json)/
+  text = text.replace(lastFwdRe, "$1" + partialDeclBlock + "\n$2")
+
+  // 5. Append partial-json implementations before the closing `}\n}`
+  const implBlock =
+    "\n    // ---- Partial-JSON serializers (generated) ----\n\n" +
+    partialFns.join("\n\n") + "\n"
+
+  const closingNs = /\n\}\n\}\n$/
+  text = text.replace(closingNs, implBlock + "\n}\n}\n")
+
+  return text
 }
 
 /// Fix CS8602 (possible null dereference) in quicktype-emitted converters:

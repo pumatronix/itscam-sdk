@@ -89,7 +89,7 @@ Use os Java/Node.js wrappers como referência. Cada item é obrigatório (ou exp
     - CGI: `login(...)` opt-in, `setBasicAuth`, `setAuthToken`. **NÃO** chame login em código library / examples por default. Veja [`AGENTS.md`](../AGENTS.md) §10 (anti-patterns).
 - [ ] **Capture (binary):** `captureSnapshot`, `getLastFrame`, `subscribe`, `subscribeCaptures`.
 - [ ] **Profiles (binary):** `getActiveProfileId`, `setActiveProfile`, `listProfiles`.
-- [ ] **REST verbs:** `httpGet`, `httpPut`, `httpPost`, `httpDelete`, `patchJson`. **Os verbos genéricos são o caminho preferencial para writes** — full-document PUT em `/api/image/profiles/{id}` retorna HTTP 500.
+- [ ] **REST verbs:** `httpGet`, `httpPut`, `httpPost`, `httpDelete`, `patchJson`. **Setters tipados são o caminho preferencial para writes** — usam serialização parcial (fields não setados são omitidos do body PUT). O `patchJson` genérico permanece disponível para payloads não tipados ou endpoints sem typed helper.
 - [ ] **REST typed helpers:** Pelo menos `getProfiles`, `getOcrConfig`/`setOcrConfig`, `getAnalyticsConfig`/`setAnalyticsConfig`, `getClassifierConfig`/`setClassifierConfig`, `getLanesConfig`/`setLanesConfig`, `getItscamproConfig`/`setItscamproConfig`, `getVolatileInfo`. Decidir se retorna struct/typed (preferido se a linguagem tem POCOs com codegen, veja §6.6) ou JSON cru.
 - [ ] **CGI:** `getLastFrame`, `getSnapshot`, `startMjpegStream`/`stopMjpegStream`, `forceTrigger`, `reboot`.
 - [ ] **TLS configuration:** `setBaseUrl(host, port, scheme)`, `setCaCertFile`, `setCaCertData`, `setVerifyServerCertificate`, `setClientCertificate` (em REST e CGI).
@@ -176,7 +176,7 @@ Status atual:
 
 ### 6.10 Documentation
 
-- [ ] **Wrapper guide:** `docs/wrappers/<lang>.md` (PT-BR) + `<lang>.en-US.md` (EN). Espelhe a estrutura de [`docs/wrappers/python.md`](wrappers/python.md): instalação, resolução da native lib, superfície idiomática, três exemplos (binary/REST/CGI), partial PUT, link para tutorial.
+- [ ] **Wrapper guide:** `docs/wrappers/<lang>.md` (PT-BR) + `<lang>.en-US.md` (EN). Espelhe a estrutura de [`docs/wrappers/python.md`](wrappers/python.md): instalação, resolução da native lib, superfície idiomática, três exemplos (binary/REST/CGI), serialização parcial nos typed setters, link para tutorial.
 - [ ] **Tutorial:** `docs/tutorials/first-image-<lang>.md` + EN counterpart. Walkthrough do zero, com fallback opcional para o binary client.
 - [ ] **Quick-link matrix** no [`README.md`](../README.md) — adicione coluna nova à tabela de use cases e a row de wrapper guides.
 - [ ] **Doc index** [`docs/README.md`](README.md) — adicione bullet em "Language wrappers" e "Tutoriais".

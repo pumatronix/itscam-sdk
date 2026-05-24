@@ -113,7 +113,10 @@ try {
 
     const profiles = rest.get('/api/image/profiles');
 
-    // Partial PUT -- preferred for image profiles
+    // Typed setter -- partial serialization (preferred for config changes)
+    rest.setOcrConfig({ enabled: true, sensitivity: 0.8 });
+
+    // Alternative: generic patchJson for untyped payloads
     rest.patchJson('/api/image/profiles/0',
                    { trigger: { enabled: false } });
 } finally {
@@ -121,9 +124,9 @@ try {
 }
 ```
 
-* **Generic verbs** (preferred): `get`, `put`, `post`, `delete`, `patchJson`. They return parsed JSON (object / array) or raw string when the body is not JSON.
-* **Typed convenience helpers**: `getProfiles`, `setOcrConfig`, etc. They also return parsed JSON. Typed POCOs / TS interfaces via codegen are a follow-up -- see [`docs/codegen.md`](../codegen.md) for status.
-* **Partial PUT** -- `rest.patchJson(path, partialBody)` sends only changed fields. Mandatory for `PUT /api/image/profiles/{id}` (the camera rejects the full body with HTTP 500). See [`docs/api/rest-client.md`](../api/rest-client.md).
+* **Typed convenience helpers** (preferred): `getProfiles`, `setOcrConfig`, etc. They use partial serialization -- only the fields you set are included in the PUT body.
+* **Generic verbs** (escape hatch): `get`, `put`, `post`, `delete`, `patchJson`. They return parsed JSON (object / array) or raw string when the body is not JSON.
+* **Generic partial PUT** -- `rest.patchJson(path, partialBody)` sends only changed fields. Available for untyped payloads or endpoints without a typed helper. See [`docs/api/rest-client.md`](../api/rest-client.md).
 
 ## Binary client usage
 

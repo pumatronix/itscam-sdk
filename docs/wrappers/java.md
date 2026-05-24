@@ -124,10 +124,10 @@ try (ItscamCgiClient cgi = new ItscamCgiClient()) {
 
 O REST client expõe duas superfícies que coexistem:
 
-* **Generic verbs** (preferencial para a maioria dos casos): `httpGet`, `httpPut`, `httpPost`, `httpDelete`, `patchJson` retornam o body JSON cru como `String`. Combine com a sua biblioteca JSON favorita (Jackson, Gson, JSON-B).
-* **Typed convenience helpers**: `getProfiles`, `setOcrConfig`, `setItscamproConfig` etc. Retornam JSON cru também — typed POCOs/codegen para Java é um follow-up (veja [`docs/codegen.md`](../codegen.md) para o status).
+* **Generic verbs** (escape hatch): `httpGet`, `httpPut`, `httpPost`, `httpDelete`, `patchJson` retornam o body JSON cru como `String`. Combine com a sua biblioteca JSON favorita (Jackson, Gson, JSON-B).
+* **Typed convenience helpers** (preferencial): `getProfiles`, `setOcrConfig`, `setItscamproConfig` etc. Usam serialização parcial -- apenas os fields que você seta são incluídos no body PUT. Typed POCOs/codegen para Java é um follow-up (veja [`docs/codegen.md`](../codegen.md) para o status).
 
-* **Partial PUT** — `patchJson(path, partialJson, timeoutMs)` envia somente os campos que mudaram. Obrigatório para image profiles (`PUT /api/image/profiles/{id}` com body completo retorna HTTP 500). Veja [`docs/api/rest-client.md`](../api/rest-client.md).
+* **Generic partial PUT** — `patchJson(path, partialJson, timeoutMs)` envia somente os campos que mudaram. Disponível para payloads não tipados ou endpoints sem typed helper. Veja [`docs/api/rest-client.md`](../api/rest-client.md).
 
 ```java
 try (ItscamRestClient rest = new ItscamRestClient()) {

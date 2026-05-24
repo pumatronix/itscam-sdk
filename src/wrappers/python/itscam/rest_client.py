@@ -15,10 +15,11 @@ The client exposes two coexisting surfaces:
   valid JSON.  Use them for endpoints that are not (yet) typed.
 
 * **Partial PUT** -- the ITSCAM daemon merges PUT bodies into the existing
-  configuration.  Send only the fields you want to change via
-  ``patch_json()`` / ``put()``.  Typed setters and ``update_profile_by_id()``
-  serialise full objects and fail with HTTP 500 on several endpoints
-  (notably ``PUT /api/image/profiles/{id}``).
+  configuration.  Typed setters (e.g. ``update_profile_by_id()``,
+  ``set_ocr_config()``) use partial serialization: only fields that are not
+  ``None`` are included in the PUT body.  Construct a dataclass with only
+  the fields you want to change and pass it directly.  The generic
+  ``patch_json()`` / ``put()`` methods remain available for untyped payloads.
 
 Example usage::
 
@@ -167,9 +168,9 @@ class ItscamRestClient:
                    timeout_ms: int = 10000) -> JsonValue:
         """PUT a partial JSON document; the daemon merges ``patch`` in place.
 
-        Prefer this over ``update_profile_by_id(get; mutate; set)`` when
-        changing a subset of fields.  Full-document PUT on image profiles
-        returns HTTP 500 even when the body is an unmodified GET response.
+        Typed setters already use partial serialization (``None`` fields are
+        omitted), so ``patch_json()`` is mainly useful for endpoints without
+        a typed helper or for hand-built patches.
         """
         return self.put(path, patch, timeout_ms)
 
@@ -235,18 +236,16 @@ class ItscamRestClient:
         raw = self.post("/api/image/profiles", profile.to_dict(), timeout_ms)
         return _rt.ProfileConfig.from_dict(raw)
 
-    # Unknown JSON fields are silently dropped by ``from_dict``, and typed
-    # setters serialise the full dataclass.  Both patterns fail when the
-    # daemon expects a partial PUT (see ``patch_json()``).
+    # Typed setters use partial serialization: ``to_dict()`` omits ``None``
+    # fields, so only explicitly-set values are included in PUT bodies.
 
     def update_profile_by_id(self, profile_id: int,
                              profile: _rt.ProfileConfig,
                              timeout_ms: int = 10000) -> _rt.ProfileConfig:
-        """PUT a full ``ProfileConfig`` document.
+        """PUT a partial ``ProfileConfig`` document.
 
-        Warning: the daemon rejects full-document PUT on this endpoint
-        (HTTP 500).  Use ``patch_json()`` to send only the fields you
-        change, e.g. ``{"trigger": {"enabled": false}}``.
+        Only non-``None`` fields are included in the PUT body.  Construct a
+        ``ProfileConfig`` with only the fields you want to change.
         """
         raw = self.put(f"/api/image/profiles/{profile_id}",
                        profile.to_dict(), timeout_ms)
@@ -254,9 +253,9 @@ class ItscamRestClient:
 
     def update_profiles(self, profiles: List[_rt.ProfileConfig],
                         timeout_ms: int = 10000) -> _rt.ProfileConfig:
-        """PUT a JSON array of full profiles (bulk endpoint).
+        """PUT a JSON array of profiles (bulk endpoint).
 
-        Warning: same partial-PUT caveat as ``update_profile_by_id()``.
+        Each profile is partially serialized (``None`` fields omitted).
         """
         body = [p.to_dict() for p in profiles]
         raw = self.put("/api/image/profiles", body, timeout_ms)

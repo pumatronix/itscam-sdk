@@ -15,10 +15,12 @@
  *  workflow.
  *
  *  **Partial PUT:** the ITSCAM daemon merges PUT bodies into the existing
- *  configuration.  Send only the fields you want to change via
- *  `patchJson()` / `httpPut()`.  Typed setters and `updateProfileById()`
- *  serialise the full object and are rejected with HTTP 500 on several
- *  endpoints (notably `PUT /api/image/profiles/{id}`).
+ *  configuration.  Typed setters (e.g. `updateProfileById()`,
+ *  `setOcrConfig()`) use partial serialization: only fields that have been
+ *  explicitly set on the struct are included in the PUT body.  Construct a
+ *  struct with only the fields you want to change and pass it directly.
+ *  The generic `patchJson()` / `httpPut()` methods remain available for
+ *  untyped payloads.
  */
 #pragma once
 
@@ -127,21 +129,20 @@ public:
         const pumatronix::itscam::ProfileConfig& profile,
         uint32_t timeoutMs = 10000);
 
-    /// PUT /api/image/profiles/{id} -- update a single profile by id.
+    /// PUT /api/image/profiles/{id} -- update a single profile.
     ///
-    /// Sends a full `ProfileConfig` document.  The daemon expects a
-    /// **partial** body on this endpoint; round-tripping a GET response
-    /// (or any complete profile object) returns HTTP 500.  To change a
-    /// subset of fields use `patchJson("/api/image/profiles/{id}", patch)`.
+    /// Uses partial serialization: only fields with a value (non-nullopt)
+    /// are included in the PUT body.  Construct a `ProfileConfig` with only
+    /// the fields you want to change.
     Result<pumatronix::itscam::ProfileConfig> updateProfileById(
         int id,
         const pumatronix::itscam::ProfileConfig& profile,
         uint32_t timeoutMs = 10000);
 
-    /// PUT /api/image/profiles -- bulk update.
+    /// PUT /api/image/profiles -- bulk update (JSON array body).
     ///
-    /// Sends a JSON array of full profiles.  Same partial-PUT caveat as
-    /// `updateProfileById()` applies; prefer `patchJson()` for subset changes.
+    /// Each profile in the array is partially serialized (unset optional
+    /// fields are omitted).
     Result<pumatronix::itscam::ProfileConfig> updateProfiles(
         const std::vector<pumatronix::itscam::ProfileConfig>& profiles,
         uint32_t timeoutMs = 10000);
@@ -450,8 +451,9 @@ public:
                                    const nlohmann::json& body,
                                    uint32_t timeoutMs = 10000);
 
-    /// PUT a partial JSON document.  Semantically identical to `httpPut()`
-    /// but documents intent: send only the fields being changed.
+    /// PUT a partial JSON document.  Semantically identical to `httpPut()`.
+    /// Typed setters already use partial serialization, so this is mainly
+    /// useful for endpoints without a typed helper or for hand-built patches.
     Result<nlohmann::json> patchJson(const std::string& path,
                                      const nlohmann::json& patch,
                                      uint32_t timeoutMs = 10000);

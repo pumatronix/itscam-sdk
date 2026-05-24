@@ -157,13 +157,20 @@ rest.login("admin", "1234");
 
 auto profiles = rest.getProfiles().value();   // typed POCO
 
-nlohmann::json patch = {{"trigger", {{"enabled", false}}}};
-rest.patchJson("/api/image/profiles/0", patch);
+// Typed setter with partial serialization (preferred):
+ProfileConfig patch;
+patch.trigger.emplace();
+patch.trigger->enabled = false;
+rest.updateProfileById(0, patch);
+
+// Alternative: generic patchJson for untyped payloads:
+// nlohmann::json jp = {{"trigger", {{"enabled", false}}}};
+// rest.patchJson("/api/image/profiles/0", jp);
 
 auto raw = rest.httpGet("/api/equipment/misc/readonly/volatile").value();
 ```
 
-Full detail (typed helpers, partial PUT semantics and when to use `httpGet` / `httpPut`) in [docs/api/rest-client.md](../api/rest-client.md).
+Full detail (typed helpers with partial serialization, generic escape hatch, and when to use `httpGet` / `httpPut`) in [docs/api/rest-client.md](../api/rest-client.md).
 
 ### Binary (Cougar TCP :60000)
 

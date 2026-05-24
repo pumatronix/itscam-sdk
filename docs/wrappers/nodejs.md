@@ -113,7 +113,10 @@ try {
 
     const profiles = rest.get('/api/image/profiles');
 
-    // Partial PUT -- preferencial para image profiles
+    // Typed setter -- serialização parcial (preferencial para config changes)
+    rest.setOcrConfig({ enabled: true, sensitivity: 0.8 });
+
+    // Alternativa: patchJson genérico para payloads não tipados
     rest.patchJson('/api/image/profiles/0',
                    { trigger: { enabled: false } });
 } finally {
@@ -121,9 +124,9 @@ try {
 }
 ```
 
-* **Generic verbs** (preferencial): `get`, `put`, `post`, `delete`, `patchJson`. Retornam JSON parseado (objeto / array) ou string raw quando o body não é JSON.
-* **Typed convenience helpers**: `getProfiles`, `setOcrConfig` etc. Retornam JSON parseado também. Typed POCOs / codegen para Node é um follow-up — veja [`docs/codegen.md`](../codegen.md) para o status.
-* **Partial PUT** — `rest.patchJson(path, partialBody)` envia somente os campos que mudaram. Obrigatório para `PUT /api/image/profiles/{id}` (que rejeita body completo com HTTP 500). Veja [`docs/api/rest-client.md`](../api/rest-client.md).
+* **Typed convenience helpers** (preferencial): `getProfiles`, `setOcrConfig` etc. Usam serialização parcial -- apenas os fields que você seta são incluídos no body PUT.
+* **Generic verbs** (escape hatch): `get`, `put`, `post`, `delete`, `patchJson`. Retornam JSON parseado (objeto / array) ou string raw quando o body não é JSON.
+* **Generic partial PUT** — `rest.patchJson(path, partialBody)` envia somente os campos que mudaram. Disponível para payloads não tipados ou endpoints sem typed helper. Veja [`docs/api/rest-client.md`](../api/rest-client.md).
 
 ## Uso do binary client
 
