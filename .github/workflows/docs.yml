@@ -13,7 +13,10 @@ name: Deploy documentation
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+      # TEMP: allow end-to-end R2 corpus testing on this branch only.
+      - ITSCAMSDK-000-fix-r2-corpus-sync
     paths:
       - "docs/**"
       - "docs-site/**"
@@ -126,9 +129,18 @@ jobs:
   # Node + the aws CLI from aws-actions/configure-aws-credentials.
   sync-r2-corpus:
     runs-on: ubuntu-latest
-    # Push events only: PRs and manual dispatches from feature branches
-    # must not overwrite the production R2 corpus.
-    if: github.event_name == 'push' && vars.R2_BUCKET_NAME != ''
+    # Production: push to `main` only. TEMP exception for
+    # ITSCAMSDK-000-fix-r2-corpus-sync so we can validate R2 + AI Search
+    # before merge. PRs still skip (must not overwrite production corpus).
+    if: >-
+      vars.R2_BUCKET_NAME != '' &&
+      (
+        (github.event_name == 'push' &&
+          (github.ref == 'refs/heads/main' ||
+           github.ref == 'refs/heads/ITSCAMSDK-000-fix-r2-corpus-sync')) ||
+        (github.event_name == 'workflow_dispatch' &&
+          github.ref == 'refs/heads/ITSCAMSDK-000-fix-r2-corpus-sync')
+      )
     steps:
       - uses: actions/checkout@v4
         with:
@@ -164,8 +176,9 @@ jobs:
 
   deploy:
     needs: build
-    # PR runs validate the build but must not publish to Pages.
-    if: github.event_name == 'push'
+    # PR runs validate the build but must not publish to Pages. Feature-branch
+    # pushes (including the temporary R2 test branch) also skip Pages deploy.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     # Serialize Pages deploys across all runs of this workflow so two
     # main pushes (or a main push + a workflow_dispatch) never race
