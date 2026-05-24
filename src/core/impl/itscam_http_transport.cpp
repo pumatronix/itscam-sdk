@@ -6,9 +6,9 @@
  *  Copyright (c) 2026 Pumatronix
  */
 
-// ============================================================================
-//  Platform configuration (must be before any includes)
-// ============================================================================
+//=========================================================================
+// Platform configuration (must be before any includes)
+//=========================================================================
 
 #if defined(_WIN32) || defined(__MINGW32__)
     #ifndef WIN32_LEAN_AND_MEAN
@@ -38,9 +38,9 @@ namespace detail {
 using Mutex = itscam_os::Mutex;
 template<typename M> using LockGuard = itscam_os::LockGuard<M>;
 
-// ============================================================================
-//  Impl
-// ============================================================================
+//=========================================================================
+// Impl
+//=========================================================================
 
 struct HttpTransport::Impl {
 
@@ -218,9 +218,9 @@ struct HttpTransport::Impl {
     }
 };
 
-// ============================================================================
-//  Constructor / destructor / move
-// ============================================================================
+//=========================================================================
+// Constructor / destructor / move
+//=========================================================================
 
 HttpTransport::HttpTransport() : mImpl(new Impl()) {}
 HttpTransport::~HttpTransport() = default;
@@ -228,9 +228,9 @@ HttpTransport::~HttpTransport() = default;
 HttpTransport::HttpTransport(HttpTransport&&) noexcept = default;
 HttpTransport& HttpTransport::operator=(HttpTransport&&) noexcept = default;
 
-// ============================================================================
-//  Configuration
-// ============================================================================
+//=========================================================================
+// Configuration
+//=========================================================================
 
 void HttpTransport::setBaseUrl(const std::string& host, uint16_t port,
                                const std::string& scheme) {
@@ -252,9 +252,9 @@ bool               HttpTransport::configured() const {
     return mImpl->configured;
 }
 
-// ============================================================================
-//  Authentication
-// ============================================================================
+//=========================================================================
+// Authentication
+//=========================================================================
 
 void HttpTransport::setBearerToken(const std::string& token) {
     mImpl->auth.bearerToken = token;
@@ -279,9 +279,9 @@ void HttpTransport::clearBasicAuth() {
     mImpl->auth.basicPassword.clear();
 }
 
-// ============================================================================
-//  TLS
-// ============================================================================
+//=========================================================================
+// TLS
+//=========================================================================
 
 void HttpTransport::setCaCertFile(const std::string& pemPath) {
     mImpl->tls.caCertFile = pemPath;
@@ -305,9 +305,9 @@ void HttpTransport::setClientCertificate(const std::string& certPem,
 
 const TlsConfig& HttpTransport::tlsConfig() const { return mImpl->tls; }
 
-// ============================================================================
-//  Logging
-// ============================================================================
+//=========================================================================
+// Logging
+//=========================================================================
 
 void HttpTransport::setLogHandler(
     std::function<void(LogLevel, const std::string&)> cb) {
@@ -320,9 +320,9 @@ void HttpTransport::log(LogLevel lvl, const std::string& msg) const {
     if (mImpl->logHandler) mImpl->logHandler(lvl, msg);
 }
 
-// ============================================================================
-//  Synchronous request
-// ============================================================================
+//=========================================================================
+// Synchronous request
+//=========================================================================
 
 Result<HttpResponse> HttpTransport::request(const HttpRequest& req,
                                             uint32_t timeoutMs) {
@@ -362,9 +362,9 @@ Result<HttpResponse> HttpTransport::request(const HttpRequest& req,
     return out;
 }
 
-// ============================================================================
-//  Streaming request
-// ============================================================================
+//=========================================================================
+// Streaming request
+//=========================================================================
 
 Result<HttpResponse> HttpTransport::streamGet(
     const std::string& path,
@@ -434,9 +434,9 @@ void HttpTransport::cancelStream() {
     }
 }
 
-// ============================================================================
-//  HTTP status -> itscam::Error mapping
-// ============================================================================
+//=========================================================================
+// HTTP status -> itscam::Error mapping
+//=========================================================================
 
 Error mapHttpStatusToError(int status, const std::string& message,
                            const std::string& method,

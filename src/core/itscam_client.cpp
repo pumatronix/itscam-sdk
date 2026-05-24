@@ -6,13 +6,12 @@
  *  Copyright (c) 2026 Pumatronix
  *
  *  Wire-protocol compatible with the Cougar server daemon.
- *  Requires: nlohmann/json.
  *  Supports: Linux (POSIX sockets), Windows (Winsock2).
  */
 
-// ============================================================================
-//  Includes
-// ============================================================================
+//=========================================================================
+// Includes
+//=========================================================================
 
 #include "itscam_client.h"
 #include "itscam_jpeg_utils.h"
@@ -30,9 +29,9 @@
 #include <stdarg.h>
 #include <vector>
 
-// ============================================================================
-//  Platform-specific socket includes (for socket API constants and types)
-// ============================================================================
+//=========================================================================
+// Platform-specific socket includes (for socket API constants and types)
+//=========================================================================
 
 #if defined(_WIN32) || defined(__MINGW32__)
     #ifndef WIN32_LEAN_AND_MEAN
@@ -53,10 +52,10 @@ using Thread = itscam_os::Thread;
 template<typename M> using LockGuard = itscam_os::LockGuard<M>;
 template<typename M> using UniqueLock = itscam_os::UniqueLock<M>;
 
-// ============================================================================
-//  Lightweight Promise/Future for internal wire message exchange
-//  (Named WirePromise/WireFuture to avoid collision with itscam::Future)
-// ============================================================================
+//=========================================================================
+// Lightweight Promise/Future for internal wire message exchange
+// (Named WirePromise/WireFuture to avoid collision with itscam::Future)
+//=========================================================================
 
 template<typename T>
 class WirePromise;
@@ -153,9 +152,9 @@ private:
 
 namespace itscam {
 
-// ============================================================================
-//  CRC-16/XMODEM table  (identical to the server implementation)
-// ============================================================================
+//=========================================================================
+// CRC-16/XMODEM table  (identical to the server implementation)
+//=========================================================================
 
 static const uint16_t kCrc16Tab[256] = {
     0x0000, 0x1021, 0x2042, 0x3063, 0x4084, 0x50A5, 0x60C6, 0x70E7,
@@ -202,9 +201,9 @@ static uint16_t calcXModem(const uint8_t* data, uint32_t len,
     return crc;
 }
 
-// ============================================================================
-//  Wire protocol constants  (shared with Cougar server)
-// ============================================================================
+//=========================================================================
+// Wire protocol constants  (shared with Cougar server)
+//=========================================================================
 
 static constexpr size_t   HEADER_SIZE     = 13;
 static constexpr size_t   MAX_BODY_SIZE   = 0xFFFFFF;
@@ -214,9 +213,9 @@ static constexpr uint32_t ID_CLIENT_OFFSET = 0;
 static constexpr uint8_t  START_BYTE      = 0x66;
 static constexpr size_t   TCP_BUF_SIZE    = 0x10000;
 
-// ============================================================================
-//  Protocol opcodes
-// ============================================================================
+//=========================================================================
+// Protocol opcodes
+//=========================================================================
 
 enum Op : uint16_t {
     OP_NACK             = 1,
@@ -244,9 +243,9 @@ enum Op : uint16_t {
     OP_CMD_REBOOT       = 521,
 };
 
-// ============================================================================
-//  Internal wire message
-// ============================================================================
+//=========================================================================
+// Internal wire message
+//=========================================================================
 
 struct WireMsg {
     uint16_t op = 0;
@@ -254,9 +253,9 @@ struct WireMsg {
     std::vector<uint8_t> body;
 };
 
-// ============================================================================
-//  Serialisation / deserialisation
-// ============================================================================
+//=========================================================================
+// Serialisation / deserialisation
+//=========================================================================
 
 static std::vector<uint8_t> serializeMsg(const WireMsg& msg) {
     std::vector<uint8_t> ret(msg.body.size() + HEADER_SIZE +
@@ -338,9 +337,9 @@ static nlohmann::json bodyToJson(const std::vector<uint8_t>& body) {
     return j;
 }
 
-// ============================================================================
-//  Thread-safe message queue
-// ============================================================================
+//=========================================================================
+// Thread-safe message queue
+//=========================================================================
 
 struct MsgQueue {
     std::deque<WireMsg> queue;
@@ -372,9 +371,9 @@ struct MsgQueue {
     }
 };
 
-// ============================================================================
-//  SerialPort  <-->  protocol string helpers
-// ============================================================================
+//=========================================================================
+// SerialPort  <-->  protocol string helpers
+//=========================================================================
 
 static const char* serialPortToStr(SerialPort p) {
     return p == SerialPort::Serial2 ? "serial2" : "serial1";
@@ -384,9 +383,9 @@ static SerialPort strToSerialPort(const std::string& s) {
     return (s == "serial2") ? SerialPort::Serial2 : SerialPort::Serial1;
 }
 
-// ============================================================================
-//  JSON  <-->  domain struct helpers
-// ============================================================================
+//=========================================================================
+// JSON  <-->  domain struct helpers
+//=========================================================================
 
 /// Read a JSON field as boolean, tolerating integer 0/1 values
 /// that older firmware may send instead of true/false.
@@ -629,9 +628,9 @@ static CaptureResult parseMixedBody(const std::vector<uint8_t>& body) {
     return cr;
 }
 
-// ============================================================================
-//  ItscamClient::Impl
-// ============================================================================
+//=========================================================================
+// ItscamClient::Impl
+//=========================================================================
 
 struct ItscamClient::Impl {
     // ---- State ---
@@ -798,7 +797,7 @@ struct ItscamClient::Impl {
     }
 
     // -----------------------------------------------------------------------
-    //  Logging
+    // Logging
     // -----------------------------------------------------------------------
     void log(LogLevel lvl, const char* fmt, ...) {
         LockGuard<Mutex> lk(cbMtx);
@@ -812,7 +811,7 @@ struct ItscamClient::Impl {
     }
 
     // -----------------------------------------------------------------------
-    //  Socket send helpers
+    // Socket send helpers
     // -----------------------------------------------------------------------
     bool sendRaw(const std::vector<uint8_t>& data) {
         LockGuard<Mutex> lk(sendMtx);
@@ -831,7 +830,7 @@ struct ItscamClient::Impl {
     }
 
     // -----------------------------------------------------------------------
-    //  Send a request and register a promise for the response
+    // Send a request and register a promise for the response
     // -----------------------------------------------------------------------
     bool sendRequest(uint16_t op, const nlohmann::json& params, uint32_t& outId) {
         outId = nextId();
@@ -852,7 +851,7 @@ struct ItscamClient::Impl {
     }
 
     // -----------------------------------------------------------------------
-    //  Wait for a response to a previously-sent request
+    // Wait for a response to a previously-sent request
     // -----------------------------------------------------------------------
     Result<nlohmann::json> waitResponse(uint16_t expectedOp, uint32_t id,
                                         uint32_t timeoutMs) {
@@ -886,7 +885,7 @@ struct ItscamClient::Impl {
     }
 
     // -----------------------------------------------------------------------
-    //  Synchronous request helper  (send + wait)
+    // Synchronous request helper  (send + wait)
     // -----------------------------------------------------------------------
     Result<nlohmann::json> syncCall(uint16_t op, const nlohmann::json& params,
                                     uint32_t timeoutMs) {
@@ -897,13 +896,13 @@ struct ItscamClient::Impl {
     }
 
     // -----------------------------------------------------------------------
-    //  syncCallDirect()  --  send a request and read the response directly
-    //  from the socket, bypassing the inbound queue.
+    // syncCallDirect()  --  send a request and read the response directly
+    // from the socket, bypassing the inbound queue.
     //
-    //  Only call this before runReadLoop() has started (e.g. during session
-    //  replay), when no other thread is reading from the socket.  Any
-    //  interleaved messages that are not the awaited response are pushed into
-    //  inboundQueue so the handler thread can process them once it starts.
+    // Only call this before runReadLoop() has started (e.g. during session
+    // replay), when no other thread is reading from the socket.  Any
+    // interleaved messages that are not the awaited response are pushed into
+    // inboundQueue so the handler thread can process them once it starts.
     // -----------------------------------------------------------------------
     Result<nlohmann::json> syncCallDirect(uint16_t op, const nlohmann::json& params,
                                           uint32_t timeoutMs) {
@@ -950,7 +949,7 @@ struct ItscamClient::Impl {
     }
 
     // -----------------------------------------------------------------------
-    //  Asynchronous request helper
+    // Asynchronous request helper
     // -----------------------------------------------------------------------
     itscam::Future<nlohmann::json> asyncCall(uint16_t op, const nlohmann::json& params,
                                      uint32_t timeoutMs) {
@@ -985,7 +984,7 @@ struct ItscamClient::Impl {
     }
 
     // -----------------------------------------------------------------------
-    //  Socket thread  --  TCP connect + read loop
+    // Socket thread  --  TCP connect + read loop
     // -----------------------------------------------------------------------
     void runSocketThread() {
         log(LogLevel::Info, "Connecting to %s:%d ...", address.c_str(), port);
@@ -1129,7 +1128,7 @@ struct ItscamClient::Impl {
     }
 
     // -----------------------------------------------------------------------
-    //  Connection state callback helper
+    // Connection state callback helper
     // -----------------------------------------------------------------------
     void fireConnectionState(ConnectionState cs, const std::string& reason) {
         LockGuard<Mutex> lk(cbMtx);
@@ -1137,8 +1136,8 @@ struct ItscamClient::Impl {
     }
 
     // -----------------------------------------------------------------------
-    //  tryConnect()  --  TCP socket creation + non-blocking connect
-    //  Returns true if TCP is up; sets sock and leaves it in blocking mode.
+    // tryConnect()  --  TCP socket creation + non-blocking connect
+    // Returns true if TCP is up; sets sock and leaves it in blocking mode.
     // -----------------------------------------------------------------------
     bool tryConnect() {
         {
@@ -1228,8 +1227,8 @@ struct ItscamClient::Impl {
     }
 
     // -----------------------------------------------------------------------
-    //  replaySession()  --  re-authenticate, re-subscribe, re-apply JPEG cfg
-    //  Returns true if all replay steps succeed.
+    // replaySession()  --  re-authenticate, re-subscribe, re-apply JPEG cfg
+    // Returns true if all replay steps succeed.
     // -----------------------------------------------------------------------
     bool replaySession() {
         try {
@@ -1291,7 +1290,7 @@ struct ItscamClient::Impl {
     }
 
     // -----------------------------------------------------------------------
-    //  runReadLoop()  --  the select/read/ping loop, extracted for reuse
+    // runReadLoop()  --  the select/read/ping loop, extracted for reuse
     // -----------------------------------------------------------------------
     void runReadLoop() {
         std::vector<uint8_t> rawBuf;
@@ -1362,7 +1361,7 @@ struct ItscamClient::Impl {
     }
 
     // -----------------------------------------------------------------------
-    //  cleanupAfterDisconnect()  --  fail pending promises, fire callbacks
+    // cleanupAfterDisconnect()  --  fail pending promises, fire callbacks
     // -----------------------------------------------------------------------
     void cleanupAfterDisconnect() {
         closeSocket();
@@ -1414,7 +1413,7 @@ struct ItscamClient::Impl {
     }
 
     // -----------------------------------------------------------------------
-    //  Message handler thread
+    // Message handler thread
     // -----------------------------------------------------------------------
     void runHandlerThread() {
         while (state.load() == RUNNING || inboundQueue.size() > 0) {
@@ -1495,7 +1494,7 @@ struct ItscamClient::Impl {
     }
 
     // -----------------------------------------------------------------------
-    //  Dispatch helpers
+    // Dispatch helpers
     // -----------------------------------------------------------------------
     /// Safe callback invocation helper -- catches exceptions from user code
     /// so that a bad callback never kills the handler thread.
@@ -1579,8 +1578,8 @@ struct ItscamClient::Impl {
     }
 
     // -----------------------------------------------------------------------
-    //  accumulateExposureGroup -- accumulate frames into a group
-    //  Returns true if the group is now complete.
+    // accumulateExposureGroup -- accumulate frames into a group
+    // Returns true if the group is now complete.
     // -----------------------------------------------------------------------
     bool accumulateExposureGroup(ExposureGroupAccumulator& acc,
                                 const CaptureResult& cr) {
@@ -1611,7 +1610,7 @@ struct ItscamClient::Impl {
     }
 
     // -----------------------------------------------------------------------
-    //  dispatchTriggerImage -- fire per-frame + accumulate exposure group
+    // dispatchTriggerImage -- fire per-frame + accumulate exposure group
     // -----------------------------------------------------------------------
     void dispatchTriggerImage(const WireMsg& wm) {
         CaptureResult cr = parseMixedBody(wm.body);
@@ -1655,8 +1654,8 @@ struct ItscamClient::Impl {
     }
 
     // -----------------------------------------------------------------------
-    //  dispatchSnapshotImage -- fire per-frame + accumulate exposure group
-    //  + resolve pending captureSnapshot futures.
+    // dispatchSnapshotImage -- fire per-frame + accumulate exposure group
+    // + resolve pending captureSnapshot futures.
     // -----------------------------------------------------------------------
     void dispatchSnapshotImage(const WireMsg& wm) {
         CaptureResult cr = parseMixedBody(wm.body);
@@ -1711,7 +1710,7 @@ struct ItscamClient::Impl {
     }
 
     // -----------------------------------------------------------------------
-    //  checkExposureGroupTimeouts -- flush stale partial groups
+    // checkExposureGroupTimeouts -- flush stale partial groups
     // -----------------------------------------------------------------------
     void checkExposureGroupTimeouts() {
         uint64_t now = itscam_os::monotonicNow();
@@ -1729,7 +1728,7 @@ struct ItscamClient::Impl {
     }
 
     // -----------------------------------------------------------------------
-    //  Ping
+    // Ping
     // -----------------------------------------------------------------------
     void sendPing() {
         uint32_t prevPingId = lastPingId.load();
@@ -1768,7 +1767,7 @@ struct ItscamClient::Impl {
     }
 
     // -----------------------------------------------------------------------
-    //  Build SET_CALLBACKS JSON from EventSubscription
+    // Build SET_CALLBACKS JSON from EventSubscription
     // -----------------------------------------------------------------------
     nlohmann::json buildCallbacksJson(const EventSubscription& ev) {
         nlohmann::json j;
@@ -1823,7 +1822,7 @@ struct ItscamClient::Impl {
     }
 
     // -----------------------------------------------------------------------
-    //  Build SET_JPEG_CFGS JSON from JpegConfig
+    // Build SET_JPEG_CFGS JSON from JpegConfig
     // -----------------------------------------------------------------------
     nlohmann::json buildJpegJson(const JpegConfig& cfg) {
         nlohmann::json j;
@@ -1863,7 +1862,7 @@ struct ItscamClient::Impl {
     }
 
     // -----------------------------------------------------------------------
-    //  Build TRIGGER_SNAPSHOT JSON from SnapshotRequest
+    // Build TRIGGER_SNAPSHOT JSON from SnapshotRequest
     // -----------------------------------------------------------------------
     nlohmann::json buildSnapshotJson(const SnapshotRequest& req) {
         nlohmann::json j;
@@ -1895,7 +1894,7 @@ struct ItscamClient::Impl {
     }
 
     // -----------------------------------------------------------------------
-    //  Build / parse serial config JSON
+    // Build / parse serial config JSON
     // -----------------------------------------------------------------------
     nlohmann::json buildSerialConfigJson(SerialPort port, const SerialConfig& cfg) {
         nlohmann::json inner;
@@ -1922,7 +1921,7 @@ struct ItscamClient::Impl {
     }
 
     // -----------------------------------------------------------------------
-    //  Profile path helper
+    // Profile path helper
     // -----------------------------------------------------------------------
     static std::string profileBasePath(uint32_t profileId) {
         if (profileId == CURRENT_PROFILE)
@@ -1931,7 +1930,7 @@ struct ItscamClient::Impl {
     }
 
     // -----------------------------------------------------------------------
-    //  TriggerEvent <-> protocol string conversion
+    // TriggerEvent <-> protocol string conversion
     // -----------------------------------------------------------------------
     static const char* triggerEventToStr(TriggerEvent ev) {
         switch (ev) {
@@ -1958,7 +1957,7 @@ struct ItscamClient::Impl {
     }
 
     // -----------------------------------------------------------------------
-    //  Build / parse trigger config JSON
+    // Build / parse trigger config JSON
     // -----------------------------------------------------------------------
     nlohmann::json buildTriggerConfigJson(const TriggerConfig& cfg,
                                            uint32_t profileId) {
@@ -1987,11 +1986,11 @@ struct ItscamClient::Impl {
     }
 
     // -----------------------------------------------------------------------
-    //  Build / parse multi-exposure config JSON
-    //  HAL format per step:
-    //    {"shutter":{"value":N,"percentageOfCurrent":bool},
-    //     "gain":{"value":N,"percentageOfCurrent":bool},
-    //     "flash":{"power":[{"out":1,"percent":50},...]}}
+    // Build / parse multi-exposure config JSON
+    // HAL format per step:
+    //   {"shutter":{"value":N,"percentageOfCurrent":bool},
+    //    "gain":{"value":N,"percentageOfCurrent":bool},
+    //    "flash":{"power":[{"out":1,"percent":50},...]}}
     // -----------------------------------------------------------------------
     nlohmann::json buildMultiExpSettingsJson(const MultiExposureConfig& cfg) {
         nlohmann::json arr = nlohmann::json::array();
@@ -2049,7 +2048,7 @@ struct ItscamClient::Impl {
     }
 
     // -----------------------------------------------------------------------
-    //  Build / parse exposure config JSON
+    // Build / parse exposure config JSON
     // -----------------------------------------------------------------------
     nlohmann::json buildExposureConfigJson(const ExposureConfig& cfg,
                                             uint32_t profileId) {
@@ -2106,9 +2105,9 @@ struct ItscamClient::Impl {
     }
 };
 
-// ============================================================================
-//  ItscamClient  --  public method implementations
-// ============================================================================
+//=========================================================================
+// ItscamClient  --  public method implementations
+//=========================================================================
 
 ItscamClient::ItscamClient() : mImpl(new Impl) {}
 

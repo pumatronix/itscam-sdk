@@ -9,8 +9,6 @@
  *
  *  Copyright (c) 2026 Pumatronix
  *
- *  Requires: nlohmann/json 3.x, cpp-httplib 0.18+ (header-only).
- *
  *  Typed REST helpers (e.g. `getOcrConfig() -> Result<OcrConfig>`) are
  *  generated from the camera's OpenAPI document into `itscam_rest_types.hpp`.
  *  See [`tools/codegen/`](../../tools/codegen/) for the refresh / regeneration
@@ -49,9 +47,9 @@ public:
     ItscamRestClient(const ItscamRestClient&) = delete;
     ItscamRestClient& operator=(const ItscamRestClient&) = delete;
 
-    // =========================================================================
-    //  Connection
-    // =========================================================================
+    //=========================================================================
+    // Connection
+    //=========================================================================
 
     /// Configure the target host, port and scheme for the webapp backend.
     /// Must be called before any HTTP method.  Does not open a persistent
@@ -66,12 +64,12 @@ public:
                     uint16_t port = 80,
                     const std::string& scheme = "http");
 
-    // =========================================================================
-    //  TLS (HTTPS) configuration
-    //  All setters are no-ops when scheme is "http".  Defaults are safe:
-    //  server certificate verification is enabled, and the OS-supplied CA
-    //  bundle is used when found.
-    // =========================================================================
+    //=========================================================================
+    // TLS (HTTPS) configuration
+    // All setters are no-ops when scheme is "http".  Defaults are safe:
+    // server certificate verification is enabled, and the OS-supplied CA
+    // bundle is used when found.
+    //=========================================================================
 
     /// Path to a PEM file containing trusted CA certificates.
     void setCaCertFile(const std::string& pemPath);
@@ -90,9 +88,9 @@ public:
     void setClientCertificate(const std::string& certPem,
                               const std::string& keyPem);
 
-    // =========================================================================
-    //  Authentication  (JWT)
-    // =========================================================================
+    //=========================================================================
+    // Authentication  (JWT)
+    //=========================================================================
 
     /// POST /api/auth -- obtain a JWT token from the webapp backend.
     /// On success the token is stored internally and attached to every
@@ -108,11 +106,11 @@ public:
     /// Clear the stored JWT token.
     void clearAuthToken();
 
-    // =========================================================================
-    //  Image profiles                                    Endpoint: /image/profiles
+    //=========================================================================
+    // Image profiles                                    Endpoint: /image/profiles
     //
-    //  ProfileConfig and friends live in itscam_rest_types.hpp (auto-generated).
-    // =========================================================================
+    // ProfileConfig and friends live in itscam_rest_types.hpp (auto-generated).
+    //=========================================================================
 
     /// GET /api/image/profiles -- list all profiles.
     Result<std::vector<pumatronix::itscam::ProfileConfig>> getProfiles(
@@ -152,22 +150,22 @@ public:
     /// Returns the server's raw response body (per-id status objects).
     Result<nlohmann::json> deleteProfile(int id, uint32_t timeoutMs = 10000);
 
-    // =========================================================================
-    //  Equipment volatile info  (read-only)
-    //  Endpoint: /api/equipment/misc/readonly/volatile
-    // =========================================================================
+    //=========================================================================
+    // Equipment volatile info  (read-only)
+    // Endpoint: /api/equipment/misc/readonly/volatile
+    //=========================================================================
 
     /// GET /api/equipment/misc/readonly/volatile
     Result<pumatronix::itscam::MiscVolatile> getVolatileInfo(
         uint32_t timeoutMs = 10000);
 
-    // =========================================================================
-    //  Equipment general configuration
-    //  Endpoint: /api/equipment/general
+    //=========================================================================
+    // Equipment general configuration
+    // Endpoint: /api/equipment/general
     //
-    //  GeneralData is not part of Phase 1; these methods still surface raw
-    //  JSON.  They will be promoted to typed once GeneralData is added.
-    // =========================================================================
+    // GeneralData is not part of Phase 1; these methods still surface raw
+    // JSON.  They will be promoted to typed once GeneralData is added.
+    //=========================================================================
 
     /// GET /api/equipment/general
     Result<nlohmann::json> getGeneralConfig(uint32_t timeoutMs = 10000);
@@ -176,10 +174,10 @@ public:
     Result<nlohmann::json> setGeneralConfig(const nlohmann::json& config,
                                             uint32_t timeoutMs = 10000);
 
-    // =========================================================================
-    //  Analytics configuration
-    //  Endpoint: /api/equipment/analytics
-    // =========================================================================
+    //=========================================================================
+    // Analytics configuration
+    // Endpoint: /api/equipment/analytics
+    //=========================================================================
 
     /// GET /api/equipment/analytics
     Result<pumatronix::itscam::AnalyticsConfig> getAnalyticsConfig(
@@ -190,10 +188,10 @@ public:
         const pumatronix::itscam::AnalyticsConfig& config,
         uint32_t timeoutMs = 10000);
 
-    // =========================================================================
-    //  OCR configuration
-    //  Endpoint: /api/equipment/ocr
-    // =========================================================================
+    //=========================================================================
+    // OCR configuration
+    // Endpoint: /api/equipment/ocr
+    //=========================================================================
 
     /// GET /api/equipment/ocr
     Result<pumatronix::itscam::OcrConfig> getOcrConfig(
@@ -204,10 +202,10 @@ public:
         const pumatronix::itscam::OcrConfig& config,
         uint32_t timeoutMs = 10000);
 
-    // =========================================================================
-    //  Classifier configuration
-    //  Endpoint: /api/equipment/classifier
-    // =========================================================================
+    //=========================================================================
+    // Classifier configuration
+    // Endpoint: /api/equipment/classifier
+    //=========================================================================
 
     /// GET /api/equipment/classifier
     Result<pumatronix::itscam::ClassifierConfig> getClassifierConfig(
@@ -218,12 +216,12 @@ public:
         const pumatronix::itscam::ClassifierConfig& config,
         uint32_t timeoutMs = 10000);
 
-    // =========================================================================
-    //  Lanes configuration
-    //  Endpoint: /api/equipment/lanes
+    //=========================================================================
+    // Lanes configuration
+    // Endpoint: /api/equipment/lanes
     //
-    //  LanesConfig is not part of Phase 1; raw-JSON methods remain in place.
-    // =========================================================================
+    // LanesConfig is not part of Phase 1; raw-JSON methods remain in place.
+    //=========================================================================
 
     /// GET /api/equipment/lanes
     Result<pumatronix::itscam::LanesConfig> getLanesConfig(
@@ -234,10 +232,10 @@ public:
         const pumatronix::itscam::LanesConfig& config,
         uint32_t timeoutMs = 10000);
 
-    // =========================================================================
-    //  ITSCAM PRO server configuration
-    //  Endpoint: /api/equipment/servers/itscampro
-    // =========================================================================
+    //=========================================================================
+    // ITSCAM PRO server configuration
+    // Endpoint: /api/equipment/servers/itscampro
+    //=========================================================================
 
     /// GET /api/equipment/servers/itscampro
     Result<pumatronix::itscam::ItscamproConfig> getItscamproConfig(
@@ -252,10 +250,10 @@ public:
     Result<pumatronix::itscam::ItscamproStatus> getItscamproStatus(
         uint32_t timeoutMs = 10000);
 
-    // =========================================================================
-    //  Auto-focus configuration
-    //  Endpoint: /api/equipment/autofocus
-    // =========================================================================
+    //=========================================================================
+    // Auto-focus configuration
+    // Endpoint: /api/equipment/autofocus
+    //=========================================================================
 
     /// GET /api/equipment/autofocus
     Result<pumatronix::itscam::AutoFocus> getAutoFocus(
@@ -266,10 +264,10 @@ public:
         const pumatronix::itscam::AutoFocus& config,
         uint32_t timeoutMs = 10000);
 
-    // =========================================================================
-    //  Video stream configuration
-    //  Endpoint: /api/video/streams
-    // =========================================================================
+    //=========================================================================
+    // Video stream configuration
+    // Endpoint: /api/video/streams
+    //=========================================================================
 
     /// GET /api/video/streams
     Result<pumatronix::itscam::StreamConfig> getStreamConfig(
@@ -280,10 +278,10 @@ public:
         const pumatronix::itscam::StreamConfig& config,
         uint32_t timeoutMs = 10000);
 
-    // =========================================================================
-    //  Equipment Misc configuration
-    //  Endpoint: /api/equipment/misc
-    // =========================================================================
+    //=========================================================================
+    // Equipment Misc configuration
+    // Endpoint: /api/equipment/misc
+    //=========================================================================
 
     /// GET /api/equipment/misc
     Result<pumatronix::itscam::Misc> getMisc(uint32_t timeoutMs = 10000);
@@ -293,19 +291,19 @@ public:
         const pumatronix::itscam::Misc& config,
         uint32_t timeoutMs = 10000);
 
-    // =========================================================================
-    //  Image-sign (frame watermarking)
-    //  Endpoint: /api/equipment/imageSign
-    // =========================================================================
+    //=========================================================================
+    // Image-sign (frame watermarking)
+    // Endpoint: /api/equipment/imageSign
+    //=========================================================================
 
     /// GET /api/equipment/imageSign  (the endpoint is read-only on most cameras)
     Result<pumatronix::itscam::ImageSignConfig> getImageSignConfig(
         uint32_t timeoutMs = 10000);
 
-    // =========================================================================
-    //  FTP upload server
-    //  Endpoint: /api/equipment/servers/ftp
-    // =========================================================================
+    //=========================================================================
+    // FTP upload server
+    // Endpoint: /api/equipment/servers/ftp
+    //=========================================================================
 
     /// GET /api/equipment/servers/ftp
     Result<pumatronix::itscam::FtpConfig> getFtpConfig(
@@ -316,10 +314,10 @@ public:
         const pumatronix::itscam::FtpConfig& config,
         uint32_t timeoutMs = 10000);
 
-    // =========================================================================
-    //  Lince integration
-    //  Endpoint: /api/equipment/servers/lince
-    // =========================================================================
+    //=========================================================================
+    // Lince integration
+    // Endpoint: /api/equipment/servers/lince
+    //=========================================================================
 
     /// GET /api/equipment/servers/lince
     Result<pumatronix::itscam::LinceConfig> getLinceConfig(
@@ -334,10 +332,10 @@ public:
     Result<pumatronix::itscam::LinceStatus> getLinceStatus(
         uint32_t timeoutMs = 10000);
 
-    // =========================================================================
-    //  Vehicle indicator
-    //  Endpoint: /api/equipment/vehicleIndicator
-    // =========================================================================
+    //=========================================================================
+    // Vehicle indicator
+    // Endpoint: /api/equipment/vehicleIndicator
+    //=========================================================================
 
     /// GET /api/equipment/vehicleIndicator
     Result<pumatronix::itscam::VehicleIndicatorConfig> getVehicleIndicatorConfig(
@@ -348,10 +346,10 @@ public:
         const pumatronix::itscam::VehicleIndicatorConfig& config,
         uint32_t timeoutMs = 10000);
 
-    // =========================================================================
-    //  Output protocols (Cougar / ITSCAM proprietary / auth / CGI flags)
-    //  Endpoint: /api/equipment/servers/protocols
-    // =========================================================================
+    //=========================================================================
+    // Output protocols (Cougar / ITSCAM proprietary / auth / CGI flags)
+    // Endpoint: /api/equipment/servers/protocols
+    //=========================================================================
 
     /// GET /api/equipment/servers/protocols
     Result<pumatronix::itscam::ProtocolsConfig> getProtocolsConfig(
@@ -362,10 +360,10 @@ public:
         const pumatronix::itscam::ProtocolsConfig& config,
         uint32_t timeoutMs = 10000);
 
-    // =========================================================================
-    //  Profile transitioner  (day/night switching policy)
-    //  Endpoint: /api/equipment/transitioner
-    // =========================================================================
+    //=========================================================================
+    // Profile transitioner  (day/night switching policy)
+    // Endpoint: /api/equipment/transitioner
+    //=========================================================================
 
     /// GET /api/equipment/transitioner
     Result<pumatronix::itscam::ProfileTransitioner> getProfileTransitioner(
@@ -376,11 +374,11 @@ public:
         const pumatronix::itscam::ProfileTransitioner& config,
         uint32_t timeoutMs = 10000);
 
-    // =========================================================================
-    //  I/O ports
-    //  Endpoint: /api/equipment/ioPorts(/{id})
-    //  Endpoint: /api/equipment/ioBasic       (lightweight pin metadata array)
-    // =========================================================================
+    //=========================================================================
+    // I/O ports
+    // Endpoint: /api/equipment/ioPorts(/{id})
+    // Endpoint: /api/equipment/ioBasic       (lightweight pin metadata array)
+    //=========================================================================
 
     /// GET /api/equipment/ioPorts (returns one IoConfig per pin).
     Result<std::vector<pumatronix::itscam::IoConfig>> getIoPorts(
@@ -410,11 +408,11 @@ public:
         const std::vector<pumatronix::itscam::IoBasic>& ports,
         uint32_t timeoutMs = 10000);
 
-    // =========================================================================
-    //  REST API client (HTTP webhook) servers
-    //  Endpoint: /api/equipment/servers/restapiclient/{id}/config
-    //  Endpoint: /api/equipment/servers/restapiclient/{id}/status
-    // =========================================================================
+    //=========================================================================
+    // REST API client (HTTP webhook) servers
+    // Endpoint: /api/equipment/servers/restapiclient/{id}/config
+    // Endpoint: /api/equipment/servers/restapiclient/{id}/status
+    //=========================================================================
 
     /// GET /api/equipment/servers/restapiclient/{id}/config
     Result<pumatronix::itscam::RestApiClientConfig> getRestApiClientConfig(
@@ -430,17 +428,17 @@ public:
     Result<pumatronix::itscam::RestApiClientStatus> getRestApiClientStatus(
         int id, uint32_t timeoutMs = 10000);
 
-    // =========================================================================
-    //  Licenses
-    //  Endpoint: /api/system/licenses
-    // =========================================================================
+    //=========================================================================
+    // Licenses
+    // Endpoint: /api/system/licenses
+    //=========================================================================
 
     /// GET /api/system/licenses  (read-only summary of installed licenses).
     Result<pumatronix::itscam::Licenses> getLicenses(uint32_t timeoutMs = 10000);
 
-    // =========================================================================
-    //  Generic HTTP methods  (escape hatch for endpoints not covered above)
-    // =========================================================================
+    //=========================================================================
+    // Generic HTTP methods  (escape hatch for endpoints not covered above)
+    //=========================================================================
 
     Result<nlohmann::json> httpGet(const std::string& path,
                                    uint32_t timeoutMs = 10000);
@@ -465,9 +463,9 @@ public:
     Result<nlohmann::json> httpDelete(const std::string& path,
                                       uint32_t timeoutMs = 10000);
 
-    // =========================================================================
-    //  Settings
-    // =========================================================================
+    //=========================================================================
+    // Settings
+    //=========================================================================
 
     /// Override the API prefix prepended to all typed endpoint paths.
     /// Default: "/api".  Affects only the typed helper methods, not the

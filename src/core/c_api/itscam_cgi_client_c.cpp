@@ -14,9 +14,9 @@
 #include <string>
 #include <vector>
 
-// ============================================================================
-//  Opaque types
-// ============================================================================
+//=========================================================================
+// Opaque types
+//=========================================================================
 
 struct ITSCAM_CgiClient {
     itscam::ItscamCgiClient impl;
@@ -36,9 +36,9 @@ struct ITSCAM_CgiImageArray {
     std::vector<ITSCAM_CgiImage> items;
 };
 
-// ============================================================================
-//  Helpers
-// ============================================================================
+//=========================================================================
+// Helpers
+//=========================================================================
 
 namespace {
 
@@ -87,9 +87,9 @@ itscam::SnapshotCgiRequest fromC(const ITSCAM_CgiSnapshotRequest* in) {
 
 }  // namespace
 
-// ============================================================================
-//  Lifecycle
-// ============================================================================
+//=========================================================================
+// Lifecycle
+//=========================================================================
 
 extern "C" {
 
@@ -101,9 +101,9 @@ void ITSCAM_CgiClient_destroy(ITSCAM_CgiClient* c) {
     delete c;
 }
 
-// ============================================================================
-//  Connection / TLS
-// ============================================================================
+//=========================================================================
+// Connection / TLS
+//=========================================================================
 
 ITSCAM_ErrorCode ITSCAM_CgiClient_setBaseUrl(ITSCAM_CgiClient* c,
                                              const char* host,
@@ -139,9 +139,9 @@ void ITSCAM_CgiClient_setClientCertificate(ITSCAM_CgiClient* c,
     if (c && certPem && keyPem) c->impl.setClientCertificate(certPem, keyPem);
 }
 
-// ============================================================================
-//  Authentication
-// ============================================================================
+//=========================================================================
+// Authentication
+//=========================================================================
 
 ITSCAM_ErrorCode ITSCAM_CgiClient_login(ITSCAM_CgiClient* c,
                                         const char* username,
@@ -169,9 +169,9 @@ void ITSCAM_CgiClient_clearBasicAuth(ITSCAM_CgiClient* c) {
     if (c) c->impl.clearBasicAuth();
 }
 
-// ============================================================================
-//  /api/lastframe.cgi
-// ============================================================================
+//=========================================================================
+// /api/lastframe.cgi
+//=========================================================================
 
 ITSCAM_ErrorCode ITSCAM_CgiClient_getLastFrame(ITSCAM_CgiClient* c,
                                                uint32_t timeoutMs,
@@ -189,9 +189,9 @@ ITSCAM_ErrorCode ITSCAM_CgiClient_getLastFrame(ITSCAM_CgiClient* c,
     return ITSCAM_OK;
 }
 
-// ============================================================================
-//  /api/snapshot.cgi
-// ============================================================================
+//=========================================================================
+// /api/snapshot.cgi
+//=========================================================================
 
 ITSCAM_ErrorCode ITSCAM_CgiClient_getSnapshot(ITSCAM_CgiClient* c,
                                               const ITSCAM_CgiSnapshotRequest* req,
@@ -216,9 +216,9 @@ ITSCAM_ErrorCode ITSCAM_CgiClient_getSnapshot(ITSCAM_CgiClient* c,
     return ITSCAM_OK;
 }
 
-// ============================================================================
-//  /api/mjpegvideo.cgi
-// ============================================================================
+//=========================================================================
+// /api/mjpegvideo.cgi
+//=========================================================================
 
 ITSCAM_ErrorCode ITSCAM_CgiClient_startMjpegStream(ITSCAM_CgiClient* c,
                                                    ITSCAM_CgiStreamCallback cb,
@@ -249,9 +249,9 @@ int ITSCAM_CgiClient_isMjpegStreamRunning(ITSCAM_CgiClient* c) {
     return (c && c->impl.isMjpegStreamRunning()) ? 1 : 0;
 }
 
-// ============================================================================
-//  /api/trigger.cgi force / /api/reboot.cgi
-// ============================================================================
+//=========================================================================
+// /api/trigger.cgi force / /api/reboot.cgi
+//=========================================================================
 
 static ITSCAM_ErrorCode wrapStringResult(
     const itscam::Result<std::string>& r, ITSCAM_String** out) {
@@ -280,9 +280,9 @@ ITSCAM_ErrorCode ITSCAM_CgiClient_reboot(ITSCAM_CgiClient* c,
     return wrapStringResult(c->impl.reboot(timeoutMs), out);
 }
 
-// ============================================================================
-//  Logging
-// ============================================================================
+//=========================================================================
+// Logging
+//=========================================================================
 
 void ITSCAM_CgiClient_onLog(ITSCAM_CgiClient* c, ITSCAM_LogCallback cb,
                             void* ud) {
@@ -303,9 +303,9 @@ void ITSCAM_CgiClient_onLog(ITSCAM_CgiClient* c, ITSCAM_LogCallback cb,
     });
 }
 
-// ============================================================================
-//  ITSCAM_CgiImage / ITSCAM_CgiImageArray accessors
-// ============================================================================
+//=========================================================================
+// ITSCAM_CgiImage / ITSCAM_CgiImageArray accessors
+//=========================================================================
 
 const char* ITSCAM_CgiImage_mimeType(const ITSCAM_CgiImage* img) {
     return img ? img->data.mimeType.c_str() : "";
