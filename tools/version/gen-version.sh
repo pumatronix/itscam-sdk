@@ -86,6 +86,25 @@ def compute() -> dict[str, str | int]:
         # `git status` can fail with exit 128 inside Docker bind mounts when
         # the repo is owned by a different uid (Git "dubious ownership").
         porcelain = try_run("git", "status", "--porcelain")
+        if porcelain:
+            # Exclude LFS-tracked binaries that may appear modified inside
+            # Docker containers without git-lfs.  Only genuinely unexpected
+            # changes should flag the build as dirty.
+            import fnmatch
+            lfs_patterns: list[str] = []
+            ga = root / ".gitattributes"
+            if ga.exists():
+                for _line in ga.read_text(encoding="utf-8").splitlines():
+                    _parts = _line.split()
+                    if len(_parts) >= 2 and any("filter=lfs" in p for p in _parts[1:]):
+                        lfs_patterns.append(_parts[0])
+            filtered = []
+            for _line in porcelain.splitlines():
+                _path = _line[2:].lstrip(" ").split(" -> ")[-1].strip()
+                if lfs_patterns and any(fnmatch.fnmatch(_path, p) for p in lfs_patterns):
+                    continue
+                filtered.append(_line)
+            porcelain = "\n".join(filtered)
         dirty = porcelain is not None and porcelain != ""
         tag = try_run("git", "describe", "--tags", "--match", "v*", "--abbrev=0")
         if tag is not None:
@@ -270,34 +289,6 @@ module.exports = {{
 """)
 
 
-def patch_parent_pom_version(path: Path, version: str) -> None:
-    """Replace the <version> of the <itscam-sdk-parent> POM."""
-    if not path.exists():
-        return
-    text = path.read_text(encoding="utf-8")
-    new_text, count = re.subn(
-        r"(<artifactId>itscam-sdk-parent</artifactId>\s*<version>)[^<]*(</version>)",
-        f"\\g<1>{version}\\g<2>",
-        text,
-        count=2,  # parent POM declares it once; child POMs reference it once.
-    )
-    if count and new_text != text:
-        safe_write(path, new_text)
-
-
-# Sync Maven POMs with the computed version so plain `mvn package` produces
-# correctly-versioned artefacts even outside the canonical Makefile flow.
-# Both child POMs inherit groupId/version from itscam-sdk-parent via
-# <parent>, so we only need to keep the parent coordinate in sync everywhere
-# it is mentioned. npm package.json keeps a stable placeholder version;
-# tools/packaging/npm-pack-versioned.sh injects npmVersion at pack time.
-for pom in [
-    root / "src/wrappers/java/pom.xml",
-    root / "src/wrappers/java/itscam-sdk/pom.xml",
-    root / "src/wrappers/java/examples/pom.xml",
-]:
-    patch_parent_pom_version(pom, info["maven_version"])
-
 def mk_escape(value: str) -> str:
     return value.replace("\\", "\\\\").replace("$", "$$")
 
@@ -312,6 +303,7 @@ safe_write(out_mk,
             f"SDK_LIB_VERSION := {info['lib_version']}",
             f"SDK_VERSION := {mk_escape(str(info['package_version']))}",
             f"SDK_VERSION_FULL := {mk_escape(str(info['version_full']))}",
+            f"SDK_MAVEN_VERSION := {mk_escape(str(info['maven_version']))}",
             f"SDK_GIT_SHA := {mk_escape(str(info['git_sha']))}",
             f"SDK_GIT_SHA_SHORT := {mk_escape(str(info['git_sha_short']))}",
             f"SDK_BUILD_DATE := {mk_escape(str(info['build_date']))}",

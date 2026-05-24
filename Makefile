@@ -330,12 +330,13 @@ csharp-software-trigger-example: csharp-examples
 
 JAVA_DIR := $(SRC_DIR)/wrappers/java
 MAVEN ?= mvn
+MAVEN_REVISION := $(if $(SDK_MAVEN_VERSION),-Drevision=$(SDK_MAVEN_VERSION),)
 
 java: lib
 	@echo "=== Building Java wrapper (JAR) ==="
 	@if command -v $(MAVEN) > /dev/null; then \
 		$(CURDIR)/tools/packaging/stage-java-natives.sh; \
-		cd $(JAVA_DIR) && $(MAVEN) -pl itscam-sdk -am package -DskipTests; \
+		cd $(JAVA_DIR) && $(MAVEN) -pl itscam-sdk -am package -DskipTests $(MAVEN_REVISION); \
 		echo "Java JAR: $(JAVA_DIR)/itscam-sdk/target/itscam-sdk-*.jar"; \
 	else \
 		echo "$(MAVEN) not found. Install Maven 3.9+ and a JDK 11+ to build the Java wrapper."; \
@@ -351,7 +352,7 @@ java-examples: lib
 	@echo "=== Building Java wrapper + runnable examples ==="
 	@if command -v $(MAVEN) > /dev/null; then \
 		$(CURDIR)/tools/packaging/stage-java-natives.sh; \
-		cd $(JAVA_DIR) && $(MAVEN) -DskipTests package; \
+		cd $(JAVA_DIR) && $(MAVEN) -DskipTests package $(MAVEN_REVISION); \
 		echo "Examples (shaded JAR): $(JAVA_DIR)/examples/target/itscam-sdk-examples-*-all.jar"; \
 		echo "Run: java -cp $(JAVA_DIR)/examples/target/itscam-sdk-examples-*-all.jar \\"; \
 		echo "          com.pumatronix.itscam.examples.CaptureExample <camera_ip> [password]"; \

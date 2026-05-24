@@ -30,4 +30,9 @@ export GOMODCACHE="${GOMODCACHE:-/tmp/go/pkg/mod}"
 export GOCACHE="${GOCACHE:-/tmp/go/build-cache}"
 mkdir -p "$GOMODCACHE" "$GOCACHE"
 
+# Ensure git-lfs filters are configured so `git status` correctly handles
+# LFS-tracked files (avoids false dirty detection on bind mounts where the
+# host smudged LFS pointers into actual binary content).
+git lfs install --skip-repo >/dev/null 2>&1 || true
+
 exec "$@"
