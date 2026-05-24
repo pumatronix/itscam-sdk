@@ -32,9 +32,20 @@ dotnet new console -n MeuApp -o .
 
 ## 4. Referenciar o SDK via NuGet
 
+O pacote `Pumatronix.Itscam.Sdk` depende de `System.Memory` e `System.Text.Json`, que vêm do **nuget.org**. Use um `nuget.config` com os dois feeds (local + nuget.org) — `--source $SDK/csharp` sozinho não resolve as dependências transitivas:
+
 ```bash
-dotnet add package Pumatronix.Itscam.Sdk \
-    --source $SDK/csharp
+cat > nuget.config <<EOF
+<?xml version="1.0" encoding="utf-8"?>
+<configuration>
+  <packageSources>
+    <add key="itscam-sdk" value="$SDK/csharp" />
+    <add key="nuget.org" value="https://api.nuget.org/v3/index.json" protocolVersion="3" />
+  </packageSources>
+</configuration>
+EOF
+
+dotnet add package Pumatronix.Itscam.Sdk
 ```
 
 ## 5. Escrever o código mínimo

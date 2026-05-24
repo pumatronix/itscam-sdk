@@ -18,6 +18,12 @@
     <_ItscamSdkRuntimesDir>$(MSBuildThisFileDirectory)..\runtimes\</_ItscamSdkRuntimesDir>
     <!-- Built-from-source layout: built by `make lib` / `make csharp-examples`. -->
     <_ItscamSdkCoreDir>$(MSBuildThisFileDirectory)..\..\..\..\core\build\</_ItscamSdkCoreDir>
+    <_ItscamSdkHostIsLinux>$([MSBuild]::IsOSPlatform('Linux'))</_ItscamSdkHostIsLinux>
+    <_ItscamSdkHostIsWindows>$([MSBuild]::IsOSPlatform('Windows'))</_ItscamSdkHostIsWindows>
+    <_ItscamSdkCopyLinux Condition="'$(RuntimeIdentifier)' == ''">$(_ItscamSdkHostIsLinux)</_ItscamSdkCopyLinux>
+    <_ItscamSdkCopyLinux Condition="'$(RuntimeIdentifier)' != ''">$([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('linux'))</_ItscamSdkCopyLinux>
+    <_ItscamSdkCopyWin Condition="'$(RuntimeIdentifier)' == ''">$(_ItscamSdkHostIsWindows)</_ItscamSdkCopyWin>
+    <_ItscamSdkCopyWin Condition="'$(RuntimeIdentifier)' != ''">$([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('win'))</_ItscamSdkCopyWin>
   </PropertyGroup>
 
   <!--
@@ -38,6 +44,9 @@
       <_ItscamSdkNativeLinuxX64
         Include="$(_ItscamSdkCoreDir)linux\libitscam_sdk.so.1.0.0"
         Condition="'@(_ItscamSdkNativeLinuxX64)' == '' and Exists('$(_ItscamSdkCoreDir)linux\libitscam_sdk.so.1.0.0')" />
+      <_ItscamSdkNativeLinuxX64
+        Include="$(_ItscamSdkRuntimesDir)linux-x64\native\libitscam_sdk.so.*"
+        Condition="'@(_ItscamSdkNativeLinuxX64)' == ''" />
 
       <!-- linux-arm (ITSCAM450) -->
       <_ItscamSdkNativeLinuxArm
@@ -49,6 +58,9 @@
       <_ItscamSdkNativeLinuxArm
         Include="$(_ItscamSdkCoreDir)linux-arm\libitscam_sdk.so.1.0.0"
         Condition="'@(_ItscamSdkNativeLinuxArm)' == '' and Exists('$(_ItscamSdkCoreDir)linux-arm\libitscam_sdk.so.1.0.0')" />
+      <_ItscamSdkNativeLinuxArm
+        Include="$(_ItscamSdkRuntimesDir)linux-arm\native\libitscam_sdk.so.*"
+        Condition="'@(_ItscamSdkNativeLinuxArm)' == ''" />
 
       <!-- linux-arm64 (ITSCAM600) -->
       <_ItscamSdkNativeLinuxArm64
@@ -60,6 +72,9 @@
       <_ItscamSdkNativeLinuxArm64
         Include="$(_ItscamSdkCoreDir)linux-arm64\libitscam_sdk.so.1.0.0"
         Condition="'@(_ItscamSdkNativeLinuxArm64)' == '' and Exists('$(_ItscamSdkCoreDir)linux-arm64\libitscam_sdk.so.1.0.0')" />
+      <_ItscamSdkNativeLinuxArm64
+        Include="$(_ItscamSdkRuntimesDir)linux-arm64\native\libitscam_sdk.so.*"
+        Condition="'@(_ItscamSdkNativeLinuxArm64)' == ''" />
 
       <!-- win-x64 -->
       <_ItscamSdkNativeWinX64
@@ -90,23 +105,23 @@
     <Copy SourceFiles="@(_ItscamSdkNativeLinuxX64)"
           DestinationFiles="$(OutDir)libitscam_sdk.so"
           SkipUnchangedFiles="true"
-          Condition="'@(_ItscamSdkNativeLinuxX64)' != ''" />
+          Condition="'@(_ItscamSdkNativeLinuxX64)' != '' and $(_ItscamSdkCopyLinux) and ('$(RuntimeIdentifier)' == '' or '$(RuntimeIdentifier)' == 'linux-x64')" />
     <Copy SourceFiles="@(_ItscamSdkNativeLinuxArm)"
           DestinationFiles="$(OutDir)libitscam_sdk.so"
           SkipUnchangedFiles="true"
-          Condition="'@(_ItscamSdkNativeLinuxArm)' != ''" />
+          Condition="'@(_ItscamSdkNativeLinuxArm)' != '' and $(_ItscamSdkCopyLinux) and '$(RuntimeIdentifier)' == 'linux-arm'" />
     <Copy SourceFiles="@(_ItscamSdkNativeLinuxArm64)"
           DestinationFiles="$(OutDir)libitscam_sdk.so"
           SkipUnchangedFiles="true"
-          Condition="'@(_ItscamSdkNativeLinuxArm64)' != ''" />
+          Condition="'@(_ItscamSdkNativeLinuxArm64)' != '' and $(_ItscamSdkCopyLinux) and '$(RuntimeIdentifier)' == 'linux-arm64'" />
     <Copy SourceFiles="@(_ItscamSdkNativeWinX64)"
           DestinationFiles="$(OutDir)itscam_sdk.dll"
           SkipUnchangedFiles="true"
-          Condition="'@(_ItscamSdkNativeWinX64)' != '' and '$(RuntimeIdentifier)' != 'win-x86'" />
+          Condition="'@(_ItscamSdkNativeWinX64)' != '' and $(_ItscamSdkCopyWin) and '$(RuntimeIdentifier)' != 'win-x86'" />
     <Copy SourceFiles="@(_ItscamSdkNativeWinX86)"
           DestinationFiles="$(OutDir)itscam_sdk.dll"
           SkipUnchangedFiles="true"
-          Condition="'@(_ItscamSdkNativeWinX86)' != '' and '$(RuntimeIdentifier)' == 'win-x86'" />
+          Condition="'@(_ItscamSdkNativeWinX86)' != '' and $(_ItscamSdkCopyWin) and '$(RuntimeIdentifier)' == 'win-x86'" />
   </Target>
 
   <!--

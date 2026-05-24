@@ -396,7 +396,16 @@ Go Wails GUI (examples/go/gui/)
 
 C# (examples/csharp/)
 ---------------------
-  dotnet restore --source \$(pwd)/csharp
+  cat > nuget.config <<EOF
+  <?xml version="1.0" encoding="utf-8"?>
+  <configuration>
+    <packageSources>
+      <add key="itscam-sdk" value="\$(pwd)/csharp" />
+      <add key="nuget.org" value="https://api.nuget.org/v3/index.json" protocolVersion="3" />
+    </packageSources>
+  </configuration>
+  EOF
+  dotnet restore --project examples/csharp/CaptureExample
   dotnet run --project examples/csharp/CaptureExample -- 192.168.254.254 admin 1234
 
 Java (examples/java/)
@@ -592,7 +601,16 @@ examples\\bin\\win-x64\\itscam-viewer.exe       # Windows 64-bit
 ## C# / .NET
 
 \`\`\`bash
-dotnet add package Pumatronix.Itscam.Sdk --source \$(pwd)/csharp
+cat > nuget.config <<EOF
+<?xml version="1.0" encoding="utf-8"?>
+<configuration>
+  <packageSources>
+    <add key="itscam-sdk" value="\$(pwd)/csharp" />
+    <add key="nuget.org" value="https://api.nuget.org/v3/index.json" protocolVersion="3" />
+  </packageSources>
+</configuration>
+EOF
+dotnet add package Pumatronix.Itscam.Sdk
 \`\`\`
 
 ## Linux C / C++
@@ -722,7 +740,16 @@ examples\\bin\\win-x64\\itscam-viewer.exe       # Windows 64-bit
 ## C# / .NET
 
 \`\`\`bash
-dotnet add package Pumatronix.Itscam.Sdk --source \$(pwd)/csharp
+cat > nuget.config <<EOF
+<?xml version="1.0" encoding="utf-8"?>
+<configuration>
+  <packageSources>
+    <add key="itscam-sdk" value="\$(pwd)/csharp" />
+    <add key="nuget.org" value="https://api.nuget.org/v3/index.json" protocolVersion="3" />
+  </packageSources>
+</configuration>
+EOF
+dotnet add package Pumatronix.Itscam.Sdk
 \`\`\`
 
 ## Linux C / C++

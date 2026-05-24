@@ -27,8 +27,17 @@ The distribution package (`itscam-sdk-<version>.tar.gz`) includes a multi-RID Nu
 
 ```bash
 tar xzf itscam-sdk-<version>.tar.gz
-dotnet add package Pumatronix.Itscam.Sdk \
-    --source $PWD/itscam-sdk-<version>/csharp
+export SDK=$PWD/itscam-sdk-<version>
+cat > nuget.config <<EOF
+<?xml version="1.0" encoding="utf-8"?>
+<configuration>
+  <packageSources>
+    <add key="itscam-sdk" value="$SDK/csharp" />
+    <add key="nuget.org" value="https://api.nuget.org/v3/index.json" protocolVersion="3" />
+  </packageSources>
+</configuration>
+EOF
+dotnet add package Pumatronix.Itscam.Sdk
 ```
 
 The NuGet already contains native binaries for linux-x64, win-x64, and win-x86. The MSBuild target file automatically copies the correct native binary to the build output.

@@ -27,8 +27,17 @@ O pacote de distribuição (`itscam-sdk-<version>.tar.gz`) inclui um NuGet multi
 
 ```bash
 tar xzf itscam-sdk-<version>.tar.gz
-dotnet add package Pumatronix.Itscam.Sdk \
-    --source $PWD/itscam-sdk-<version>/csharp
+export SDK=$PWD/itscam-sdk-<version>
+cat > nuget.config <<EOF
+<?xml version="1.0" encoding="utf-8"?>
+<configuration>
+  <packageSources>
+    <add key="itscam-sdk" value="$SDK/csharp" />
+    <add key="nuget.org" value="https://api.nuget.org/v3/index.json" protocolVersion="3" />
+  </packageSources>
+</configuration>
+EOF
+dotnet add package Pumatronix.Itscam.Sdk
 ```
 
 O NuGet já contém native binaries para linux-x64, win-x64 e win-x86. O MSBuild target file copia o binário correto para o output de build automaticamente.

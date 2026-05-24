@@ -81,10 +81,19 @@ For the C API (FFI from other languages): use the headers under `$SDK/linux-x64/
 The NuGet package already includes native binaries for all supported platforms:
 
 ```bash
-# Create a project and add the NuGet from the SDK directory:
+# Create a project and add the NuGet from the SDK directory.
+# Use nuget.config so nuget.org resolves transitive deps (System.Memory, System.Text.Json):
 dotnet new console -n MyApp -o my-app && cd my-app
-dotnet add package Pumatronix.Itscam.Sdk \
-    --source $SDK/csharp
+cat > nuget.config <<EOF
+<?xml version="1.0" encoding="utf-8"?>
+<configuration>
+  <packageSources>
+    <add key="itscam-sdk" value="$SDK/csharp" />
+    <add key="nuget.org" value="https://api.nuget.org/v3/index.json" protocolVersion="3" />
+  </packageSources>
+</configuration>
+EOF
+dotnet add package Pumatronix.Itscam.Sdk
 ```
 
 The MSBuild target file in the NuGet automatically copies the correct native binary to the build output.
