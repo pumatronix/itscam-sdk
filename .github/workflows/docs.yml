@@ -108,6 +108,7 @@ jobs:
             -e VITE_AI_SEARCH_API_URL \
             itscam-sdk-builder:ci \
             bash -euxc '
+              git config --global --add safe.directory /sdk
               make lib
               make docs-sync-check
               make docs-api
