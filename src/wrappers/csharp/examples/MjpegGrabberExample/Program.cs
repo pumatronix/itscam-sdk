@@ -53,9 +53,9 @@ class Program
 
     static async Task<int> Main(string[] args)
     {
-        string host     = null;
-        string user     = null;
-        string pass     = null;
+        string? host     = null;
+        string? user     = null;
+        string? pass     = null;
         bool   useTls   = false;
         bool   insecure = false;
         int    duration  = 10;
