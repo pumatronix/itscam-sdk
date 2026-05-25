@@ -32,10 +32,24 @@ dotnet new console -n MeuApp -o .
 
 ## 4. Referenciar o SDK via NuGet
 
+O pacote `Pumatronix.Itscam.Sdk` depende de `System.Memory` e `System.Text.Json`, que vêm do **nuget.org**. Use um `nuget.config` com os dois feeds (local + nuget.org) — `--source $SDK/csharp` sozinho não resolve as dependências transitivas:
+
 ```bash
-dotnet add package Pumatronix.Itscam.Sdk \
-    --source $SDK/csharp
+cat > nuget.config <<EOF
+<?xml version="1.0" encoding="utf-8"?>
+<configuration>
+  <packageSources>
+    <add key="itscam-sdk" value="$SDK/csharp" />
+    <add key="nuget.org" value="https://api.nuget.org/v3/index.json" protocolVersion="3" />
+  </packageSources>
+</configuration>
+EOF
+
+ITSCAM_VERSION=$(sed -n 's/.*"nugetVersion"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$SDK/VERSION.json")
+dotnet add package Pumatronix.Itscam.Sdk --version "$ITSCAM_VERSION"
 ```
+
+O tarball inclui `VERSION.json` na raiz; `nugetVersion` é `0.3.1` em builds de release (no tag) e `0.3.1-dev.N` em builds fora do tag — use sempre esse valor no `--version`.
 
 ## 5. Escrever o código mínimo
 

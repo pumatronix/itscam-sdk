@@ -53,18 +53,6 @@
     first to produce them.
   -->
   <ItemGroup>
-    <None Include="..\..\..\core\build\linux\libitscam_sdk.so.$(ItscamLibVersion)"
-          Link="libitscam_sdk.so"
-          Pack="true" PackagePath="runtimes/linux-x64/native/"
-          Condition="Exists('..\..\..\core\build\linux\libitscam_sdk.so.$(ItscamLibVersion)')" />
-    <None Include="..\..\..\core\build\linux-arm\libitscam_sdk.so.$(ItscamLibVersion)"
-          Link="libitscam_sdk.so"
-          Pack="true" PackagePath="runtimes/linux-arm/native/"
-          Condition="Exists('..\..\..\core\build\linux-arm\libitscam_sdk.so.$(ItscamLibVersion)')" />
-    <None Include="..\..\..\core\build\linux-arm64\libitscam_sdk.so.$(ItscamLibVersion)"
-          Link="libitscam_sdk.so"
-          Pack="true" PackagePath="runtimes/linux-arm64/native/"
-          Condition="Exists('..\..\..\core\build\linux-arm64\libitscam_sdk.so.$(ItscamLibVersion)')" />
     <None Include="..\..\..\core\build\win-x64\itscam_sdk.dll"
           Pack="true" PackagePath="runtimes/win-x64/native/"
           Condition="Exists('..\..\..\core\build\win-x64\itscam_sdk.dll')" />
@@ -72,6 +60,40 @@
           Pack="true" PackagePath="runtimes/win-x86/native/"
           Condition="Exists('..\..\..\core\build\win-x86\itscam_sdk.dll')" />
   </ItemGroup>
+
+  <!-- dotnet pack does not follow symlinks; copy versioned .so under the loader name. -->
+  <Target Name="_ItscamSdkStageNativeForPack" BeforeTargets="_GetPackageFiles">
+    <PropertyGroup>
+      <_ItscamSdkPackStage>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\obj\$(Configuration)\native-pack\'))</_ItscamSdkPackStage>
+    </PropertyGroup>
+    <MakeDir Directories="$(_ItscamSdkPackStage)linux-x64\native;$(_ItscamSdkPackStage)linux-arm\native;$(_ItscamSdkPackStage)linux-arm64\native" />
+    <Copy SourceFiles="..\..\..\core\build\linux\libitscam_sdk.so.$(ItscamLibVersion)"
+          DestinationFiles="$(_ItscamSdkPackStage)linux-x64\native\libitscam_sdk.so"
+          SkipUnchangedFiles="true"
+          Condition="Exists('..\..\..\core\build\linux\libitscam_sdk.so.$(ItscamLibVersion)')" />
+    <Copy SourceFiles="..\..\..\core\build\linux-arm\libitscam_sdk.so.$(ItscamLibVersion)"
+          DestinationFiles="$(_ItscamSdkPackStage)linux-arm\native\libitscam_sdk.so"
+          SkipUnchangedFiles="true"
+          Condition="Exists('..\..\..\core\build\linux-arm\libitscam_sdk.so.$(ItscamLibVersion)')" />
+    <Copy SourceFiles="..\..\..\core\build\linux-arm64\libitscam_sdk.so.$(ItscamLibVersion)"
+          DestinationFiles="$(_ItscamSdkPackStage)linux-arm64\native\libitscam_sdk.so"
+          SkipUnchangedFiles="true"
+          Condition="Exists('..\..\..\core\build\linux-arm64\libitscam_sdk.so.$(ItscamLibVersion)')" />
+    <ItemGroup>
+      <None Remove="$(_ItscamSdkPackStage)linux-x64\native\libitscam_sdk.so" />
+      <None Remove="$(_ItscamSdkPackStage)linux-arm\native\libitscam_sdk.so" />
+      <None Remove="$(_ItscamSdkPackStage)linux-arm64\native\libitscam_sdk.so" />
+      <None Include="$(_ItscamSdkPackStage)linux-x64\native\libitscam_sdk.so"
+            Pack="true" PackagePath="runtimes/linux-x64/native/"
+            Condition="Exists('$(_ItscamSdkPackStage)linux-x64\native\libitscam_sdk.so')" />
+      <None Include="$(_ItscamSdkPackStage)linux-arm\native\libitscam_sdk.so"
+            Pack="true" PackagePath="runtimes/linux-arm/native/"
+            Condition="Exists('$(_ItscamSdkPackStage)linux-arm\native\libitscam_sdk.so')" />
+      <None Include="$(_ItscamSdkPackStage)linux-arm64\native\libitscam_sdk.so"
+            Pack="true" PackagePath="runtimes/linux-arm64/native/"
+            Condition="Exists('$(_ItscamSdkPackStage)linux-arm64\native\libitscam_sdk.so')" />
+    </ItemGroup>
+  </Target>
 
   <!--
     Ship a .targets file so consuming projects automatically copy the

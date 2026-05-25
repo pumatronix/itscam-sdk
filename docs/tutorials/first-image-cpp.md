@@ -39,7 +39,8 @@ SDK_DIR  ?= $(error Defina SDK_DIR=<caminho para itscam-sdk-<version>>)
 PLATFORM := linux-x64
 
 CXXFLAGS := -std=c++17 -O2 -Wall \
-            -I$(SDK_DIR)/$(PLATFORM)/cpp/include
+            -I$(SDK_DIR)/$(PLATFORM)/cpp/include \
+            -I$(SDK_DIR)/$(PLATFORM)/cpp/include/3rdparty
 LDFLAGS  := -L$(SDK_DIR)/$(PLATFORM)/cpp/lib \
             -litscam_sdk -lpthread \
             -Wl,-rpath,'$$ORIGIN'

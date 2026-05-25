@@ -13,7 +13,7 @@
 
     <groupId>com.pumatronix</groupId>
     <artifactId>itscam-sdk-parent</artifactId>
-    <version>0.2.0-SNAPSHOT</version>
+    <version>${revision}</version>
     <packaging>pom</packaging>
     <name>ITSCAM Client SDK - Java aggregator</name>
 
@@ -23,6 +23,7 @@
     </modules>
 
     <properties>
+        <revision>0.3.0</revision>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.source>11</maven.compiler.source>
         <maven.compiler.target>11</maven.compiler.target>

@@ -33,6 +33,7 @@ src/wrappers/csharp/examples/SoftwareTriggerSnapshotExample/obj/
 src/wrappers/csharp/examples/BinaryCaptureExample/bin/
 src/wrappers/csharp/examples/BinaryCaptureExample/obj/
 src/wrappers/csharp/nupkg/
+src/wrappers/csharp/obj/
 
 # Java wrapper
 src/wrappers/java/itscam-sdk/target/

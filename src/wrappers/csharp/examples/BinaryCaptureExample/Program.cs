@@ -19,7 +19,7 @@ class Program
             return PrintUsage();
 
         string host     = args[0];
-        string password = args.Length >= 2 ? args[1] : null;
+        string? password = args.Length >= 2 ? args[1] : null;
 
         int snapshotCallbacks = 0;
 

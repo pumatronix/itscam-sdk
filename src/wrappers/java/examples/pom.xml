@@ -25,7 +25,7 @@
     <parent>
         <groupId>com.pumatronix</groupId>
         <artifactId>itscam-sdk-parent</artifactId>
-        <version>0.2.0-SNAPSHOT</version>
+        <version>${revision}</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
 

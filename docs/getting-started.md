@@ -60,6 +60,7 @@ Nos exemplos abaixo, `$SDK` aponta para o diretório raiz extraído (ex: `/opt/i
 # Compile e linke contra a shared library pré-compilada:
 g++ -std=c++17 \
     -I$SDK/linux-x64/cpp/include \
+    -I$SDK/linux-x64/cpp/include/3rdparty \
     -c your_app.cpp -o your_app.o
 
 g++ your_app.o \
@@ -81,10 +82,20 @@ Para a C API (FFI de outras linguagens): use os headers em `$SDK/linux-x64/c/inc
 O pacote NuGet já inclui native binaries para todas as plataformas suportadas:
 
 ```bash
-# Crie um projeto e adicione o NuGet a partir do diretório do SDK:
+# Crie um projeto e adicione o NuGet a partir do diretório do SDK.
+# Use nuget.config para combinar o feed local com nuget.org (deps transitivas):
 dotnet new console -n MeuApp -o meu-app && cd meu-app
-dotnet add package Pumatronix.Itscam.Sdk \
-    --source $SDK/csharp
+cat > nuget.config <<EOF
+<?xml version="1.0" encoding="utf-8"?>
+<configuration>
+  <packageSources>
+    <add key="itscam-sdk" value="$SDK/csharp" />
+    <add key="nuget.org" value="https://api.nuget.org/v3/index.json" protocolVersion="3" />
+  </packageSources>
+</configuration>
+EOF
+ITSCAM_VERSION=$(sed -n 's/.*"nugetVersion"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$SDK/VERSION.json")
+dotnet add package Pumatronix.Itscam.Sdk --version "$ITSCAM_VERSION"
 ```
 
 O MSBuild target file do NuGet copia o native binary correto para o output de build automaticamente.
