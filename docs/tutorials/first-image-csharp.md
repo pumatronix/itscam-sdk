@@ -45,8 +45,11 @@ cat > nuget.config <<EOF
 </configuration>
 EOF
 
-dotnet add package Pumatronix.Itscam.Sdk
+ITSCAM_VERSION=$(sed -n 's/.*"nugetVersion"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$SDK/VERSION.json")
+dotnet add package Pumatronix.Itscam.Sdk --version "$ITSCAM_VERSION"
 ```
+
+O tarball inclui `VERSION.json` na raiz; `nugetVersion` é `0.3.1` em builds de release (no tag) e `0.3.1-dev.N` em builds fora do tag — use sempre esse valor no `--version`.
 
 ## 5. Escrever o código mínimo
 

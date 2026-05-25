@@ -52,7 +52,7 @@ export SDK=$PWD
 | Language | Quick integration |
 | -------- | ----------------- |
 | **C++ / C** | `g++ -I$SDK/linux-x64/cpp/include ... -L$SDK/linux-x64/cpp/lib -litscam_sdk` |
-| **C# / .NET** | `nuget.config` (local feed + nuget.org) + `dotnet add package Pumatronix.Itscam.Sdk` |
+| **C# / .NET** | `nuget.config` + `dotnet add package ... --version $(… VERSION.json nugetVersion)` |
 | **Python** | `pip install $SDK/linux-x64/python/itscam-*.whl` |
 | **Go** | `go mod edit -replace=...=$SDK/linux-x64/go/itscam-sdk-go` |
 | **Java** | `mvn install:install-file ... -DgeneratePom=true` (see [Java wrapper](docs/wrappers/java.en-US.md)) |

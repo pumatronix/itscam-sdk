@@ -94,7 +94,8 @@ cat > nuget.config <<EOF
   </packageSources>
 </configuration>
 EOF
-dotnet add package Pumatronix.Itscam.Sdk
+ITSCAM_VERSION=$(sed -n 's/.*"nugetVersion"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$SDK/VERSION.json")
+dotnet add package Pumatronix.Itscam.Sdk --version "$ITSCAM_VERSION"
 ```
 
 The MSBuild target file in the NuGet automatically copies the correct native binary to the build output.

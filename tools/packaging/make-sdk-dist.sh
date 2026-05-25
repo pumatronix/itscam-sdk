@@ -611,7 +611,8 @@ cat > nuget.config <<EOF
   </packageSources>
 </configuration>
 EOF
-dotnet add package Pumatronix.Itscam.Sdk
+ITSCAM_VERSION=\$(sed -n 's/.*"nugetVersion"[[:space:]]*:[[:space:]]*"\\([^"]*\\)".*/\\1/p' "\$(pwd)/VERSION.json")
+dotnet add package Pumatronix.Itscam.Sdk --version "\$ITSCAM_VERSION"
 \`\`\`
 
 ## Linux C / C++
@@ -751,7 +752,8 @@ cat > nuget.config <<EOF
   </packageSources>
 </configuration>
 EOF
-dotnet add package Pumatronix.Itscam.Sdk
+ITSCAM_VERSION=\$(sed -n 's/.*"nugetVersion"[[:space:]]*:[[:space:]]*"\\([^"]*\\)".*/\\1/p' "\$(pwd)/VERSION.json")
+dotnet add package Pumatronix.Itscam.Sdk --version "\$ITSCAM_VERSION"
 \`\`\`
 
 ## Linux C / C++
