@@ -13,7 +13,7 @@
 // When --user and --password are supplied the example also:
 //
 //   1. Logs in to the REST API (REST always requires auth).
-//   2. Updates day/night profiles: trigger off, 2 exposure steps.
+//   2. Updates Diurno/Noturno profiles: trigger off, 2 exposure steps.
 //   3. Enables Jidosha OCR and the vehicle classifier.
 //
 // The snapshot loop always runs via snapshot.cgi (ItscamCgiClient).
@@ -44,6 +44,12 @@ using Pumatronix.Itscam.RestTypes;
 class Program
 {
     const int TargetExposureCount = 2;
+    const string DefaultDayProfileName   = "Diurno";
+    const string DefaultNightProfileName = "Noturno";
+
+    static bool IsDefaultDayNightProfile(string name) =>
+        string.Equals(name, DefaultDayProfileName, StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(name, DefaultNightProfileName, StringComparison.OrdinalIgnoreCase);
 
     static async Task<int> Main(string[] args)
     {
@@ -178,15 +184,14 @@ class Program
         foreach (var p in profiles)
         {
             string name = p.Name ?? string.Empty;
-            if (name.IndexOf("day",   StringComparison.OrdinalIgnoreCase) >= 0 ||
-                name.IndexOf("night", StringComparison.OrdinalIgnoreCase) >= 0)
+            if (IsDefaultDayNightProfile(name))
             {
                 targeted.Add(p);
             }
         }
         if (targeted.Count == 0)
         {
-            Console.WriteLine("  Could not find day/night profiles by name; "
+            Console.WriteLine("  Could not find Diurno/Noturno profiles by name; "
                 + "applying to all profiles as fallback.");
             targeted.AddRange(profiles);
         }

@@ -13,8 +13,8 @@
 // Steps performed (all via REST, which always requires authentication):
 //
 //   1. Login to the camera.
-//   2. Fetch all image profiles, locate the "day" and "night" profiles
-//      (by name, case-insensitive) and disable trigger on each using
+//   2. Fetch all image profiles, locate the default "Diurno" and "Noturno"
+//      profiles (by name, case-insensitive) and disable trigger on each using
 //      a typed partial UpdateProfileByIdAsync call.
 //   3. SetStreamConfigAsync to set mjpeg.main.useTriggerFrames = false
 //      and mjpeg.main.framerate (default 30).
@@ -44,6 +44,13 @@ using Pumatronix.Itscam.RestTypes;
 
 class Program
 {
+    const string DefaultDayProfileName   = "Diurno";
+    const string DefaultNightProfileName = "Noturno";
+
+    static bool IsDefaultDayNightProfile(string name) =>
+        string.Equals(name, DefaultDayProfileName, StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(name, DefaultNightProfileName, StringComparison.OrdinalIgnoreCase);
+
     static async Task<int> Main(string[] args)
     {
         string host     = null;
@@ -137,15 +144,14 @@ class Program
         foreach (var p in profiles)
         {
             string name = p.Name ?? string.Empty;
-            if (name.IndexOf("day",   StringComparison.OrdinalIgnoreCase) >= 0 ||
-                name.IndexOf("night", StringComparison.OrdinalIgnoreCase) >= 0)
+            if (IsDefaultDayNightProfile(name))
             {
                 targeted.Add(p);
             }
         }
         if (targeted.Count == 0)
         {
-            Console.WriteLine("  Could not find day/night profiles by name; "
+            Console.WriteLine("  Could not find Diurno/Noturno profiles by name; "
                 + "applying to all profiles as fallback.");
             targeted.AddRange(profiles);
         }
