@@ -10,11 +10,26 @@ O SDK expõe três classes de cliente independentes em C++, C#, Python, Go, Java
 
 | Client | Transport | Use para | Não use para |
 | ------ | --------- | -------- | ------------ |
-| **`ItscamClient`** | **Cougar** binary TCP **:60000** | Triggers e snapshots em real time, GPIO/serial, multi-exposure groups, controle de **image-pipeline** (profiles, trigger/exposure, JPEG, overlays/crops), baixa latência e auto-reconnect. | Administração do **equipmento**, como networking, timezone, FTP, licenses, OCR/lanes/analytics e outras configurações do webapp/daemon. Use REST. |
+| **`ItscamClient`** | **Cougar** binário TCP **:60000** | Triggers e snapshots em real time, GPIO/serial, multi-exposure groups, controle de **image-pipeline** (profiles, trigger/exposure, JPEG, overlays/crops), baixa latência e auto-reconnect. | Administração do **equipmento**, como networking, timezone, FTP, licenses, OCR/lanes/analytics e outras configurações do webapp/daemon. Use REST. |
 | **`ItscamRestClient`** | HTTP/HTTPS JSON | Administração do **equipmento** e daemon via webapp backend: networking, timezone, OCR, classifier, lanes, analytics, ITSCAM PRO, typed config helpers e partial JSON updates. | Event stream Cougar em real time, ajustes de pipeline de baixa latência ou image streaming contínuo. Use o binary client para pipeline e faça login antes de qualquer chamada REST. |
 | **`ItscamCgiClient`** | HTTP/HTTPS multipart | `snapshot.cgi`, `lastframe.cgi`, `mjpegvideo.cgi`, forced triggers e endpoints de imagem simples. Credentials são opcionais. O acesso é anonymous por default. | Configuration. Use Cougar para pipeline settings ou REST para equipment. |
 
 ## Links rápidos
+
+### Tutoriais de primeiros passos
+
+Crie um projeto do zero e salve a primeira imagem em disco - escolha a linguagem do seu projeto:
+
+| Linguagem | Tutorial |
+| --------- | -------- |
+| C++ | [Primeira imagem em C++](docs/tutorials/first-image-cpp.md) |
+| C# / .NET | [Primeira imagem em C#](docs/tutorials/first-image-csharp.md) |
+| Python | [Primeira imagem em Python](docs/tutorials/first-image-python.md) |
+| Go | [Primeira imagem em Go](docs/tutorials/first-image-go.md) |
+| Java | [Primeira imagem em Java](docs/tutorials/first-image-java.md) |
+| Node.js | [Primeira imagem em Node.js](docs/tutorials/first-image-nodejs.md) |
+
+### Casos de uso
 
 Escolha uma linha pelo **que você quer fazer** e uma coluna pela **linguagem do seu projeto**. Cada célula aponta para um example pronto para executar.
 
@@ -27,7 +42,7 @@ Escolha uma linha pelo **que você quer fazer** e uma coluna pela **linguagem do
 | HTTPS / TLS (REST + CGI, mbedTLS) | [`itscam_rest_example.cpp`](src/examples/itscam_rest_example.cpp) (`--https`) | [`CaptureExample/Program.cs`](src/wrappers/csharp/examples/CaptureExample/Program.cs) (`--https`) | [`cgi_snapshot_example.py`](src/wrappers/python/examples/cgi_snapshot_example.py) (`--https`) | [`cgi_snapshot_example.go`](src/wrappers/go/examples/cgi_snapshot_example.go) (`--https`) | [`RestExample.java`](src/wrappers/java/examples/src/main/java/com/pumatronix/itscam/examples/RestExample.java) (`--https`) | [`rest-example.js`](src/wrappers/nodejs/examples/rest-example.js) (`--https`) |
 | Desktop GUI viewer (Wails) | -- | -- | -- | [`gui/`](src/wrappers/go/examples/gui/) | -- | -- |
 
-Reference docs por client surface:
+Documentação da API por tipo de cliente (Surface):
 
 | Surface | API guide | Wrapper guide |
 | ------- | --------- | ------------- |
@@ -35,15 +50,13 @@ Reference docs por client surface:
 | REST client (HTTP/HTTPS JSON) | [docs/api/rest-client.md](docs/api/rest-client.md) | [C++](docs/wrappers/cpp.md) -- [Python](docs/wrappers/python.md) -- [Go](docs/wrappers/go.md) -- [C#](docs/wrappers/csharp.md) -- [Java](docs/wrappers/java.md) -- [Node.js](docs/wrappers/nodejs.md) |
 | CGI client (HTTP/HTTPS multipart) | [docs/api/cgi-client.md](docs/api/cgi-client.md) | [C++](docs/wrappers/cpp.md) -- [Python](docs/wrappers/python.md) -- [Go](docs/wrappers/go.md) -- [C#](docs/wrappers/csharp.md) -- [Java](docs/wrappers/java.md) -- [Node.js](docs/wrappers/nodejs.md) |
 
-Tutoriais passo a passo (criar projeto do zero e salvar a primeira imagem em disco): [C++](docs/tutorials/first-image-cpp.md) -- [C# / .NET](docs/tutorials/first-image-csharp.md) -- [Python](docs/tutorials/first-image-python.md) -- [Go](docs/tutorials/first-image-go.md) -- [Java](docs/tutorials/first-image-java.md) -- [Node.js](docs/tutorials/first-image-nodejs.md).
-
 ## Começar a usar
 
 Escolha um dos caminhos abaixo.
 
-### Opção 1 — Pacote pré-compilado (integração)
+### Opção 1 - Pacote pré-compilado (integração)
 
-O SDK é distribuído como um pacote pré-compilado (`itscam-sdk-<version>.tar.gz`) que contém headers, shared libraries, NuGet, Python wheel e módulo Go para linux-x64, win-x64 e win-x86. Baixe a versão desejada na [página de releases](https://github.com/pumatronix/itscam-sdk/releases), extraia o pacote e integre direto no seu projeto — não é necessário compilar nada:
+O SDK é distribuído como um pacote pré-compilado (`itscam-sdk-<version>.tar.gz`) que contém headers, shared libraries, NuGet, Python wheel e módulo Go para linux-x64, win-x64 e win-x86. Baixe a versão desejada na [página de releases](https://github.com/pumatronix/itscam-sdk/releases), extraia o pacote e integre direto no seu projeto - não é necessário compilar nada:
 
 ```bash
 tar xzf itscam-sdk-<version>.tar.gz
@@ -62,7 +75,7 @@ export SDK=$PWD
 
 Comece por `README-sdk.md` dentro do tarball (layout e install por linguagem). Guia completo em [`docs/getting-started.md`](docs/getting-started.md).
 
-### Opção 2 — Clonar o repositório e compilar
+### Opção 2 - Clonar o repositório e compilar
 
 Para contribuidores, debug ou quando você precisa do source completo:
 
@@ -89,7 +102,7 @@ Rodar um example contra a câmera:
 
 | Linguagem | Próximo passo (source tree) |
 | --------- | -------------------------- |
-| **C++ / C** | Link contra `src/core/build/linux/` — veja [linkar no source tree](docs/getting-started.md#linkar-contra-o-source-tree) |
+| **C++ / C** | Link contra `src/core/build/linux/` - veja [linkar no source tree](docs/getting-started.md#linkar-contra-o-source-tree) |
 | **C# / .NET** | `make csharp` e examples em [`src/wrappers/csharp/examples/`](src/wrappers/csharp/examples/) |
 | **Python** | `make lib` + scripts em [`src/wrappers/python/examples/`](src/wrappers/python/examples/) |
 | **Go** | `make go-cgi-example` ou [`src/wrappers/go/examples/`](src/wrappers/go/examples/) |
@@ -120,9 +133,9 @@ Este repositório inclui [`AGENTS.md`](AGENTS.md), um briefing curto e escaneáv
 | Tópico | Regra rápida |
 | ------ | ------------ |
 | Três clients | Cougar **:60000** para pipeline/capture; REST para equipment; CGI para endpoints HTTP de imagem. |
-| Auth | REST sempre exige `login`; CGI é anonymous por default — não adicione `cgi.login()` sem opt-in. |
+| Auth | REST sempre exige `login`; CGI é anonymous por default - não adicione `cgi.login()` sem opt-in. |
 | Novas features | Core C++ → C API → todos os wrappers; mantenha parity C# / Python / Go. |
-| REST types | Gerados de `tools/codegen/spec/default.yaml` — use `make codegen`, não edite à mão. |
+| REST types | Gerados de `tools/codegen/spec/default.yaml` - use `make codegen`, não edite à mão. |
 | Partial updates | Use `patchJson()` / `PatchJSON`; PUT completo de profile retorna HTTP 500. |
 
 **Assistant na documentação**
@@ -145,7 +158,7 @@ Este README é intencionalmente direto. A documentação completa fica em [`docs
 - Tutoriais (primeira imagem em disco): [C++](docs/tutorials/first-image-cpp.md) -- [C# / .NET](docs/tutorials/first-image-csharp.md) -- [Python](docs/tutorials/first-image-python.md) -- [Go](docs/tutorials/first-image-go.md) -- [Java](docs/tutorials/first-image-java.md) -- [Node.js](docs/tutorials/first-image-nodejs.md).
 - [Adicionar um novo wrapper](docs/adding-a-new-wrapper.md) -- procedimento canônico para futuros bindings (Rust, Ruby, Swift, ...).
 - [Migration from CougarClient](docs/migration-cougar.md).
-- [`AGENTS.md`](AGENTS.md) — briefing para coding agents; veja [Uso com AI agents](#uso-com-ai-agents).
+- [`AGENTS.md`](AGENTS.md) - briefing para coding agents; veja [Uso com AI agents](#uso-com-ai-agents).
 - **[Documentation website](docs-site/)** -- site VitePress para GitHub Pages com assistant opcional via [Cloudflare AI Search](https://developers.cloudflare.com/ai-search/). Veja [`docs-site/README.md`](docs-site/README.md) para setup.
 
 ## Destaques
@@ -164,4 +177,6 @@ Este README é intencionalmente direto. A documentação completa fica em [`docs
 
 ## Licença e contato
 
-Copyright (c) 2026 Pumatronix Equipamentos Eletrônicos. Software proprietário. Entre em contato com a Pumatronix para termos de licenciamento.
+Software proprietário. 
+Copyright (c) 2026 Pumatronix Equipamentos Eletrônicos LTDA.
+Entre em contato com a Pumatronix para termos de licenciamento.
