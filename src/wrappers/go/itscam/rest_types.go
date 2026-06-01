@@ -903,6 +903,7 @@ type RESTAPIClientConfig struct {
 	SendIndividualRequests bool        `json:"sendIndividualRequests"`
 	SendWithoutOcr         bool        `json:"sendWithoutOcr"`
 	Timeout                int64       `json:"timeout"`
+	TLS                    TLS         `json:"tls"`
 	URL                    URL         `json:"url"`
 }
 
@@ -912,9 +913,9 @@ type Body struct {
 }
 
 type Part struct {
-	Content string `json:"content"`
-	Name    string `json:"name"`
-	Type    Type   `json:"type"`
+	Data string `json:"data"`
+	Name string `json:"name"`
+	Type Type   `json:"type"`
 }
 
 type Header struct {
@@ -937,6 +938,11 @@ type Persistency struct {
 	MaxDiskUsage int64 `json:"maxDiskUsage"`
 	MaxFileAge   int64 `json:"maxFileAge"`
 	NewestFirst  bool  `json:"newestFirst"`
+}
+
+type TLS struct {
+	Insecure bool    `json:"insecure"`
+	MtlsKey  *string `json:"mtlsKey,omitempty"`
 }
 
 type URL struct {

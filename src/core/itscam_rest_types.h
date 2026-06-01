@@ -767,7 +767,7 @@ namespace rest_types {
     enum class Type : int { JSON };
 
     struct Part {
-        std::string content;
+        std::string data;
         std::string name;
         Type type;
     };
@@ -803,6 +803,11 @@ namespace rest_types {
         bool newest_first;
     };
 
+    struct Tls {
+        bool insecure;
+        std::optional<std::string> mtls_key;
+    };
+
     enum class Scheme : int { HTTP, HTTPS };
 
     struct Url {
@@ -826,6 +831,7 @@ namespace rest_types {
         bool send_individual_requests;
         bool send_without_ocr;
         int64_t timeout;
+        Tls tls;
         Url url;
     };
 
@@ -1125,6 +1131,9 @@ namespace rest_types {
     void from_json(json const & j, Persistency & x);
     void to_json(json & j, Persistency const & x);
 
+    void from_json(json const & j, Tls & x);
+    void to_json(json & j, Tls const & x);
+
     void from_json(json const & j, Url & x);
     void to_json(json & j, Url const & x);
 
@@ -1246,6 +1255,7 @@ namespace rest_types {
     json to_partial_json(Resolution const & x);
     json to_partial_json(Jpeg const & x);
     json to_partial_json(Persistency const & x);
+    json to_partial_json(Tls const & x);
     json to_partial_json(Url const & x);
     json to_partial_json(RestApiClientConfig const & x);
     json to_partial_json(RestApiClientStatus const & x);
@@ -2421,14 +2431,14 @@ namespace rest_types {
     }
 
     inline void from_json(json const & j, Part& x) {
-        x.content = j.at("content").get<std::string>();
+        x.data = j.at("data").get<std::string>();
         x.name = j.at("name").get<std::string>();
         x.type = j.at("type").get<Type>();
     }
 
     inline void to_json(json & j, Part const & x) {
         j = json::object();
-        j["content"] = x.content;
+        j["data"] = x.data;
         j["name"] = x.name;
         j["type"] = x.type;
     }
@@ -2492,6 +2502,17 @@ namespace rest_types {
         j["newestFirst"] = x.newest_first;
     }
 
+    inline void from_json(json const & j, Tls& x) {
+        x.insecure = j.at("insecure").get<bool>();
+        x.mtls_key = get_stack_optional<std::string>(j, "mtlsKey");
+    }
+
+    inline void to_json(json & j, Tls const & x) {
+        j = json::object();
+        j["insecure"] = x.insecure;
+        j["mtlsKey"] = x.mtls_key;
+    }
+
     inline void from_json(json const & j, Url& x) {
         x.host = j.at("host").get<std::string>();
         x.path = j.at("path").get<std::string>();
@@ -2518,6 +2539,7 @@ namespace rest_types {
         x.send_individual_requests = j.at("sendIndividualRequests").get<bool>();
         x.send_without_ocr = j.at("sendWithoutOcr").get<bool>();
         x.timeout = j.at("timeout").get<int64_t>();
+        x.tls = j.at("tls").get<Tls>();
         x.url = j.at("url").get<Url>();
     }
 
@@ -2533,6 +2555,7 @@ namespace rest_types {
         j["sendIndividualRequests"] = x.send_individual_requests;
         j["sendWithoutOcr"] = x.send_without_ocr;
         j["timeout"] = x.timeout;
+        j["tls"] = x.tls;
         j["url"] = x.url;
     }
 
@@ -3408,7 +3431,7 @@ namespace rest_types {
 
     inline json to_partial_json(Part const & x) {
         json j = json::object();
-        j["content"] = x.content;
+        j["data"] = x.data;
         j["name"] = x.name;
         j["type"] = x.type;
         return j;
@@ -3451,6 +3474,13 @@ namespace rest_types {
         return j;
     }
 
+    inline json to_partial_json(Tls const & x) {
+        json j = json::object();
+        j["insecure"] = x.insecure;
+        if (x.mtls_key) j["mtlsKey"] = *x.mtls_key;
+        return j;
+    }
+
     inline json to_partial_json(Url const & x) {
         json j = json::object();
         j["host"] = x.host;
@@ -3472,6 +3502,7 @@ namespace rest_types {
         j["sendIndividualRequests"] = x.send_individual_requests;
         j["sendWithoutOcr"] = x.send_without_ocr;
         j["timeout"] = x.timeout;
+        j["tls"] = to_partial_json(x.tls);
         j["url"] = to_partial_json(x.url);
         return j;
     }

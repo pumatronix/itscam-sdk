@@ -1691,6 +1691,9 @@ namespace Pumatronix.Itscam.RestTypes
         [JsonPropertyName("timeout")]
         public long Timeout { get; set; }
 
+        [JsonPropertyName("tls")]
+        public Tls Tls { get; set; }
+
         [JsonPropertyName("url")]
         public Url Url { get; set; }
     }
@@ -1706,8 +1709,8 @@ namespace Pumatronix.Itscam.RestTypes
 
     public partial class Part
     {
-        [JsonPropertyName("content")]
-        public string Content { get; set; }
+        [JsonPropertyName("data")]
+        public string Data { get; set; }
 
         [JsonPropertyName("name")]
         public string Name { get; set; }
@@ -1756,6 +1759,16 @@ namespace Pumatronix.Itscam.RestTypes
 
         [JsonPropertyName("newestFirst")]
         public bool NewestFirst { get; set; }
+    }
+
+    public partial class Tls
+    {
+        [JsonPropertyName("insecure")]
+        public bool Insecure { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("mtlsKey")]
+        public string MtlsKey { get; set; }
     }
 
     public partial class Url

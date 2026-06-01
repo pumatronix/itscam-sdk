@@ -526,6 +526,7 @@ components:
         - enabled
         - method
         - url
+        - tls
         - headers
         - body
         - jpeg
@@ -564,6 +565,15 @@ components:
               type: array
               items:
                 type: string
+        tls:
+          type: object
+          required:
+            - insecure
+          properties:
+            insecure:
+              type: boolean
+            mtlsKey:
+              type: string
         headers:
           type: array
           items:
@@ -594,7 +604,7 @@ components:
                 required:
                   - name
                   - type
-                  - content
+                  - data
                 properties:
                   name:
                     type: string
@@ -602,7 +612,7 @@ components:
                     type: string
                     enum:
                       - json
-                  content:
+                  data:
                     type: string
         jpeg:
           type: object
