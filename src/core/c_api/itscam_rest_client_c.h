@@ -150,6 +150,10 @@ ITSCAM_C_API ITSCAM_ErrorCode ITSCAM_RestClient_getProfile(
     ITSCAM_RestClient* client, int profileId, uint32_t timeoutMs,
     ITSCAM_String** outResponse);
 
+ITSCAM_C_API ITSCAM_ErrorCode ITSCAM_RestClient_getProfileByName(
+    ITSCAM_RestClient* client, const char* name, uint32_t timeoutMs,
+    ITSCAM_String** outResponse);
+
 ITSCAM_C_API ITSCAM_ErrorCode ITSCAM_RestClient_createProfile(
     ITSCAM_RestClient* client, const char* jsonProfile, uint32_t timeoutMs,
     ITSCAM_String** outResponse);
@@ -157,6 +161,10 @@ ITSCAM_C_API ITSCAM_ErrorCode ITSCAM_RestClient_createProfile(
 ITSCAM_C_API ITSCAM_ErrorCode ITSCAM_RestClient_updateProfile(
     ITSCAM_RestClient* client, const char* jsonProfile, uint32_t timeoutMs,
     ITSCAM_String** outResponse);
+
+ITSCAM_C_API ITSCAM_ErrorCode ITSCAM_RestClient_updateProfileByName(
+    ITSCAM_RestClient* client, const char* name, const char* jsonProfile,
+    uint32_t timeoutMs, ITSCAM_String** outResponse);
 
 ITSCAM_C_API ITSCAM_ErrorCode ITSCAM_RestClient_deleteProfile(
     ITSCAM_RestClient* client, int profileId, uint32_t timeoutMs,

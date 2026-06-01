@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
@@ -332,6 +333,25 @@ namespace Pumatronix.Itscam
                 json, $"GET /image/profiles?id={id}");
         }
 
+        /// <summary>
+        /// Get a single profile by name (case-sensitive match).
+        /// </summary>
+        /// <exception cref="ItscamInvalidParameterException">
+        /// Thrown if no profile with the given name exists.
+        /// </exception>
+        public async Task<ProfileConfig> GetProfileByNameAsync(
+            string name, uint timeoutMs = 10000)
+        {
+            if (name == null)
+                throw new ArgumentNullException(nameof(name));
+            var all = await GetProfilesAsync(timeoutMs).ConfigureAwait(false);
+            var match = all.FirstOrDefault(p => p.Name == name);
+            if (match == null)
+                throw new ItscamInvalidParameterException(
+                    $"profile not found: \"{name}\"");
+            return match;
+        }
+
         /// <summary>POST /api/image/profiles -- create a new profile.</summary>
         public async Task<ProfileConfig> CreateProfileAsync(
             ProfileConfig profile, uint timeoutMs = 10000)
@@ -363,6 +383,27 @@ namespace Pumatronix.Itscam
                 .ConfigureAwait(false);
             return Deserialize<ProfileConfig>(
                 json, $"PUT /image/profiles/{id}");
+        }
+
+        /// <summary>
+        /// Update a profile found by name.  Looks up the profile, then PUTs
+        /// the partial update to its id.
+        /// </summary>
+        /// <exception cref="ItscamInvalidParameterException">
+        /// Thrown if no profile with the given name exists.
+        /// </exception>
+        public async Task<ProfileConfig> UpdateProfileByNameAsync(
+            string name, ProfileConfig profile, uint timeoutMs = 10000)
+        {
+            if (name == null)
+                throw new ArgumentNullException(nameof(name));
+            if (profile == null)
+                throw new ArgumentNullException(nameof(profile));
+            var found = await GetProfileByNameAsync(name, timeoutMs)
+                .ConfigureAwait(false);
+            return await UpdateProfileByIdAsync((int)found.Id, profile,
+                                               timeoutMs)
+                .ConfigureAwait(false);
         }
 
         /// <summary>

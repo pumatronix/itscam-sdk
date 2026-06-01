@@ -124,6 +124,12 @@ public:
     Result<std::vector<rest_types::ProfileConfig>> getProfile(
         int id, uint32_t timeoutMs = 10000);
 
+    /// Get a single profile by name.
+    /// Lists all profiles and returns the first one whose `name` field
+    /// matches (case-sensitive).  Returns InvalidParameter if not found.
+    Result<rest_types::ProfileConfig> getProfileByName(
+        const std::string& name, uint32_t timeoutMs = 10000);
+
     /// POST /api/image/profiles -- create a new profile.
     Result<rest_types::ProfileConfig> createProfile(
         const rest_types::ProfileConfig& profile,
@@ -136,6 +142,14 @@ public:
     /// the fields you want to change.
     Result<rest_types::ProfileConfig> updateProfileById(
         int id,
+        const rest_types::ProfileConfig& profile,
+        uint32_t timeoutMs = 10000);
+
+    /// Update a profile found by name.
+    /// Looks up the profile by name, then calls updateProfileById with
+    /// its id.  Returns InvalidParameter if no profile with that name exists.
+    Result<rest_types::ProfileConfig> updateProfileByName(
+        const std::string& name,
         const rest_types::ProfileConfig& profile,
         uint32_t timeoutMs = 10000);
 

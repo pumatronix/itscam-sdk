@@ -232,12 +232,33 @@ Result<rt::ProfileConfig> ItscamRestClient::createProfile(
                       json(profile), timeoutMs));
 }
 
+Result<rt::ProfileConfig> ItscamRestClient::getProfileByName(
+    const std::string& name, uint32_t timeoutMs) {
+    auto all = getProfiles(timeoutMs);
+    if (!all) return all.error();
+    for (auto& p : all.value()) {
+        if (p.name && *p.name == name)
+            return std::move(p);
+    }
+    return Error{Error::InvalidParameter,
+                 "profile not found: \"" + name + "\""};
+}
+
 Result<rt::ProfileConfig> ItscamRestClient::updateProfileById(
     int id, const rt::ProfileConfig& profile, uint32_t timeoutMs) {
     std::string path =
         mImpl->apiPrefix + "/image/profiles/" + std::to_string(id);
     return mapTyped<rt::ProfileConfig>(
         mImpl->doPut(path, rt::to_partial_json(profile), timeoutMs));
+}
+
+Result<rt::ProfileConfig> ItscamRestClient::updateProfileByName(
+    const std::string& name, const rt::ProfileConfig& profile,
+    uint32_t timeoutMs) {
+    auto found = getProfileByName(name, timeoutMs);
+    if (!found) return found.error();
+    return updateProfileById(static_cast<int>(found.value().id), profile,
+                             timeoutMs);
 }
 
 Result<rt::ProfileConfig> ItscamRestClient::updateProfiles(
