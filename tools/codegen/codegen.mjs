@@ -102,7 +102,7 @@ const TARGETS = [
     name: "C++",
     lang: "c++",
     rendererOptions: {
-      namespace: "pumatronix::itscam",
+      namespace: "itscam::rest_types",
       "source-style": "single-source",
       "include-location": "global-include",
       "code-format": "with-struct",

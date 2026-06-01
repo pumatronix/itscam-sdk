@@ -67,12 +67,12 @@ namespace nlohmann {
 }
 #endif
 
-namespace pumatronix {
 namespace itscam {
+namespace rest_types {
     using nlohmann::json;
 
-    #ifndef NLOHMANN_UNTYPED_pumatronix_itscam_HELPER
-    #define NLOHMANN_UNTYPED_pumatronix_itscam_HELPER
+    #ifndef NLOHMANN_UNTYPED_itscam_rest_types_HELPER
+    #define NLOHMANN_UNTYPED_itscam_rest_types_HELPER
     inline json get_untyped(json const & j, char const * property) {
         if (j.find(property) != j.end()) {
             return j.at(property).get<json>();
@@ -85,8 +85,8 @@ namespace itscam {
     }
     #endif
 
-    #ifndef NLOHMANN_OPTIONAL_pumatronix_itscam_HELPER
-    #define NLOHMANN_OPTIONAL_pumatronix_itscam_HELPER
+    #ifndef NLOHMANN_OPTIONAL_itscam_rest_types_HELPER
+    #define NLOHMANN_OPTIONAL_itscam_rest_types_HELPER
     template <typename T>
     inline std::shared_ptr<T> get_heap_optional(json const & j, char const * property) {
         auto it = j.find(property);
@@ -249,7 +249,7 @@ namespace itscam {
     /**
      * Multiple exposures configuration
      */
-    struct Something {
+    struct MultipleExposuresConfig {
         std::optional<Flash> flash;
         std::optional<SettingGain> gain;
         std::optional<Shutter> shutter;
@@ -257,7 +257,7 @@ namespace itscam {
 
     struct MultipleExposures {
         std::optional<bool> enabled;
-        std::optional<std::vector<Something>> settings;
+        std::optional<std::vector<MultipleExposuresConfig>> settings;
     };
 
     struct Overlay {
@@ -880,8 +880,8 @@ namespace itscam {
 }
 }
 
-namespace pumatronix {
 namespace itscam {
+namespace rest_types {
     void from_json(json const & j, Exposition & x);
     void to_json(json & j, Exposition const & x);
 
@@ -936,8 +936,8 @@ namespace itscam {
     void from_json(json const & j, Shutter & x);
     void to_json(json & j, Shutter const & x);
 
-    void from_json(json const & j, Something & x);
-    void to_json(json & j, Something const & x);
+    void from_json(json const & j, MultipleExposuresConfig & x);
+    void to_json(json & j, MultipleExposuresConfig const & x);
 
     void from_json(json const & j, MultipleExposures & x);
     void to_json(json & j, MultipleExposures const & x);
@@ -1183,7 +1183,7 @@ namespace itscam {
     json to_partial_json(Flash const & x);
     json to_partial_json(SettingGain const & x);
     json to_partial_json(Shutter const & x);
-    json to_partial_json(Something const & x);
+    json to_partial_json(MultipleExposuresConfig const & x);
     json to_partial_json(MultipleExposures const & x);
     json to_partial_json(Overlay const & x);
     json to_partial_json(Lower const & x);
@@ -1495,13 +1495,13 @@ namespace itscam {
         j["value"] = x.value;
     }
 
-    inline void from_json(json const & j, Something& x) {
+    inline void from_json(json const & j, MultipleExposuresConfig& x) {
         x.flash = get_stack_optional<Flash>(j, "flash");
         x.gain = get_stack_optional<SettingGain>(j, "gain");
         x.shutter = get_stack_optional<Shutter>(j, "shutter");
     }
 
-    inline void to_json(json & j, Something const & x) {
+    inline void to_json(json & j, MultipleExposuresConfig const & x) {
         j = json::object();
         j["flash"] = x.flash;
         j["gain"] = x.gain;
@@ -1510,7 +1510,7 @@ namespace itscam {
 
     inline void from_json(json const & j, MultipleExposures& x) {
         x.enabled = get_stack_optional<bool>(j, "enabled");
-        x.settings = get_stack_optional<std::vector<Something>>(j, "settings");
+        x.settings = get_stack_optional<std::vector<MultipleExposuresConfig>>(j, "settings");
     }
 
     inline void to_json(json & j, MultipleExposures const & x) {
@@ -2854,7 +2854,7 @@ namespace itscam {
         return j;
     }
 
-    inline json to_partial_json(Something const & x) {
+    inline json to_partial_json(MultipleExposuresConfig const & x) {
         json j = json::object();
         if (x.flash) j["flash"] = to_partial_json(*x.flash);
         if (x.gain) j["gain"] = to_partial_json(*x.gain);

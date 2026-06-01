@@ -46,7 +46,7 @@ ITSCAM_ErrorCode translateError(const itscam::Error& err) {
     // Surface the upstream message via ITSCAM_getLastError() so wrappers
     // (C#, Python, Go) can include the server-side detail in their
     // exception/error types.
-    itscam_c_internal::setLastError(err.message);
+    itscam::c_internal::setLastError(err.message);
     switch (err.code) {
         case itscam::Error::ConnectionFailed: return ITSCAM_ERROR_CONNECTION_FAILED;
         case itscam::Error::Timeout:          return ITSCAM_ERROR_TIMEOUT;
@@ -257,7 +257,7 @@ static ITSCAM_ErrorCode wrapStringResult(
     const itscam::Result<std::string>& r, ITSCAM_String** out) {
     if (!r) return translateError(r.error());
     if (out) {
-        auto* s = itscam_c_internal::makeString(r.value());
+        auto* s = itscam::c_internal::makeString(r.value());
         if (!s) return ITSCAM_ERROR_ALLOCATION_FAILED;
         *out = s;
     }

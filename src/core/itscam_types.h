@@ -118,7 +118,7 @@ public:
     /// Block until the result is available.
     Result<T> get() {
         if (!m_state) return Result<T>(Error{Error::Unknown, "invalid future"});
-        itscam_os::UniqueLock<itscam_os::Mutex> lk(m_state->mtx);
+        os::UniqueLock<os::Mutex> lk(m_state->mtx);
         while (!m_state->ready) {
             m_state->cv.wait(lk);
         }
@@ -128,9 +128,9 @@ public:
     /// Block up to @p waitMs milliseconds. Returns Error::Timeout on expiry.
     Result<T> get(uint32_t waitMs) {
         if (!m_state) return Result<T>(Error{Error::Unknown, "invalid future"});
-        itscam_os::UniqueLock<itscam_os::Mutex> lk(m_state->mtx);
+        os::UniqueLock<os::Mutex> lk(m_state->mtx);
         if (!m_state->ready) {
-            if (m_state->cv.waitFor(lk, waitMs) == itscam_os::ConditionVariable::CvStatus::timeout) {
+            if (m_state->cv.waitFor(lk, waitMs) == os::ConditionVariable::CvStatus::timeout) {
                 if (!m_state->ready) {
                     return Result<T>(Error{Error::Timeout, "future timed out"});
                 }
@@ -142,7 +142,7 @@ public:
     /// Non-blocking readiness check.
     bool isReady() const {
         if (!m_state) return false;
-        itscam_os::LockGuard<itscam_os::Mutex> lk(m_state->mtx);
+        os::LockGuard<os::Mutex> lk(m_state->mtx);
         return m_state->ready;
     }
 
@@ -152,8 +152,8 @@ private:
     friend class Promise<T>;
 
     struct SharedState {
-        mutable itscam_os::Mutex mtx;
-        itscam_os::ConditionVariable cv;
+        mutable os::Mutex mtx;
+        os::ConditionVariable cv;
         Result<T> value;
         bool ready = false;
     };
@@ -181,7 +181,7 @@ public:
     void set_value(Result<T> value) {
         if (!m_state) return;
         {
-            itscam_os::LockGuard<itscam_os::Mutex> lk(m_state->mtx);
+            os::LockGuard<os::Mutex> lk(m_state->mtx);
             m_state->value = std::move(value);
             m_state->ready = true;
         }

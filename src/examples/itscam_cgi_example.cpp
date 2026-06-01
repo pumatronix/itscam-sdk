@@ -153,7 +153,7 @@ int main(int argc, char* argv[]) {
                       << f.data.size() << " bytes)\n";
         }
     });
-    itscam_os::sleepForMs(5000);
+    itscam::os::sleepForMs(5000);
     cgi.stopMjpegStream();
     std::cout << "  stopped after " << frameCount.load() << " frame(s)\n";
 

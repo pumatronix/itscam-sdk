@@ -22,7 +22,7 @@ namespace itscam {
 
 using json      = nlohmann::json;
 using Transport = detail::HttpTransport;
-namespace rt    = pumatronix::itscam;
+namespace rt    = rest_types;
 
 namespace {
 

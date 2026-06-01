@@ -23,7 +23,7 @@ using detail::HttpResponse;
 using detail::extractMultipartBoundary;
 using detail::parseMultipart;
 using detail::StreamingMultipartParser;
-using Thread = itscam_os::Thread;
+using Thread = os::Thread;
 
 //=========================================================================
 // Local helpers

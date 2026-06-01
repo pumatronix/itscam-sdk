@@ -15,7 +15,8 @@ struct ITSCAM_String {
     std::string data;
 };
 
-namespace itscam_c_internal {
+namespace itscam {
+namespace c_internal {
 
 inline ITSCAM_String* makeString(std::string s) {
     auto* out = new (std::nothrow) ITSCAM_String();
@@ -35,4 +36,5 @@ inline void setLastError(const std::string& message) {
     setLastError("%s", message.c_str());
 }
 
-}  // namespace itscam_c_internal
+}  // namespace c_internal
+}  // namespace itscam

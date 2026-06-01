@@ -381,13 +381,13 @@ namespace Pumatronix.Itscam.RestTypes
 
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         [JsonPropertyName("settings")]
-        public List<Something> Settings { get; set; }
+        public List<MultipleExposuresConfig> Settings { get; set; }
     }
 
     /// <summary>
     /// Multiple exposures configuration
     /// </summary>
-    public partial class Something
+    public partial class MultipleExposuresConfig
     {
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         [JsonPropertyName("flash")]

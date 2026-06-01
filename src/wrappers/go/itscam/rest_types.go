@@ -429,12 +429,12 @@ type MOVFilter struct {
 }
 
 type MultipleExposures struct {
-	Enabled  *bool       `json:"enabled,omitempty"`
-	Settings []Something `json:"settings,omitempty"`
+	Enabled  *bool                     `json:"enabled,omitempty"`
+	Settings []MultipleExposuresConfig `json:"settings,omitempty"`
 }
 
 // Multiple exposures configuration
-type Something struct {
+type MultipleExposuresConfig struct {
 	Flash   *Flash       `json:"flash,omitempty"`
 	Gain    *SettingGain `json:"gain,omitempty"`
 	Shutter *Shutter     `json:"shutter,omitempty"`

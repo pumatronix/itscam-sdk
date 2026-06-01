@@ -262,6 +262,51 @@ function applyUpstreamPatches(doc) {
   return doc
 }
 
+// Fix quicktype naming of MultipleExposuresConfig.
+//
+// ProfileConfig.multipleExposures is an inline object in the upstream spec.
+// quicktype derives the type name "MultipleExposures" from the property name,
+// then when it encounters the $ref'd MultipleExposuresConfig schema it detects
+// a near-collision and falls back to the placeholder name "Something".
+//
+// Fix: extract the inline property to a named schema ("MultipleExposures") so
+// quicktype gets both names from explicit schema names.  Also set `title` on
+// MultipleExposuresConfig as a belt-and-suspenders measure.
+//
+// Idempotent: if a future firmware defines MultipleExposures natively and uses
+// a $ref in ProfileConfig, both steps become no-ops.
+function fixMultipleExposuresNaming(doc) {
+  const schemas = doc.components?.schemas ?? {}
+  const profile = schemas.ProfileConfig
+
+  // Step 1: extract inline multipleExposures → named schema
+  if (
+    profile?.properties?.multipleExposures &&
+    !profile.properties.multipleExposures.$ref
+  ) {
+    const inline = profile.properties.multipleExposures
+    if (!schemas.MultipleExposures) {
+      schemas.MultipleExposures = inline
+      info(
+        "Extracted inline ProfileConfig.multipleExposures → named schema 'MultipleExposures'."
+      )
+    }
+    profile.properties.multipleExposures = {
+      $ref: "#/components/schemas/MultipleExposures",
+    }
+  }
+
+  // Step 2: ensure MultipleExposuresConfig carries a title so quicktype
+  // preserves the name even as a transitive dependency.
+  if (schemas.MultipleExposuresConfig && !schemas.MultipleExposuresConfig.title) {
+    schemas.MultipleExposuresConfig.title = "MultipleExposuresConfig"
+    info("Added title to MultipleExposuresConfig schema for stable codegen naming.")
+  }
+
+  doc.components.schemas = schemas
+  return doc
+}
+
 async function validate(doc, { strict }) {
   // SwaggerParser mutates its input when dereferencing; pass a deep clone so
   // the document we write to disk keeps its $refs intact.
@@ -293,6 +338,7 @@ async function main() {
   await injectLanesConfigIfMissing(doc)
   autoFixTypoes(doc)
   applyUpstreamPatches(doc)
+  fixMultipleExposuresNaming(doc)
   await validate(doc, { strict })
 
   await fs.mkdir(path.dirname(output), { recursive: true })

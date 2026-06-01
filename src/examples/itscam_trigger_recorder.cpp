@@ -525,7 +525,7 @@ int main(int argc, char* argv[]) {
     log("Recording started. Waiting for trigger events...");
 
     while (g_running) {
-        itscam_os::sleepForMs(100);
+        itscam::os::sleepForMs(100);
     }
 
     // --- Cleanup ------------------------------------------------------------

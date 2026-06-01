@@ -39,7 +39,8 @@
 #pragma comment(lib, "ws2_32.lib")
 #endif
 
-namespace itscam_os {
+namespace itscam {
+namespace os {
 
 //=========================================================================
 // Internal Structures
@@ -538,7 +539,8 @@ uint64_t epochMs() {
     return (uint64_t)((uli.QuadPart / 10000) - 11644473600000ULL);
 }
 
-}  // namespace itscam_os
+}  // namespace os
+}  // namespace itscam
 
 //=========================================================================
 // Auto-initialize Winsock on DLL load
@@ -550,10 +552,10 @@ uint64_t epochMs() {
 static class WinsockAutoInit {
 public:
     WinsockAutoInit() {
-        itscam_os::socketInit();
+        itscam::os::socketInit();
     }
     ~WinsockAutoInit() {
-        itscam_os::socketCleanup();
+        itscam::os::socketCleanup();
     }
 } s_winsockAutoInit;
 

@@ -551,7 +551,7 @@ class Shutter:
 
 
 @dataclass
-class Something:
+class MultipleExposuresConfig:
     """Multiple exposures configuration"""
 
     flash: Optional[Flash] = None
@@ -559,12 +559,12 @@ class Something:
     shutter: Optional[Shutter] = None
 
     @staticmethod
-    def from_dict(obj: Any) -> 'Something':
+    def from_dict(obj: Any) -> 'MultipleExposuresConfig':
         assert isinstance(obj, dict)
         flash = from_union([Flash.from_dict, from_none], obj.get("flash"))
         gain = from_union([SettingGain.from_dict, from_none], obj.get("gain"))
         shutter = from_union([Shutter.from_dict, from_none], obj.get("shutter"))
-        return Something(flash, gain, shutter)
+        return MultipleExposuresConfig(flash, gain, shutter)
 
     def to_dict(self) -> dict:
         result: dict = {}
@@ -580,13 +580,13 @@ class Something:
 @dataclass
 class MultipleExposures:
     enabled: Optional[bool] = None
-    settings: Optional[List[Something]] = None
+    settings: Optional[List[MultipleExposuresConfig]] = None
 
     @staticmethod
     def from_dict(obj: Any) -> 'MultipleExposures':
         assert isinstance(obj, dict)
         enabled = from_union([from_bool, from_none], obj.get("enabled"))
-        settings = from_union([lambda x: from_list(Something.from_dict, x), from_none], obj.get("settings"))
+        settings = from_union([lambda x: from_list(MultipleExposuresConfig.from_dict, x), from_none], obj.get("settings"))
         return MultipleExposures(enabled, settings)
 
     def to_dict(self) -> dict:
@@ -594,7 +594,7 @@ class MultipleExposures:
         if self.enabled is not None:
             result["enabled"] = from_union([from_bool, from_none], self.enabled)
         if self.settings is not None:
-            result["settings"] = from_union([lambda x: from_list(lambda x: to_class(Something, x), x), from_none], self.settings)
+            result["settings"] = from_union([lambda x: from_list(lambda x: to_class(MultipleExposuresConfig, x), x), from_none], self.settings)
         return result
 
 

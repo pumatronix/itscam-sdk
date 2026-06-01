@@ -196,7 +196,7 @@ class Program
             targeted.AddRange(profiles);
         }
 
-        var steps = new List<Something>();
+        var steps = new List<MultipleExposuresConfig>();
         for (int i = 0; i < TargetExposureCount; ++i)
             steps.Add(DefaultExposureStep());
 
@@ -221,7 +221,7 @@ class Program
         }
     }
 
-    static Something DefaultExposureStep() => new Something
+    static MultipleExposuresConfig DefaultExposureStep() => new MultipleExposuresConfig
     {
         Shutter = new Shutter
         {
