@@ -115,18 +115,24 @@ public:
     //=========================================================================
 
     /// GET /api/image/profiles -- list all profiles.
-    Result<std::vector<pumatronix::itscam::ProfileConfig>> getProfiles(
+    Result<std::vector<rest_types::ProfileConfig>> getProfiles(
         uint32_t timeoutMs = 10000);
 
     /// GET /api/image/profiles?id=<id> -- filter profiles by id.
     /// Returns an array because the server may return more than one entry
     /// when the id is ambiguous (e.g. a NaN response).
-    Result<std::vector<pumatronix::itscam::ProfileConfig>> getProfile(
+    Result<std::vector<rest_types::ProfileConfig>> getProfile(
         int id, uint32_t timeoutMs = 10000);
 
+    /// Get a single profile by name.
+    /// Lists all profiles and returns the first one whose `name` field
+    /// matches (case-sensitive).  Returns InvalidParameter if not found.
+    Result<rest_types::ProfileConfig> getProfileByName(
+        const std::string& name, uint32_t timeoutMs = 10000);
+
     /// POST /api/image/profiles -- create a new profile.
-    Result<pumatronix::itscam::ProfileConfig> createProfile(
-        const pumatronix::itscam::ProfileConfig& profile,
+    Result<rest_types::ProfileConfig> createProfile(
+        const rest_types::ProfileConfig& profile,
         uint32_t timeoutMs = 10000);
 
     /// PUT /api/image/profiles/{id} -- update a single profile.
@@ -134,17 +140,25 @@ public:
     /// Uses partial serialization: only fields with a value (non-nullopt)
     /// are included in the PUT body.  Construct a `ProfileConfig` with only
     /// the fields you want to change.
-    Result<pumatronix::itscam::ProfileConfig> updateProfileById(
+    Result<rest_types::ProfileConfig> updateProfileById(
         int id,
-        const pumatronix::itscam::ProfileConfig& profile,
+        const rest_types::ProfileConfig& profile,
+        uint32_t timeoutMs = 10000);
+
+    /// Update a profile found by name.
+    /// Looks up the profile by name, then calls updateProfileById with
+    /// its id.  Returns InvalidParameter if no profile with that name exists.
+    Result<rest_types::ProfileConfig> updateProfileByName(
+        const std::string& name,
+        const rest_types::ProfileConfig& profile,
         uint32_t timeoutMs = 10000);
 
     /// PUT /api/image/profiles -- bulk update (JSON array body).
     ///
     /// Each profile in the array is partially serialized (unset optional
     /// fields are omitted).
-    Result<pumatronix::itscam::ProfileConfig> updateProfiles(
-        const std::vector<pumatronix::itscam::ProfileConfig>& profiles,
+    Result<rest_types::ProfileConfig> updateProfiles(
+        const std::vector<rest_types::ProfileConfig>& profiles,
         uint32_t timeoutMs = 10000);
 
     /// DELETE /api/image/profiles?id=<id> -- delete a profile by id.
@@ -157,7 +171,7 @@ public:
     //=========================================================================
 
     /// GET /api/equipment/misc/readonly/volatile
-    Result<pumatronix::itscam::MiscVolatile> getVolatileInfo(
+    Result<rest_types::MiscVolatile> getVolatileInfo(
         uint32_t timeoutMs = 10000);
 
     //=========================================================================
@@ -181,12 +195,12 @@ public:
     //=========================================================================
 
     /// GET /api/equipment/analytics
-    Result<pumatronix::itscam::AnalyticsConfig> getAnalyticsConfig(
+    Result<rest_types::AnalyticsConfig> getAnalyticsConfig(
         uint32_t timeoutMs = 10000);
 
     /// PUT /api/equipment/analytics
-    Result<pumatronix::itscam::AnalyticsConfig> setAnalyticsConfig(
-        const pumatronix::itscam::AnalyticsConfig& config,
+    Result<rest_types::AnalyticsConfig> setAnalyticsConfig(
+        const rest_types::AnalyticsConfig& config,
         uint32_t timeoutMs = 10000);
 
     //=========================================================================
@@ -195,12 +209,12 @@ public:
     //=========================================================================
 
     /// GET /api/equipment/ocr
-    Result<pumatronix::itscam::OcrConfig> getOcrConfig(
+    Result<rest_types::OcrConfig> getOcrConfig(
         uint32_t timeoutMs = 10000);
 
     /// PUT /api/equipment/ocr
-    Result<pumatronix::itscam::OcrConfig> setOcrConfig(
-        const pumatronix::itscam::OcrConfig& config,
+    Result<rest_types::OcrConfig> setOcrConfig(
+        const rest_types::OcrConfig& config,
         uint32_t timeoutMs = 10000);
 
     //=========================================================================
@@ -209,12 +223,12 @@ public:
     //=========================================================================
 
     /// GET /api/equipment/classifier
-    Result<pumatronix::itscam::ClassifierConfig> getClassifierConfig(
+    Result<rest_types::ClassifierConfig> getClassifierConfig(
         uint32_t timeoutMs = 10000);
 
     /// PUT /api/equipment/classifier
-    Result<pumatronix::itscam::ClassifierConfig> setClassifierConfig(
-        const pumatronix::itscam::ClassifierConfig& config,
+    Result<rest_types::ClassifierConfig> setClassifierConfig(
+        const rest_types::ClassifierConfig& config,
         uint32_t timeoutMs = 10000);
 
     //=========================================================================
@@ -225,12 +239,12 @@ public:
     //=========================================================================
 
     /// GET /api/equipment/lanes
-    Result<pumatronix::itscam::LanesConfig> getLanesConfig(
+    Result<rest_types::LanesConfig> getLanesConfig(
         uint32_t timeoutMs = 10000);
 
     /// PUT /api/equipment/lanes
-    Result<pumatronix::itscam::LanesConfig> setLanesConfig(
-        const pumatronix::itscam::LanesConfig& config,
+    Result<rest_types::LanesConfig> setLanesConfig(
+        const rest_types::LanesConfig& config,
         uint32_t timeoutMs = 10000);
 
     //=========================================================================
@@ -239,16 +253,16 @@ public:
     //=========================================================================
 
     /// GET /api/equipment/servers/itscampro
-    Result<pumatronix::itscam::ItscamproConfig> getItscamproConfig(
+    Result<rest_types::ItscamproConfig> getItscamproConfig(
         uint32_t timeoutMs = 10000);
 
     /// PUT /api/equipment/servers/itscampro
-    Result<pumatronix::itscam::ItscamproConfig> setItscamproConfig(
-        const pumatronix::itscam::ItscamproConfig& config,
+    Result<rest_types::ItscamproConfig> setItscamproConfig(
+        const rest_types::ItscamproConfig& config,
         uint32_t timeoutMs = 10000);
 
     /// GET /api/equipment/servers/itscampro/status
-    Result<pumatronix::itscam::ItscamproStatus> getItscamproStatus(
+    Result<rest_types::ItscamproStatus> getItscamproStatus(
         uint32_t timeoutMs = 10000);
 
     //=========================================================================
@@ -257,12 +271,12 @@ public:
     //=========================================================================
 
     /// GET /api/equipment/autofocus
-    Result<pumatronix::itscam::AutoFocus> getAutoFocus(
+    Result<rest_types::AutoFocus> getAutoFocus(
         uint32_t timeoutMs = 10000);
 
     /// PUT /api/equipment/autofocus
-    Result<pumatronix::itscam::AutoFocus> setAutoFocus(
-        const pumatronix::itscam::AutoFocus& config,
+    Result<rest_types::AutoFocus> setAutoFocus(
+        const rest_types::AutoFocus& config,
         uint32_t timeoutMs = 10000);
 
     //=========================================================================
@@ -271,12 +285,12 @@ public:
     //=========================================================================
 
     /// GET /api/video/streams
-    Result<pumatronix::itscam::StreamConfig> getStreamConfig(
+    Result<rest_types::StreamConfig> getStreamConfig(
         uint32_t timeoutMs = 10000);
 
     /// PUT /api/video/streams
-    Result<pumatronix::itscam::StreamConfig> setStreamConfig(
-        const pumatronix::itscam::StreamConfig& config,
+    Result<rest_types::StreamConfig> setStreamConfig(
+        const rest_types::StreamConfig& config,
         uint32_t timeoutMs = 10000);
 
     //=========================================================================
@@ -285,11 +299,11 @@ public:
     //=========================================================================
 
     /// GET /api/equipment/misc
-    Result<pumatronix::itscam::Misc> getMisc(uint32_t timeoutMs = 10000);
+    Result<rest_types::Misc> getMisc(uint32_t timeoutMs = 10000);
 
     /// PUT /api/equipment/misc
-    Result<pumatronix::itscam::Misc> setMisc(
-        const pumatronix::itscam::Misc& config,
+    Result<rest_types::Misc> setMisc(
+        const rest_types::Misc& config,
         uint32_t timeoutMs = 10000);
 
     //=========================================================================
@@ -298,7 +312,7 @@ public:
     //=========================================================================
 
     /// GET /api/equipment/imageSign  (the endpoint is read-only on most cameras)
-    Result<pumatronix::itscam::ImageSignConfig> getImageSignConfig(
+    Result<rest_types::ImageSignConfig> getImageSignConfig(
         uint32_t timeoutMs = 10000);
 
     //=========================================================================
@@ -307,12 +321,12 @@ public:
     //=========================================================================
 
     /// GET /api/equipment/servers/ftp
-    Result<pumatronix::itscam::FtpConfig> getFtpConfig(
+    Result<rest_types::FtpConfig> getFtpConfig(
         uint32_t timeoutMs = 10000);
 
     /// PUT /api/equipment/servers/ftp
-    Result<pumatronix::itscam::FtpConfig> setFtpConfig(
-        const pumatronix::itscam::FtpConfig& config,
+    Result<rest_types::FtpConfig> setFtpConfig(
+        const rest_types::FtpConfig& config,
         uint32_t timeoutMs = 10000);
 
     //=========================================================================
@@ -321,16 +335,16 @@ public:
     //=========================================================================
 
     /// GET /api/equipment/servers/lince
-    Result<pumatronix::itscam::LinceConfig> getLinceConfig(
+    Result<rest_types::LinceConfig> getLinceConfig(
         uint32_t timeoutMs = 10000);
 
     /// PUT /api/equipment/servers/lince
-    Result<pumatronix::itscam::LinceConfig> setLinceConfig(
-        const pumatronix::itscam::LinceConfig& config,
+    Result<rest_types::LinceConfig> setLinceConfig(
+        const rest_types::LinceConfig& config,
         uint32_t timeoutMs = 10000);
 
     /// GET /api/equipment/servers/lince/status
-    Result<pumatronix::itscam::LinceStatus> getLinceStatus(
+    Result<rest_types::LinceStatus> getLinceStatus(
         uint32_t timeoutMs = 10000);
 
     //=========================================================================
@@ -339,12 +353,12 @@ public:
     //=========================================================================
 
     /// GET /api/equipment/vehicleIndicator
-    Result<pumatronix::itscam::VehicleIndicatorConfig> getVehicleIndicatorConfig(
+    Result<rest_types::VehicleIndicatorConfig> getVehicleIndicatorConfig(
         uint32_t timeoutMs = 10000);
 
     /// PUT /api/equipment/vehicleIndicator
-    Result<pumatronix::itscam::VehicleIndicatorConfig> setVehicleIndicatorConfig(
-        const pumatronix::itscam::VehicleIndicatorConfig& config,
+    Result<rest_types::VehicleIndicatorConfig> setVehicleIndicatorConfig(
+        const rest_types::VehicleIndicatorConfig& config,
         uint32_t timeoutMs = 10000);
 
     //=========================================================================
@@ -353,12 +367,12 @@ public:
     //=========================================================================
 
     /// GET /api/equipment/servers/protocols
-    Result<pumatronix::itscam::ProtocolsConfig> getProtocolsConfig(
+    Result<rest_types::ProtocolsConfig> getProtocolsConfig(
         uint32_t timeoutMs = 10000);
 
     /// PUT /api/equipment/servers/protocols
-    Result<pumatronix::itscam::ProtocolsConfig> setProtocolsConfig(
-        const pumatronix::itscam::ProtocolsConfig& config,
+    Result<rest_types::ProtocolsConfig> setProtocolsConfig(
+        const rest_types::ProtocolsConfig& config,
         uint32_t timeoutMs = 10000);
 
     //=========================================================================
@@ -367,12 +381,12 @@ public:
     //=========================================================================
 
     /// GET /api/equipment/transitioner
-    Result<pumatronix::itscam::ProfileTransitioner> getProfileTransitioner(
+    Result<rest_types::ProfileTransitioner> getProfileTransitioner(
         uint32_t timeoutMs = 10000);
 
     /// PUT /api/equipment/transitioner
-    Result<pumatronix::itscam::ProfileTransitioner> setProfileTransitioner(
-        const pumatronix::itscam::ProfileTransitioner& config,
+    Result<rest_types::ProfileTransitioner> setProfileTransitioner(
+        const rest_types::ProfileTransitioner& config,
         uint32_t timeoutMs = 10000);
 
     //=========================================================================
@@ -382,31 +396,31 @@ public:
     //=========================================================================
 
     /// GET /api/equipment/ioPorts (returns one IoConfig per pin).
-    Result<std::vector<pumatronix::itscam::IoConfig>> getIoPorts(
+    Result<std::vector<rest_types::IoConfig>> getIoPorts(
         uint32_t timeoutMs = 10000);
 
     /// PUT /api/equipment/ioPorts (bulk update of all pins).
-    Result<std::vector<pumatronix::itscam::IoConfig>> setIoPorts(
-        const std::vector<pumatronix::itscam::IoConfig>& ports,
+    Result<std::vector<rest_types::IoConfig>> setIoPorts(
+        const std::vector<rest_types::IoConfig>& ports,
         uint32_t timeoutMs = 10000);
 
     /// GET /api/equipment/ioPorts/{id}
-    Result<pumatronix::itscam::IoConfig> getIoPort(int id,
+    Result<rest_types::IoConfig> getIoPort(int id,
                                                    uint32_t timeoutMs = 10000);
 
     /// PUT /api/equipment/ioPorts/{id}
-    Result<pumatronix::itscam::IoConfig> setIoPort(
+    Result<rest_types::IoConfig> setIoPort(
         int id,
-        const pumatronix::itscam::IoConfig& port,
+        const rest_types::IoConfig& port,
         uint32_t timeoutMs = 10000);
 
     /// GET /api/equipment/ioBasic (returns one IoBasic per pin).
-    Result<std::vector<pumatronix::itscam::IoBasic>> getIoBasic(
+    Result<std::vector<rest_types::IoBasic>> getIoBasic(
         uint32_t timeoutMs = 10000);
 
     /// PUT /api/equipment/ioBasic (bulk update of all pins).
-    Result<std::vector<pumatronix::itscam::IoBasic>> setIoBasic(
-        const std::vector<pumatronix::itscam::IoBasic>& ports,
+    Result<std::vector<rest_types::IoBasic>> setIoBasic(
+        const std::vector<rest_types::IoBasic>& ports,
         uint32_t timeoutMs = 10000);
 
     //=========================================================================
@@ -416,17 +430,17 @@ public:
     //=========================================================================
 
     /// GET /api/equipment/servers/restapiclient/{id}/config
-    Result<pumatronix::itscam::RestApiClientConfig> getRestApiClientConfig(
+    Result<rest_types::RestApiClientConfig> getRestApiClientConfig(
         int id, uint32_t timeoutMs = 10000);
 
     /// PUT /api/equipment/servers/restapiclient/{id}/config
-    Result<pumatronix::itscam::RestApiClientConfig> setRestApiClientConfig(
+    Result<rest_types::RestApiClientConfig> setRestApiClientConfig(
         int id,
-        const pumatronix::itscam::RestApiClientConfig& config,
+        const rest_types::RestApiClientConfig& config,
         uint32_t timeoutMs = 10000);
 
     /// GET /api/equipment/servers/restapiclient/{id}/status
-    Result<pumatronix::itscam::RestApiClientStatus> getRestApiClientStatus(
+    Result<rest_types::RestApiClientStatus> getRestApiClientStatus(
         int id, uint32_t timeoutMs = 10000);
 
     //=========================================================================
@@ -435,7 +449,7 @@ public:
     //=========================================================================
 
     /// GET /api/system/licenses  (read-only summary of installed licenses).
-    Result<pumatronix::itscam::Licenses> getLicenses(uint32_t timeoutMs = 10000);
+    Result<rest_types::Licenses> getLicenses(uint32_t timeoutMs = 10000);
 
     //=========================================================================
     // Generic HTTP methods  (escape hatch for endpoints not covered above)

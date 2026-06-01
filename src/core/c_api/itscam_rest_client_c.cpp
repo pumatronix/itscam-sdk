@@ -44,7 +44,7 @@ ITSCAM_ErrorCode translateError(const itscam::Error& err) {
     // Surface the upstream message via ITSCAM_getLastError() so wrappers
     // (C#, Python, Go) can include the server-side detail in their
     // exception/error types.
-    itscam_c_internal::setLastError(err.message);
+    itscam::c_internal::setLastError(err.message);
     switch (err.code) {
         case itscam::Error::ConnectionFailed: return ITSCAM_ERROR_CONNECTION_FAILED;
         case itscam::Error::Timeout:          return ITSCAM_ERROR_TIMEOUT;
@@ -58,7 +58,7 @@ ITSCAM_ErrorCode translateError(const itscam::Error& err) {
 
 void assignOut(ITSCAM_String** out, const json& body) {
     if (!out) return;
-    *out = itscam_c_internal::makeString(
+    *out = itscam::c_internal::makeString(
         body.is_null() ? std::string("") : body.dump());
 }
 
@@ -235,6 +235,22 @@ ITSCAM_ErrorCode ITSCAM_RestClient_getProfile(ITSCAM_RestClient* c, int id,
     return handleResult(c->impl.httpGet(path, t), out);
 }
 
+ITSCAM_ErrorCode ITSCAM_RestClient_getProfileByName(ITSCAM_RestClient* c,
+                                                    const char* name,
+                                                    uint32_t t,
+                                                    ITSCAM_String** out) {
+    if (!c) return ITSCAM_ERROR_NULL_HANDLE;
+    if (!name) return ITSCAM_ERROR_INVALID_PARAMETER;
+    auto res = c->impl.getProfileByName(name, t);
+    if (!res) {
+        if (out) *out = nullptr;
+        return translateError(res.error());
+    }
+    json j = res.value();
+    assignOut(out, j);
+    return ITSCAM_OK;
+}
+
 ITSCAM_ErrorCode ITSCAM_RestClient_createProfile(ITSCAM_RestClient* c,
                                                  const char* body,
                                                  uint32_t t,
@@ -251,6 +267,30 @@ ITSCAM_ErrorCode ITSCAM_RestClient_updateProfile(ITSCAM_RestClient* c,
     if (!c) return ITSCAM_ERROR_NULL_HANDLE;
     return handleResult(c->impl.httpPut(apiPath(c, "/image/profiles"),
                                          parseJsonBody(body), t), out);
+}
+
+ITSCAM_ErrorCode ITSCAM_RestClient_updateProfileByName(ITSCAM_RestClient* c,
+                                                       const char* name,
+                                                       const char* body,
+                                                       uint32_t t,
+                                                       ITSCAM_String** out) {
+    if (!c) return ITSCAM_ERROR_NULL_HANDLE;
+    if (!name || !body) return ITSCAM_ERROR_INVALID_PARAMETER;
+    itscam::rest_types::ProfileConfig patch;
+    try {
+        patch = json::parse(body).get<itscam::rest_types::ProfileConfig>();
+    } catch (...) {
+        itscam::c_internal::setLastError("invalid JSON for ProfileConfig");
+        return ITSCAM_ERROR_INVALID_PARAMETER;
+    }
+    auto res = c->impl.updateProfileByName(name, patch, t);
+    if (!res) {
+        if (out) *out = nullptr;
+        return translateError(res.error());
+    }
+    json j = res.value();
+    assignOut(out, j);
+    return ITSCAM_OK;
 }
 
 ITSCAM_ErrorCode ITSCAM_RestClient_deleteProfile(ITSCAM_RestClient* c, int id,

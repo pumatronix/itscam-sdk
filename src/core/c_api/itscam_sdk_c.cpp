@@ -20,20 +20,20 @@
 #include <vector>
 
 // Thread-local error buffer shared by every C ABI translation unit through
-// itscam_c_internal::setLastError().
+// itscam::c_internal::setLastError().
 static thread_local char s_lastError[512] = {0};
 
-namespace itscam_c_internal {
+namespace itscam::c_internal {
 void setLastError(const char* fmt, ...) {
     va_list args;
     va_start(args, fmt);
     vsnprintf(s_lastError, sizeof(s_lastError), fmt, args);
     va_end(args);
 }
-}  // namespace itscam_c_internal
+}  // namespace itscam::c_internal
 
 // Local alias so the existing call sites in this file remain readable.
-using itscam_c_internal::setLastError;
+using itscam::c_internal::setLastError;
 
 static ITSCAM_ErrorCode translateError(const itscam::Error& err) {
     switch (err.code) {
@@ -680,7 +680,7 @@ size_t ITSCAM_Jpeg_extractComment(
 //=========================================================================
 
 ITSCAM_Timestamp ITSCAM_getSystemLocalTime(void) {
-    auto ts = itscam_utils::getSystemLocalTime();
+    auto ts = itscam::utils::getSystemLocalTime();
     ITSCAM_Timestamp result;
     result.year = ts.year;
     result.month = ts.month;
@@ -694,7 +694,7 @@ ITSCAM_Timestamp ITSCAM_getSystemLocalTime(void) {
 }
 
 ITSCAM_Timestamp ITSCAM_getSystemUtcTime(void) {
-    auto ts = itscam_utils::getSystemUtcTime();
+    auto ts = itscam::utils::getSystemUtcTime();
     ITSCAM_Timestamp result;
     result.year = ts.year;
     result.month = ts.month;
@@ -708,11 +708,11 @@ ITSCAM_Timestamp ITSCAM_getSystemUtcTime(void) {
 }
 
 uint64_t ITSCAM_getEpochTime(void) {
-    return itscam_utils::getEpochTime();
+    return itscam::utils::getEpochTime();
 }
 
 uint64_t ITSCAM_getEpochTimeMs(void) {
-    return itscam_utils::getEpochTimeMs();
+    return itscam::utils::getEpochTimeMs();
 }
 
 int ITSCAM_storeFile(
@@ -721,19 +721,19 @@ int ITSCAM_storeFile(
     size_t size,
     int overwrite)
 {
-    return itscam_utils::storeFile(path, data, size, overwrite != 0) ? 1 : 0;
+    return itscam::utils::storeFile(path, data, size, overwrite != 0) ? 1 : 0;
 }
 
 int ITSCAM_createFolder(const char* path, int recursive) {
-    return itscam_utils::createFolder(path, recursive != 0) ? 1 : 0;
+    return itscam::utils::createFolder(path, recursive != 0) ? 1 : 0;
 }
 
 int ITSCAM_fileExists(const char* path) {
-    return itscam_utils::fileExists(path) ? 1 : 0;
+    return itscam::utils::fileExists(path) ? 1 : 0;
 }
 
 int ITSCAM_folderExists(const char* path) {
-    return itscam_utils::folderExists(path) ? 1 : 0;
+    return itscam::utils::folderExists(path) ? 1 : 0;
 }
 
 const char* ITSCAM_getLastError(void) {

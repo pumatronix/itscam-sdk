@@ -35,8 +35,8 @@
 namespace itscam {
 namespace detail {
 
-using Mutex = itscam_os::Mutex;
-template<typename M> using LockGuard = itscam_os::LockGuard<M>;
+using Mutex = os::Mutex;
+template<typename M> using LockGuard = os::LockGuard<M>;
 
 //=========================================================================
 // Impl

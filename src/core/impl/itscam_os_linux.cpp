@@ -30,7 +30,8 @@
 #include <cstdio>
 #include <cstdlib>
 
-namespace itscam_os {
+namespace itscam {
+namespace os {
 
 //=========================================================================
 // Internal Structures
@@ -464,6 +465,7 @@ uint64_t epochMs() {
     return (uint64_t)ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
 }
 
-}  // namespace itscam_os
+}  // namespace os
+}  // namespace itscam
 
 #endif  // !_WIN32 && !__MINGW32__

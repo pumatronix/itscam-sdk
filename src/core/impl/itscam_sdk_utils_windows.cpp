@@ -24,7 +24,8 @@
 #include <cstdio>
 #include <cstring>
 
-namespace itscam_utils {
+namespace itscam {
+namespace utils {
 
 // Thread-local error buffer
 static thread_local char s_errorBuffer[256] = {0};
@@ -521,4 +522,5 @@ const char* getLastUtilError() {
     return s_errorBuffer;
 }
 
-} // namespace itscam_utils
+} // namespace utils
+} // namespace itscam

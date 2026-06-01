@@ -125,6 +125,100 @@ is statically linked and designed to run continuously until interrupted.
 ./itscam_trigger_recorder 192.168.254.254 ./images -q 95 -r 1000
 ```
 
+### itscam_snapshot_to_freeflow
+
+Demonstrates switching between the two main ITSCAM operational modes:
+
+- **Snapshot mode**: on-demand image capture via `snapshot.cgi` (CGI client)
+- **Freeflow mode**: continuous trigger with majority voting and REST API
+  Client (RAC) integration for automatic plate dispatch
+
+When switching to freeflow, the example configures a night profile with
+2 multi-exposure steps at different flash power levels, enables analytics
+majority voting, and sets up a RAC server with a JSON body template
+containing plate, timestamp, and base64-encoded image.
+
+**Usage:**
+
+```bash
+./itscam_snapshot_to_freeflow <host> <user> <password> [options]
+```
+
+**Arguments:**
+
+| Argument              | Required | Description                                         |
+|-----------------------|----------|-----------------------------------------------------|
+| `host`                | yes      | Camera hostname or IP                               |
+| `user`                | yes      | REST API username                                   |
+| `password`            | yes      | REST API password                                   |
+| `--https`             | no       | Use HTTPS instead of HTTP                           |
+| `--insecure`          | no       | Skip TLS certificate verification                   |
+| `--rac-host <host>`   | no       | RAC destination host (default: localhost)            |
+| `--rac-port <port>`   | no       | RAC destination port (default: 8080)                |
+| `--rac-path <path>`   | no       | RAC destination path (default: /api/captures)       |
+| `--profile-name <n>`  | no       | Night profile name to configure (default: Noturno)  |
+| `--duration <sec>`    | no       | Freeflow run duration in seconds (default: 30)      |
+
+**Examples:**
+
+```bash
+# Basic usage with defaults
+./itscam_snapshot_to_freeflow 192.168.254.254 admin 1234
+
+# Custom RAC endpoint and longer freeflow duration
+./itscam_snapshot_to_freeflow 192.168.254.254 admin 1234 \
+    --rac-host 10.0.0.50 --rac-port 9090 --duration 60
+
+# Specify a different profile name
+./itscam_snapshot_to_freeflow 192.168.254.254 admin 1234 \
+    --profile-name "Night"
+
+# Using HTTPS
+./itscam_snapshot_to_freeflow camera.example.com admin secret --https
+```
+
+**Testing with a local RAC receiver:**
+
+The RAC service on the camera will POST JSON payloads to the configured
+endpoint.  To verify the integration you can spin up a minimal Python HTTP
+server that prints incoming requests:
+
+```bash
+# rac_test_server.py — paste or save this script, then run it
+python3 -c "
+from http.server import HTTPServer, BaseHTTPRequestHandler
+import json, sys
+
+class Handler(BaseHTTPRequestHandler):
+    def do_POST(self):
+        length = int(self.headers.get('Content-Length', 0))
+        body = self.rfile.read(length)
+        try:
+            data = json.loads(body)
+            plate = data.get('plate', '???')
+            ts    = data.get('timestamp', '')
+            img   = data.get('image', '')
+            print(f'  plate={plate}  ts={ts}  image={len(img)} chars (base64)')
+        except Exception:
+            print(f'  raw body: {body[:200]}')
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b'ok')
+
+port = int(sys.argv[1]) if len(sys.argv) > 1 else 8080
+print(f'Listening on http://localhost:{port}/api/captures ...')
+HTTPServer(('', port), Handler).serve_forever()
+" 8080
+```
+
+Then, in another terminal, run the example pointing at localhost (the default):
+
+```bash
+./itscam_snapshot_to_freeflow 192.168.254.254 admin 1234
+# Python variant:
+python3 snapshot_to_freeflow_example.py 192.168.254.254 admin 1234
+```
+
 ## File Structure
 
 ```
@@ -134,4 +228,5 @@ examples/
   itscam_sdk_example.cpp          General SDK usage example
   itscam_rest_example.cpp         REST API example
   itscam_trigger_recorder.cpp     Trigger recorder (static linked)
+  itscam_snapshot_to_freeflow.cpp Snapshot-to-freeflow swap example
 ```

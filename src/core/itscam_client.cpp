@@ -43,14 +43,14 @@
 #endif
 
 // Use OS abstraction types
-using socket_t = itscam_os::SocketHandle;
+using socket_t = itscam::os::SocketHandle;
 
 // Use OS abstraction types for threading
-using Mutex = itscam_os::Mutex;
-using ConditionVariable = itscam_os::ConditionVariable;
-using Thread = itscam_os::Thread;
-template<typename M> using LockGuard = itscam_os::LockGuard<M>;
-template<typename M> using UniqueLock = itscam_os::UniqueLock<M>;
+using Mutex = itscam::os::Mutex;
+using ConditionVariable = itscam::os::ConditionVariable;
+using Thread = itscam::os::Thread;
+template<typename M> using LockGuard = itscam::os::LockGuard<M>;
+template<typename M> using UniqueLock = itscam::os::UniqueLock<M>;
 
 //=========================================================================
 // Lightweight Promise/Future for internal wire message exchange
@@ -261,14 +261,14 @@ static std::vector<uint8_t> serializeMsg(const WireMsg& msg) {
     std::vector<uint8_t> ret(msg.body.size() + HEADER_SIZE +
                               (msg.body.empty() ? 0 : CRC_SIZE));
     ret[0] = START_BYTE;
-    *(uint32_t*)(&ret[1]) = itscam_os::hostToNet32((uint32_t)msg.body.size());
-    *(uint16_t*)(&ret[5]) = itscam_os::hostToNet16(msg.op);
-    *(uint32_t*)(&ret[7]) = itscam_os::hostToNet32(msg.id);
-    *(uint16_t*)(&ret[11]) = itscam_os::hostToNet16(calcXModem(&ret[0], HEADER_SIZE - CRC_SIZE));
+    *(uint32_t*)(&ret[1]) = os::hostToNet32((uint32_t)msg.body.size());
+    *(uint16_t*)(&ret[5]) = os::hostToNet16(msg.op);
+    *(uint32_t*)(&ret[7]) = os::hostToNet32(msg.id);
+    *(uint16_t*)(&ret[11]) = os::hostToNet16(calcXModem(&ret[0], HEADER_SIZE - CRC_SIZE));
     if (!msg.body.empty()) {
         std::memcpy(&ret[HEADER_SIZE], msg.body.data(), msg.body.size());
         *(uint16_t*)(&ret[HEADER_SIZE + msg.body.size()]) =
-            itscam_os::hostToNet16(calcXModem(msg.body.data(), (uint32_t)msg.body.size()));
+            os::hostToNet16(calcXModem(msg.body.data(), (uint32_t)msg.body.size()));
     }
     return ret;
 }
@@ -299,10 +299,10 @@ static bool readOneMsg(std::vector<uint8_t>& raw, size_t& offset, WireMsg& msg) 
             continue;
         }
         uint8_t* hdr = &raw[off];
-        uint32_t bodySize = itscam_os::netToHost32(*(uint32_t*)(hdr + 1));
+        uint32_t bodySize = os::netToHost32(*(uint32_t*)(hdr + 1));
         if (bodySize > MAX_BODY_SIZE) { ++off; continue; }
-        msg.op = itscam_os::netToHost16(*(uint16_t*)(hdr + 5));
-        msg.id = itscam_os::netToHost32(*(uint32_t*)(hdr + 7));
+        msg.op = os::netToHost16(*(uint16_t*)(hdr + 5));
+        msg.id = os::netToHost32(*(uint32_t*)(hdr + 7));
         auto bodyBegin = raw.begin() + off + HEADER_SIZE;
         if (bodySize > 0) {
             if (off + HEADER_SIZE + bodySize + CRC_SIZE > raw.size()) {
@@ -513,7 +513,7 @@ static FrameInfo parseFrameInfo(const nlohmann::json& j) {
 static CaptureResult parseMixedBody(const std::vector<uint8_t>& body) {
     CaptureResult cr;
     if (body.size() <= 4) return cr;
-    uint32_t metaLen = itscam_os::netToHost32(*(const uint32_t*)body.data());
+    uint32_t metaLen = os::netToHost32(*(const uint32_t*)body.data());
     if (body.size() < 4 + metaLen) return cr;
     std::vector<uint8_t> metaRaw(body.begin() + 4, body.begin() + 4 + metaLen);
     nlohmann::json meta = bodyToJson(metaRaw);
@@ -816,8 +816,8 @@ struct ItscamClient::Impl {
     bool sendRaw(const std::vector<uint8_t>& data) {
         LockGuard<Mutex> lk(sendMtx);
         if (sock == ITSCAM_OS_INVALID_SOCKET) return false;
-        int64_t n = itscam_os::socketSend(sock, data.data(), data.size());
-        lastSentTime = itscam_os::monotonicNow();
+        int64_t n = os::socketSend(sock, data.data(), data.size());
+        lastSentTime = os::monotonicNow();
         if (n == -1) state.store(STOPPING);
         return n == (int64_t)data.size();
     }
@@ -917,16 +917,16 @@ struct ItscamClient::Impl {
         std::vector<uint8_t> rawBuf;
         size_t rawOffset = 0;
         uint8_t readBuf[TCP_BUF_SIZE];
-        uint64_t deadline = itscam_os::monotonicNow() + timeoutMs;
+        uint64_t deadline = os::monotonicNow() + timeoutMs;
 
-        while (itscam_os::monotonicNow() < deadline) {
-            uint64_t remaining = deadline - itscam_os::monotonicNow();
+        while (os::monotonicNow() < deadline) {
+            uint64_t remaining = deadline - os::monotonicNow();
             int waitMs = static_cast<int>(std::min(remaining, (uint64_t)1000));
-            int waitResult = itscam_os::socketWait(sock, waitMs, false);
+            int waitResult = os::socketWait(sock, waitMs, false);
             if (waitResult < 0) return Error{Error::ConnectionFailed, "socket error"};
             if (waitResult == 0) continue;
 
-            int64_t n = itscam_os::socketRead(sock, readBuf, TCP_BUF_SIZE);
+            int64_t n = os::socketRead(sock, readBuf, TCP_BUF_SIZE);
             if (n == 0) return Error{Error::ConnectionFailed, "socket disconnected"};
             if (n  < 0) return Error{Error::ConnectionFailed, "socket read error"};
 
@@ -1016,7 +1016,7 @@ struct ItscamClient::Impl {
             }
 
             state.store(RUNNING);
-            lastSentTime = itscam_os::monotonicNow();
+            lastSentTime = os::monotonicNow();
             hadSuccessfulSession = true;
             log(LogLevel::Info, "Connected");
             fireConnectionState(ConnectionState::Connected, "connected");
@@ -1061,10 +1061,10 @@ struct ItscamClient::Impl {
 
             // Interruptible sleep: check state every 100ms during the interval
             {
-                uint64_t sleepEnd = itscam_os::monotonicNow() + reconnectCfg.intervalMs;
-                while (itscam_os::monotonicNow() < sleepEnd) {
+                uint64_t sleepEnd = os::monotonicNow() + reconnectCfg.intervalMs;
+                while (os::monotonicNow() < sleepEnd) {
                     if (state.load() == DISCONNECTING) break;
-                    itscam_os::sleepForMs(100);
+                    os::sleepForMs(100);
                 }
                 if (state.load() == DISCONNECTING) break;
             }
@@ -1081,7 +1081,7 @@ struct ItscamClient::Impl {
             }
 
             state.store(RUNNING);
-            lastSentTime = itscam_os::monotonicNow();
+            lastSentTime = os::monotonicNow();
             log(LogLevel::Info, "Reconnected (TCP)");
 
             // Start a new handler thread for this connection
@@ -1122,7 +1122,7 @@ struct ItscamClient::Impl {
     void closeSocket() {
         LockGuard<Mutex> lk(sendMtx);
         if (sock != ITSCAM_OS_INVALID_SOCKET) {
-            itscam_os::socketClose(sock);
+            os::socketClose(sock);
             sock = ITSCAM_OS_INVALID_SOCKET;
         }
     }
@@ -1142,28 +1142,28 @@ struct ItscamClient::Impl {
     bool tryConnect() {
         {
             LockGuard<Mutex> lk(sendMtx);
-            sock = itscam_os::socketCreate();
+            sock = os::socketCreate();
             if (sock == ITSCAM_OS_INVALID_SOCKET) {
-                int err = itscam_os::socketErrno();
+                int err = os::socketErrno();
                 log(LogLevel::Error, "Socket creation failed (%d: %s)",
-                    err, itscam_os::socketStrerror(err));
+                    err, os::socketStrerror(err));
                 return false;
             }
         }
 
         // Set non-blocking mode for connect with timeout
-        itscam_os::socketSetNonblocking(sock, true);
-        int ret = itscam_os::socketConnect(sock, address.c_str(), port);
-        int connectErr = itscam_os::socketErrno();
+        os::socketSetNonblocking(sock, true);
+        int ret = os::socketConnect(sock, address.c_str(), port);
+        int connectErr = os::socketErrno();
         if (ret < 0 && connectErr != ITSCAM_SOCK_EINPROGRESS && connectErr != ITSCAM_SOCK_EWOULDBLOCK) {
-            log(LogLevel::Error, "Connect failed (%d: %s)", connectErr, itscam_os::socketStrerror(connectErr));
+            log(LogLevel::Error, "Connect failed (%d: %s)", connectErr, os::socketStrerror(connectErr));
             closeSocket();
             return false;
         }
 
         // Wait for connection to complete
         // socketWait returns: 1 = socket ready, 0 = timeout, -1 = error
-        int waitResult = itscam_os::socketWait(sock, 3000, true);  // 3 second timeout, check write
+        int waitResult = os::socketWait(sock, 3000, true);  // 3 second timeout, check write
         if (waitResult <= 0) {
             log(LogLevel::Error, "Connect timed out or error");
             closeSocket();
@@ -1171,15 +1171,15 @@ struct ItscamClient::Impl {
         }
 
         // Check for socket error
-        int sockErr = itscam_os::socketGetError(sock);
+        int sockErr = os::socketGetError(sock);
         if (sockErr != ITSCAM_SOCK_OK) {
-            log(LogLevel::Error, "Connect error: %s", itscam_os::socketStrerror(sockErr));
+            log(LogLevel::Error, "Connect error: %s", os::socketStrerror(sockErr));
             closeSocket();
             return false;
         }
 
         // Return to blocking mode for reads
-        itscam_os::socketSetNonblocking(sock, false);
+        os::socketSetNonblocking(sock, false);
         return true;
     }
 
@@ -1299,9 +1299,9 @@ struct ItscamClient::Impl {
         while (state.load() == RUNNING) {
             // Wait for data with 1 second timeout
             // socketWait returns: 1 = socket ready, 0 = timeout, -1 = error
-            int waitResult = itscam_os::socketWait(sock, 1000, false);  // 1000ms, check read
+            int waitResult = os::socketWait(sock, 1000, false);  // 1000ms, check read
             if (waitResult > 0) {
-                int64_t n = itscam_os::socketRead(sock, readBuf, TCP_BUF_SIZE);
+                int64_t n = os::socketRead(sock, readBuf, TCP_BUF_SIZE);
                 if (n > 0) {
                     if (rawOffset == rawBuf.size()) {
                         rawBuf.clear();
@@ -1340,16 +1340,16 @@ struct ItscamClient::Impl {
                     log(LogLevel::Error, "Socket disconnected");
                     state.store(STOPPING);
                 } else {
-                    int err = itscam_os::socketErrno();
+                    int err = os::socketErrno();
                     if (err != ITSCAM_SOCK_EWOULDBLOCK) {
-                        log(LogLevel::Error, "Socket error %d: %s", err, itscam_os::socketStrerror(err));
+                        log(LogLevel::Error, "Socket error %d: %s", err, os::socketStrerror(err));
                         state.store(STOPPING);
                     }
                 }
             }
 
             // Ping if idle
-            uint64_t now = itscam_os::monotonicNow();
+            uint64_t now = os::monotonicNow();
             uint64_t delta = now - lastSentTime;
             if (delta >= (uint64_t)pingInterval.load() * 1000) {
                 sendPing();
@@ -1549,7 +1549,7 @@ struct ItscamClient::Impl {
         LockGuard<Mutex> lk(cbMtx);
         if (!cbSerial) return;
         if (wm.body.size() <= 4) return;
-        uint32_t metaLen = itscam_os::netToHost32(*(const uint32_t*)wm.body.data());
+        uint32_t metaLen = os::netToHost32(*(const uint32_t*)wm.body.data());
         if (wm.body.size() < 4 + metaLen) return;
         std::vector<uint8_t> metaRaw(wm.body.begin() + 4,
                                       wm.body.begin() + 4 + metaLen);
@@ -1593,7 +1593,7 @@ struct ItscamClient::Impl {
             acc.rid = cr.info.requestId;
             acc.expectedCount = expLen;
             acc.frames.clear();
-            acc.firstFrameTimeMs = itscam_os::monotonicNow();
+            acc.firstFrameTimeMs = os::monotonicNow();
         }
 
         acc.frames.push_back(cr);
@@ -1713,7 +1713,7 @@ struct ItscamClient::Impl {
     // checkExposureGroupTimeouts -- flush stale partial groups
     // -----------------------------------------------------------------------
     void checkExposureGroupTimeouts() {
-        uint64_t now = itscam_os::monotonicNow();
+        uint64_t now = os::monotonicNow();
         uint64_t timeout = exposureGroupTimeoutMs.load();
         LockGuard<Mutex> lk(cbMtx);
 
@@ -2162,7 +2162,7 @@ Future<void> ItscamClient::connectAsync(const std::string& address,
     // Poll in a background thread for the connect state transition
     Thread([impl, pShared, timeoutMs]() {
         try {
-            auto start = itscam_os::monotonicNow();
+            auto start = os::monotonicNow();
             while (true) {
                 int st = impl->state.load();
                 if (st == Impl::RUNNING) {
@@ -2173,13 +2173,13 @@ Future<void> ItscamClient::connectAsync(const std::string& address,
                     pShared->set_value(Error{Error::ConnectionFailed, "connection failed"});
                     return;
                 }
-                auto elapsed = itscam_os::monotonicNow() - start;
+                auto elapsed = os::monotonicNow() - start;
                 if (elapsed >= timeoutMs) {
                     impl->state.store(Impl::STOPPING);
                     pShared->set_value(Error{Error::Timeout, "connect timed out"});
                     return;
                 }
-                itscam_os::sleepForMs(10);
+                os::sleepForMs(10);
             }
         } catch (...) {
             try { pShared->set_value(Error{Error::Unknown, "exception in connect poll"}); }
@@ -2201,7 +2201,7 @@ void ItscamClient::disconnect() {
     // Give threads some time to wind down
     for (int i = 0; i < 100 && mImpl->state.load() != Impl::STOPPED &&
                      mImpl->state.load() != Impl::IDLE; ++i) {
-        itscam_os::sleepForMs(20);
+        os::sleepForMs(20);
     }
     mImpl->closeSocket();
 }

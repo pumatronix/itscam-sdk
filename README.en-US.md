@@ -16,6 +16,21 @@ The SDK exposes three independent client classes across C++, C#, Python, Go, Jav
 
 ## Quick Links
 
+### Getting Started Tutorials
+
+Create a project from scratch and save your first image to disk - pick your language:
+
+| Language | Tutorial |
+| -------- | -------- |
+| C++ | [First image in C++](docs/tutorials/first-image-cpp.md) |
+| C# / .NET | [First image in C#](docs/tutorials/first-image-csharp.md) |
+| Python | [First image in Python](docs/tutorials/first-image-python.md) |
+| Go | [First image in Go](docs/tutorials/first-image-go.md) |
+| Java | [First image in Java](docs/tutorials/first-image-java.md) |
+| Node.js | [First image in Node.js](docs/tutorials/first-image-nodejs.md) |
+
+### Use Cases
+
 Choose a row by **what you want to do** and a column by **the language you ship in**. Every cell links to a runnable example.
 
 | Use case | C++ | C# / .NET | Python | Go | Java | Node.js |
@@ -24,6 +39,7 @@ Choose a row by **what you want to do** and a column by **the language you ship 
 | Trigger-burst recorder to disk | [`itscam_trigger_recorder.cpp`](src/examples/itscam_trigger_recorder.cpp) | -- | -- | -- | -- | -- |
 | Equipment / REST configuration (login required) | [`itscam_rest_example.cpp`](src/examples/itscam_rest_example.cpp) | [`CaptureExample/Program.cs`](src/wrappers/csharp/examples/CaptureExample/Program.cs) | [`rest_example.py`](src/wrappers/python/examples/rest_example.py) | [`rest_example.go`](src/wrappers/go/examples/rest_example.go) | [`RestExample.java`](src/wrappers/java/examples/src/main/java/com/pumatronix/itscam/examples/RestExample.java) | [`rest-example.js`](src/wrappers/nodejs/examples/rest-example.js) |
 | CGI snapshot / lastframe / MJPEG (auth optional) | [`itscam_cgi_example.cpp`](src/examples/itscam_cgi_example.cpp) | [`CaptureExample/Program.cs`](src/wrappers/csharp/examples/CaptureExample/Program.cs) | [`cgi_snapshot_example.py`](src/wrappers/python/examples/cgi_snapshot_example.py) | [`cgi_snapshot_example.go`](src/wrappers/go/examples/cgi_snapshot_example.go) | [`CgiSnapshotExample.java`](src/wrappers/java/examples/src/main/java/com/pumatronix/itscam/examples/CgiSnapshotExample.java) | [`cgi-snapshot-example.js`](src/wrappers/nodejs/examples/cgi-snapshot-example.js) |
+| Snapshot ↔ Freeflow swap (CGI + REST + RAC + voting) | [`itscam_snapshot_to_freeflow.cpp`](src/examples/itscam_snapshot_to_freeflow.cpp) | -- | [`snapshot_to_freeflow_example.py`](src/wrappers/python/examples/snapshot_to_freeflow_example.py) | -- | -- | -- |
 | HTTPS / TLS (REST + CGI, mbedTLS) | [`itscam_rest_example.cpp`](src/examples/itscam_rest_example.cpp) (`--https`) | [`CaptureExample/Program.cs`](src/wrappers/csharp/examples/CaptureExample/Program.cs) (`--https`) | [`cgi_snapshot_example.py`](src/wrappers/python/examples/cgi_snapshot_example.py) (`--https`) | [`cgi_snapshot_example.go`](src/wrappers/go/examples/cgi_snapshot_example.go) (`--https`) | [`RestExample.java`](src/wrappers/java/examples/src/main/java/com/pumatronix/itscam/examples/RestExample.java) (`--https`) | [`rest-example.js`](src/wrappers/nodejs/examples/rest-example.js) (`--https`) |
 | Desktop GUI viewer (Wails) | -- | -- | -- | [`gui/`](src/wrappers/go/examples/gui/) | -- | -- |
 
@@ -39,9 +55,9 @@ Reference docs by surface:
 
 Pick one of the paths below.
 
-### Option 1 — Pre-compiled package (integration)
+### Option 1 - Pre-compiled package (integration)
 
-The SDK is distributed as a pre-compiled package (`itscam-sdk-<version>.tar.gz`) containing headers, shared libraries, a NuGet, Python wheel, and Go module for linux-x64, win-x64, and win-x86. Download the desired version from the [releases page](https://github.com/pumatronix/itscam-sdk/releases), extract the package, and integrate directly into your project — no compilation needed:
+The SDK is distributed as a pre-compiled package (`itscam-sdk-<version>.tar.gz`) containing headers, shared libraries, a NuGet, Python wheel, and Go module for linux-x64, win-x64, and win-x86. Download the desired version from the [releases page](https://github.com/pumatronix/itscam-sdk/releases), extract the package, and integrate directly into your project - no compilation needed:
 
 ```bash
 tar xzf itscam-sdk-<version>.tar.gz
@@ -60,7 +76,7 @@ export SDK=$PWD
 
 Start with `README-sdk.en-US.md` inside the tarball (layout and per-language install). Full guide in [`docs/getting-started.en-US.md`](docs/getting-started.en-US.md).
 
-### Option 2 — Clone the repository and build
+### Option 2 - Clone the repository and build
 
 For contributors, debugging, or when you need the full source tree:
 
@@ -87,7 +103,7 @@ Run an example against the camera:
 
 | Language | Next step (source tree) |
 | -------- | ----------------------- |
-| **C++ / C** | Link against `src/core/build/linux/` — see [linking from the source tree](docs/getting-started.en-US.md#link-against-the-source-tree) |
+| **C++ / C** | Link against `src/core/build/linux/` - see [linking from the source tree](docs/getting-started.en-US.md#link-against-the-source-tree) |
 | **C# / .NET** | `make csharp` and examples under [`src/wrappers/csharp/examples/`](src/wrappers/csharp/examples/) |
 | **Python** | `make lib` + scripts under [`src/wrappers/python/examples/`](src/wrappers/python/examples/) |
 | **Go** | `make go-cgi-example` or [`src/wrappers/go/examples/`](src/wrappers/go/examples/) |
@@ -118,9 +134,9 @@ This repository ships [`AGENTS.md`](AGENTS.md), a short, scannable briefing for 
 | Topic | Quick rule |
 | ----- | ---------- |
 | Three clients | Cougar **:60000** for pipeline/capture; REST for equipment; CGI for HTTP image endpoints. |
-| Auth | REST always requires `login`; CGI is anonymous by default — do not add `cgi.login()` without opt-in. |
+| Auth | REST always requires `login`; CGI is anonymous by default - do not add `cgi.login()` without opt-in. |
 | New features | C++ core → C API → every wrapper; keep C# / Python / Go / Java / Node.js parity. |
-| REST types | Generated from `tools/codegen/spec/default.yaml` — run `make codegen`, do not hand-edit. |
+| REST types | Generated from `tools/codegen/spec/default.yaml` - run `make codegen`, do not hand-edit. |
 | Partial updates | Use `patchJson()` / `PatchJSON`; full profile PUT returns HTTP 500. |
 
 **Documentation assistant**
@@ -142,7 +158,7 @@ This README is intentionally concise. Chapter-style documentation lives under [`
 - Wrappers: [C++](docs/wrappers/cpp.md) -- [C# / .NET](docs/wrappers/csharp.md) -- [Python](docs/wrappers/python.md) -- [Go](docs/wrappers/go.md) -- [Java](docs/wrappers/java.en-US.md) -- [Node.js](docs/wrappers/nodejs.en-US.md).
 - [Adding a new wrapper](docs/adding-a-new-wrapper.en-US.md) -- canonical procedure for future bindings.
 - [Migration from CougarClient](docs/migration-cougar.md).
-- [`AGENTS.md`](AGENTS.md) — briefing for coding agents; see [Using AI Agents](#using-ai-agents).
+- [`AGENTS.md`](AGENTS.md) - briefing for coding agents; see [Using AI Agents](#using-ai-agents).
 - **[Documentation website](docs-site/)** -- VitePress site for GitHub Pages with an optional [Cloudflare AI Search](https://developers.cloudflare.com/ai-search/) assistant. See [`docs-site/README.md`](docs-site/README.md) for setup.
 
 ## Highlights
@@ -161,4 +177,6 @@ This README is intentionally concise. Chapter-style documentation lives under [`
 
 ## License and Contact
 
-Copyright (c) 2026 Pumatronix Equipamentos Eletrônicos. Proprietary software. Contact Pumatronix for licensing terms.
+Proprietary software.
+Copyright (c) 2026 Pumatronix Equipamentos Eletrônicos.
+Contact Pumatronix for licensing terms.

@@ -32,7 +32,8 @@
 #endif
 
 // Separate namespace to avoid conflicts with itscam::Timestamp in itscam_types.h
-namespace itscam_utils {
+namespace itscam {
+namespace utils {
 
 //=========================================================================
 // Timestamp
@@ -251,4 +252,5 @@ ITSCAM_UTILS_API char getPathSeparator();
  */
 ITSCAM_UTILS_API const char* getLastUtilError();
 
-} // namespace itscam_utils
+} // namespace utils
+} // namespace itscam

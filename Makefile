@@ -17,7 +17,7 @@
 # Copyright (c) 2026 Pumatronix
 
 .PHONY: all linux windows lib examples examples-windows wrappers clean help
-.PHONY: python-example python-rest-example python-cgi-example
+.PHONY: python-example python-rest-example python-cgi-example python-snapshot-to-freeflow-example
 .PHONY: go-example go-rest-example go-cgi-example go-examples go-examples-windows
 .PHONY: go-examples-windows-x86 go-gui go-gui-windows sdk-dist-examples
 .PHONY: csharp csharp-pack csharp-examples csharp-examples-publish csharp-examples-publish-all
@@ -114,6 +114,10 @@ python-rest-example:
 python-cgi-example:
 	@echo "=== Python CGI snapshot example ready ==="
 	@echo "Run: python $(SRC_DIR)/wrappers/python/examples/cgi_snapshot_example.py <host> [--user U --password P]"
+
+python-snapshot-to-freeflow-example:
+	@echo "=== Python snapshot-to-freeflow swap example ready ==="
+	@echo "Run: python $(SRC_DIR)/wrappers/python/examples/snapshot_to_freeflow_example.py <host> <user> <pass> [--rac-host H --rac-port P --profile-name N]"
 
 go-example: lib
 	@echo "=== Building Go example ==="

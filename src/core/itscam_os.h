@@ -55,7 +55,8 @@
 // OS Abstraction Namespace - Internal API
 //=========================================================================
 
-namespace itscam_os {
+namespace itscam {
+namespace os {
 
 //=========================================================================
 // Platform-specific Types
@@ -69,7 +70,7 @@ namespace itscam_os {
     using SocketHandle = void*;  // SOCKET is actually a pointer-sized handle
     // INVALID_SOCKET is (SOCKET)(~0) on Windows
     inline SocketHandle invalidSocket() { return reinterpret_cast<SocketHandle>(~static_cast<std::uintptr_t>(0)); }
-    #define ITSCAM_OS_INVALID_SOCKET (itscam_os::invalidSocket())
+    #define ITSCAM_OS_INVALID_SOCKET (itscam::os::invalidSocket())
 #else
     // POSIX types
     struct ThreadImpl;
@@ -77,7 +78,7 @@ namespace itscam_os {
     struct CondImpl;
     using SocketHandle = int;
     constexpr SocketHandle kInvalidSocket = -1;
-    #define ITSCAM_OS_INVALID_SOCKET (itscam_os::kInvalidSocket)
+    #define ITSCAM_OS_INVALID_SOCKET (itscam::os::kInvalidSocket)
 #endif
 
 // Opaque handles for thread primitives
@@ -626,6 +627,7 @@ inline uint64_t monotonicNow() {
     return monotonicMs();
 }
 
-}  // namespace itscam_os
+}  // namespace os
+}  // namespace itscam
 
 #endif  // ITSCAM_OS_H

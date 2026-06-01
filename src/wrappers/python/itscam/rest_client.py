@@ -231,6 +231,21 @@ class ItscamRestClient:
         raw = self.get(f"/api/image/profiles?id={profile_id}", timeout_ms)
         return self._list_from_dict(_rt.ProfileConfig, raw)
 
+    def get_profile_by_name(self, name: str,
+                            timeout_ms: int = 10000) -> _rt.ProfileConfig:
+        """Get a single profile by name (case-sensitive match).
+
+        Raises:
+            ItscamError: If no profile with the given name exists.
+        """
+        from .types import ItscamError, ErrorCode
+        profiles = self.get_profiles(timeout_ms)
+        for p in profiles:
+            if p.name == name:
+                return p
+        raise ItscamError(f'profile not found: "{name}"',
+                          ErrorCode.INVALID_PARAMETER)
+
     def create_profile(self, profile: _rt.ProfileConfig,
                        timeout_ms: int = 10000) -> _rt.ProfileConfig:
         raw = self.post("/api/image/profiles", profile.to_dict(), timeout_ms)
@@ -250,6 +265,19 @@ class ItscamRestClient:
         raw = self.put(f"/api/image/profiles/{profile_id}",
                        profile.to_dict(), timeout_ms)
         return _rt.ProfileConfig.from_dict(raw)
+
+    def update_profile_by_name(self, name: str,
+                               profile: _rt.ProfileConfig,
+                               timeout_ms: int = 10000) -> _rt.ProfileConfig:
+        """Update a profile found by name.
+
+        Looks up the profile by name, then PUTs the partial update to its id.
+
+        Raises:
+            ItscamError: If no profile with the given name exists.
+        """
+        found = self.get_profile_by_name(name, timeout_ms)
+        return self.update_profile_by_id(found.id, profile, timeout_ms)
 
     def update_profiles(self, profiles: List[_rt.ProfileConfig],
                         timeout_ms: int = 10000) -> _rt.ProfileConfig:

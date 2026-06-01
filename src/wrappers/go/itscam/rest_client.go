@@ -369,6 +369,29 @@ func (r *RestClient) DeleteProfile(id int, timeoutMs uint32) (string, error) {
 	return r.Delete(fmt.Sprintf("/api/image/profiles?id=%d", id), timeoutMs)
 }
 
+// GetProfileByName returns the first profile whose Name matches (case-sensitive).
+func (r *RestClient) GetProfileByName(name string, timeoutMs uint32) (ProfileConfig, error) {
+	profiles, err := r.GetProfiles(timeoutMs)
+	if err != nil {
+		return ProfileConfig{}, err
+	}
+	for _, p := range profiles {
+		if p.Name != nil && *p.Name == name {
+			return p, nil
+		}
+	}
+	return ProfileConfig{}, fmt.Errorf("profile not found: %q", name)
+}
+
+// UpdateProfileByName finds a profile by name and applies a partial update.
+func (r *RestClient) UpdateProfileByName(name string, p ProfileConfig, timeoutMs uint32) (ProfileConfig, error) {
+	found, err := r.GetProfileByName(name, timeoutMs)
+	if err != nil {
+		return ProfileConfig{}, err
+	}
+	return r.UpdateProfileById(int(found.ID), p, timeoutMs)
+}
+
 // ---- Equipment misc / volatile info ----------------------------------------
 
 func (r *RestClient) GetVolatileInfo(timeoutMs uint32) (MiscVolatile, error) {

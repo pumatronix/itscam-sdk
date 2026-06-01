@@ -551,7 +551,7 @@ class Shutter:
 
 
 @dataclass
-class Something:
+class MultipleExposuresConfig:
     """Multiple exposures configuration"""
 
     flash: Optional[Flash] = None
@@ -559,12 +559,12 @@ class Something:
     shutter: Optional[Shutter] = None
 
     @staticmethod
-    def from_dict(obj: Any) -> 'Something':
+    def from_dict(obj: Any) -> 'MultipleExposuresConfig':
         assert isinstance(obj, dict)
         flash = from_union([Flash.from_dict, from_none], obj.get("flash"))
         gain = from_union([SettingGain.from_dict, from_none], obj.get("gain"))
         shutter = from_union([Shutter.from_dict, from_none], obj.get("shutter"))
-        return Something(flash, gain, shutter)
+        return MultipleExposuresConfig(flash, gain, shutter)
 
     def to_dict(self) -> dict:
         result: dict = {}
@@ -580,13 +580,13 @@ class Something:
 @dataclass
 class MultipleExposures:
     enabled: Optional[bool] = None
-    settings: Optional[List[Something]] = None
+    settings: Optional[List[MultipleExposuresConfig]] = None
 
     @staticmethod
     def from_dict(obj: Any) -> 'MultipleExposures':
         assert isinstance(obj, dict)
         enabled = from_union([from_bool, from_none], obj.get("enabled"))
-        settings = from_union([lambda x: from_list(Something.from_dict, x), from_none], obj.get("settings"))
+        settings = from_union([lambda x: from_list(MultipleExposuresConfig.from_dict, x), from_none], obj.get("settings"))
         return MultipleExposures(enabled, settings)
 
     def to_dict(self) -> dict:
@@ -594,7 +594,7 @@ class MultipleExposures:
         if self.enabled is not None:
             result["enabled"] = from_union([from_bool, from_none], self.enabled)
         if self.settings is not None:
-            result["settings"] = from_union([lambda x: from_list(lambda x: to_class(Something, x), x), from_none], self.settings)
+            result["settings"] = from_union([lambda x: from_list(lambda x: to_class(MultipleExposuresConfig, x), x), from_none], self.settings)
         return result
 
 
@@ -2402,21 +2402,21 @@ class TypeEnum(Enum):
 
 @dataclass
 class Part:
-    content: str
+    data: str
     name: str
     type: TypeEnum
 
     @staticmethod
     def from_dict(obj: Any) -> 'Part':
         assert isinstance(obj, dict)
-        content = from_str(obj.get("content"))
+        data = from_str(obj.get("data"))
         name = from_str(obj.get("name"))
         type = TypeEnum(obj.get("type"))
-        return Part(content, name, type)
+        return Part(data, name, type)
 
     def to_dict(self) -> dict:
         result: dict = {}
-        result["content"] = from_str(self.content)
+        result["data"] = from_str(self.data)
         result["name"] = from_str(self.name)
         result["type"] = to_enum(TypeEnum, self.type)
         return result
@@ -2534,6 +2534,26 @@ class Persistency:
         return result
 
 
+@dataclass
+class TLS:
+    insecure: bool
+    mtls_key: Optional[str] = None
+
+    @staticmethod
+    def from_dict(obj: Any) -> 'TLS':
+        assert isinstance(obj, dict)
+        insecure = from_bool(obj.get("insecure"))
+        mtls_key = from_union([from_str, from_none], obj.get("mtlsKey"))
+        return TLS(insecure, mtls_key)
+
+    def to_dict(self) -> dict:
+        result: dict = {}
+        result["insecure"] = from_bool(self.insecure)
+        if self.mtls_key is not None:
+            result["mtlsKey"] = from_union([from_str, from_none], self.mtls_key)
+        return result
+
+
 class Scheme(Enum):
     HTTP = "http"
     HTTPS = "https"
@@ -2578,6 +2598,7 @@ class RESTAPIClientConfig:
     send_individual_requests: bool
     send_without_ocr: bool
     timeout: int
+    tls: TLS
     url: URL
 
     @staticmethod
@@ -2593,8 +2614,9 @@ class RESTAPIClientConfig:
         send_individual_requests = from_bool(obj.get("sendIndividualRequests"))
         send_without_ocr = from_bool(obj.get("sendWithoutOcr"))
         timeout = from_int(obj.get("timeout"))
+        tls = TLS.from_dict(obj.get("tls"))
         url = URL.from_dict(obj.get("url"))
-        return RESTAPIClientConfig(body, enabled, headers, jpeg, method, persistency, retries, send_individual_requests, send_without_ocr, timeout, url)
+        return RESTAPIClientConfig(body, enabled, headers, jpeg, method, persistency, retries, send_individual_requests, send_without_ocr, timeout, tls, url)
 
     def to_dict(self) -> dict:
         result: dict = {}
@@ -2608,6 +2630,7 @@ class RESTAPIClientConfig:
         result["sendIndividualRequests"] = from_bool(self.send_individual_requests)
         result["sendWithoutOcr"] = from_bool(self.send_without_ocr)
         result["timeout"] = from_int(self.timeout)
+        result["tls"] = to_class(TLS, self.tls)
         result["url"] = to_class(URL, self.url)
         return result
 
