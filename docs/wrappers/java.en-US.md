@@ -48,6 +48,8 @@ Then declare the dependency in your `pom.xml`:
 
 The native library is automatically extracted from the JAR to a temporary JVM directory on the first call.
 
+The packaged JAR is a fat / multi-arch artefact: `META-INF/native/` includes every platform produced by the builder (`linux-x86_64/`, `linux-arm/`, `linux-aarch64/`, `win-x86_64/`, `win-x86/`). The runtime loader picks the entry matching the current JVM's `os.name` + `os.arch`.
+
 ### Building from source (advanced)
 
 When working inside the SDK source tree:

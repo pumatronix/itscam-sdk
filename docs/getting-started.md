@@ -26,7 +26,7 @@ itscam-sdk-<version>/
 ├── README.en-US.md                  # mesmo hub, em inglês
 ├── AGENTS.md                        # briefing para AI coding agents
 ├── docs/                            # guias chapter-style (getting started, API, wrappers, ...)
-├── csharp/                          # NuGet multi-RID (linux-x64 + win-x64 + win-x86)
+├── csharp/                          # NuGet multi-RID (linux-x64 + linux-arm + linux-arm64 + win-x64 + win-x86)
 │   └── Pumatronix.Itscam.Sdk.<version>.nupkg
 ├── linux-x64/
 │   ├── cpp/
@@ -39,9 +39,13 @@ itscam-sdk-<version>/
 │   │   └── itscam-<version>.whl     # wheel com native lib embutida
 │   └── go/
 │       └── itscam-sdk-go/           # módulo Go com native lib em native/
+├── linux-arm/                       # mesma sub-estrutura, .so ARMv7 hard-float
+├── linux-arm64/                     # mesma sub-estrutura, .so ARMv8 / aarch64
 ├── win-x64/                         # mesma sub-estrutura (.dll + .a)
 └── win-x86/                         # idem, 32-bit
 ```
+
+> Os diretórios `linux-arm/` e `linux-arm64/` só estão presentes quando o tarball foi gerado em um host com os cross-toolchains Arm GNU 8.3-2019.03 instalados (caso padrão da imagem Docker oficial). Cobrem ITSCAM450 (ARMv7) e ITSCAM600 (ARMv8), respectivamente.
 
 ## Extrair o SDK
 

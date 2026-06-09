@@ -41,7 +41,7 @@ ITSCAM_VERSION=$(sed -n 's/.*"nugetVersion"[[:space:]]*:[[:space:]]*"\([^"]*\)".
 dotnet add package Pumatronix.Itscam.Sdk --version "$ITSCAM_VERSION"
 ```
 
-O NuGet já contém native binaries para linux-x64, win-x64 e win-x86. O MSBuild target file copia o binário correto para o output de build automaticamente.
+O NuGet já contém native binaries para linux-x64, linux-arm, linux-arm64, win-x64 e win-x86 (cada um quando o respectivo toolchain estava disponível no momento do pack). O MSBuild target file copia o binário correto para o output de build automaticamente.
 
 ### Build a partir do source (avançado)
 
@@ -54,15 +54,14 @@ make csharp-pack         # gera native binaries + produz o NuGet
 
 `make csharp-pack` produz `src/wrappers/csharp/nupkg/Pumatronix.Itscam.Sdk.<version>.nupkg` contendo o managed assembly e um native binary por **host RID** em `runtimes/<rid>/native/`. O RID descreve a máquina onde a aplicação .NET vai rodar (Linux x64, Windows x64, etc.) -- **não** a câmera ITSCAM, que recebe REST/CGI/binary pela rede e não roda o seu app.
 
-Por default o pack inclui os RIDs que o `Makefile` realmente builda:
+`make csharp-pack` auto-detecta os cross-toolchains disponíveis e roda `make lib-arm` / `make lib-arm64` / `make windows` antes de empacotar -- então o NuGet final inclui:
 
 - `linux-x64` -- gerado por `make lib`
+- `linux-arm` -- gerado por `make lib-arm` (cross Arm GNU-A 8.3-2019.03; ITSCAM450)
+- `linux-arm64` -- gerado por `make lib-arm64` (cross Arm GNU-A 8.3-2019.03; ITSCAM600)
 - `win-x64`, `win-x86` -- gerados por `make windows` (cross-compile MinGW)
 
-Slots adicionais existem no [`Itscam.Sdk.csproj`](../../src/wrappers/csharp/Itscam.Sdk/Itscam.Sdk.csproj) e são empacotados *somente se* você produzir os artefatos manualmente:
-
-- `linux-arm` -- precisa de `src/core/build/linux-arm/libitscam_sdk.so.*`
-- `linux-arm64` -- precisa de `src/core/build/linux-arm64/libitscam_sdk.so.*`
+Qualquer RID cujo toolchain não estiver no `PATH` é silenciosamente omitido do pacote final.
 
 Notas específicas do wrapper (convenções de P/Invoke, layout dos native binaries, MSBuild target file) ficam em [`src/wrappers/csharp/README.md`](../../src/wrappers/csharp/README.md).
 

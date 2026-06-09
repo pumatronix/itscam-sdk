@@ -41,7 +41,7 @@ ITSCAM_VERSION=$(sed -n 's/.*"nugetVersion"[[:space:]]*:[[:space:]]*"\([^"]*\)".
 dotnet add package Pumatronix.Itscam.Sdk --version "$ITSCAM_VERSION"
 ```
 
-The NuGet already contains native binaries for linux-x64, win-x64, and win-x86. The MSBuild target file automatically copies the correct native binary to the build output.
+The NuGet already contains native binaries for linux-x64, linux-arm, linux-arm64, win-x64, and win-x86 (each one when the respective cross-toolchain was available at pack time). The MSBuild target file automatically copies the correct native binary to the build output.
 
 ### Build from source (advanced)
 
@@ -54,15 +54,14 @@ make csharp-pack         # builds native binaries + produces a NuGet
 
 `make csharp-pack` produces `src/wrappers/csharp/nupkg/Pumatronix.Itscam.Sdk.<version>.nupkg` containing the managed assembly and a per-**host RID** native binary under `runtimes/<rid>/native/`. The RID describes the machine where the .NET application runs (Linux x64, Windows x64, etc.) -- **not** the ITSCAM camera, which is reached over the network via REST/CGI/binary and does not host your app.
 
-By default the pack ships the RIDs that the `Makefile` actually builds:
+`make csharp-pack` auto-detects the available cross-toolchains and runs `make lib-arm` / `make lib-arm64` / `make windows` before packing -- so the final NuGet includes:
 
 - `linux-x64` -- produced by `make lib`
+- `linux-arm` -- produced by `make lib-arm` (Arm GNU-A 8.3-2019.03 cross; ITSCAM450)
+- `linux-arm64` -- produced by `make lib-arm64` (Arm GNU-A 8.3-2019.03 cross; ITSCAM600)
 - `win-x64`, `win-x86` -- produced by `make windows` (MinGW cross-compile)
 
-Additional slots exist in [`Itscam.Sdk.csproj`](../../src/wrappers/csharp/Itscam.Sdk/Itscam.Sdk.csproj) and are packed *only if* you produce the binaries yourself:
-
-- `linux-arm` -- requires `src/core/build/linux-arm/libitscam_sdk.so.*`
-- `linux-arm64` -- requires `src/core/build/linux-arm64/libitscam_sdk.so.*`
+Any RID whose toolchain is not on `PATH` is silently omitted from the final package.
 
 Detailed wrapper-specific notes (P/Invoke conventions, native binary layout, MSBuild target file) live in [`src/wrappers/csharp/README.md`](../../src/wrappers/csharp/README.md).
 

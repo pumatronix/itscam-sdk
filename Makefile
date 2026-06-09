@@ -17,9 +17,12 @@
 # Copyright (c) 2026 Pumatronix
 
 .PHONY: all linux windows lib examples examples-windows wrappers clean help
+.PHONY: lib-arm lib-arm64 lib-linux-all examples-arm examples-arm64 examples-linux-all
+.PHONY: check-glibc qemu-smoke qemu-smoke-armhf qemu-smoke-arm64
 .PHONY: python-example python-rest-example python-cgi-example python-snapshot-to-freeflow-example
 .PHONY: go-example go-rest-example go-cgi-example go-examples go-examples-windows
 .PHONY: go-examples-windows-x86 go-gui go-gui-windows sdk-dist-examples
+.PHONY: go-examples-arm go-examples-arm64 go-examples-linux-all
 .PHONY: csharp csharp-pack csharp-examples csharp-examples-publish csharp-examples-publish-all
 .PHONY: csharp-mjpeg-grabber-example csharp-software-trigger-example
 .PHONY: java java-pack java-examples
@@ -27,6 +30,7 @@
 .PHONY: install
 .PHONY: version sdk-dist sdk-dist-clean docker-sdk-dist docker-sdk-dist-examples
 .PHONY: docker-build docker-all docker-linux docker-windows docker-shell docker-go-gui
+.PHONY: docker-linux-arm docker-linux-arm64 docker-linux-all docker-qemu-smoke
 .PHONY: docker-csharp docker-csharp-examples docker-csharp-examples-publish
 .PHONY: docker-java docker-java-pack docker-nodejs docker-nodejs-pack
 .PHONY: regression-examples docker-regression-examples
@@ -80,6 +84,36 @@ lib: version
 
 linux: lib
 
+# ARM cross-compiled core library.  Requires the Arm GNU-A 8.3-2019.03
+# toolchains under /opt/cross/{armhf,arm64} (see Dockerfile) or pass
+# ARMHF_TOOLCHAIN_PATH / ARM64_TOOLCHAIN_PATH on the command line.
+lib-arm: version
+	@echo "=== Building core library (Linux ARMv7) ==="
+	$(MAKE) -C $(SRC_DIR)/core linux-arm
+
+lib-arm64: version
+	@echo "=== Building core library (Linux ARMv8 / aarch64) ==="
+	$(MAKE) -C $(SRC_DIR)/core linux-arm64
+
+lib-linux-all: lib lib-arm lib-arm64
+
+# Re-verify the glibc floor of every .so already under src/core/build/.
+check-glibc:
+	$(MAKE) -C $(SRC_DIR)/core check-glibc
+
+# Run ARM-cross-compiled examples under qemu-user-static.  Requires the
+# armhf / aarch64 binaries (make examples-arm / examples-arm64 / go-examples-arm*)
+# and qemu-user-static + the matching sysroots (installed in the Docker
+# builder image).
+qemu-smoke:
+	$(CURDIR)/tools/qemu-smoke.sh
+
+qemu-smoke-armhf:
+	$(CURDIR)/tools/qemu-smoke.sh armhf
+
+qemu-smoke-arm64:
+	$(CURDIR)/tools/qemu-smoke.sh arm64
+
 windows:
 	@echo "=== Building core library (Windows) ==="
 	$(MAKE) -C $(SRC_DIR)/core windows
@@ -91,6 +125,16 @@ windows:
 examples: lib
 	@echo "=== Building C++ examples ==="
 	$(MAKE) -C $(SRC_DIR)/examples
+
+examples-arm: lib-arm
+	@echo "=== Cross-compiling C++ examples for Linux ARMv7 ==="
+	$(MAKE) -C $(SRC_DIR)/examples linux-arm
+
+examples-arm64: lib-arm64
+	@echo "=== Cross-compiling C++ examples for Linux ARMv8 ==="
+	$(MAKE) -C $(SRC_DIR)/examples linux-arm64
+
+examples-linux-all: examples examples-arm examples-arm64
 
 examples-windows: windows
 	@echo "=== Cross-compiling C++ examples for Windows ==="
@@ -215,6 +259,45 @@ go-examples-windows-x86: windows
 	CGO_CFLAGS="-I$(CURDIR)/$(SRC_DIR)/core" \
 	go build -o build/win-x86/cgi_snapshot_example.exe cgi_snapshot_example.go
 
+# Cross-compile Go CLI examples for Linux ARMv7 (used by sdk-dist).
+# Requires CC override -- the Arm GNU 8.3-2019.03 cross-compiler shipped
+# in the builder image.  GOARM=7 matches the ITSCAM450 hard-float ABI.
+ARMHF_TOOLCHAIN_PATH ?= /opt/cross/armhf/bin
+ARM64_TOOLCHAIN_PATH ?= /opt/cross/arm64/bin
+
+go-examples-arm: lib-arm
+	@echo "=== Building Go CLI examples (Linux ARMv7) ==="
+	@if ! command -v go > /dev/null; then \
+		echo "Go not found. Install go to build Go examples."; exit 1; \
+	fi
+	@mkdir -p $(GO_EXAMPLES_DIR)/build/linux-arm
+	@cd $(GO_EXAMPLES_DIR) && \
+	for prog in capture_example rest_example cgi_snapshot_example; do \
+	    CGO_ENABLED=1 GOOS=linux GOARCH=arm GOARM=7 \
+	    CC=$(ARMHF_TOOLCHAIN_PATH)/arm-linux-gnueabihf-gcc \
+	    CGO_LDFLAGS="-L$(CURDIR)/$(SRC_DIR)/core/build/linux-arm" \
+	    CGO_CFLAGS="-I$(CURDIR)/$(SRC_DIR)/core" \
+	    go build -o build/linux-arm/$$prog $$prog.go || exit 1; \
+	done
+
+# Cross-compile Go CLI examples for Linux ARMv8 / aarch64 (used by sdk-dist).
+go-examples-arm64: lib-arm64
+	@echo "=== Building Go CLI examples (Linux ARMv8) ==="
+	@if ! command -v go > /dev/null; then \
+		echo "Go not found. Install go to build Go examples."; exit 1; \
+	fi
+	@mkdir -p $(GO_EXAMPLES_DIR)/build/linux-arm64
+	@cd $(GO_EXAMPLES_DIR) && \
+	for prog in capture_example rest_example cgi_snapshot_example; do \
+	    CGO_ENABLED=1 GOOS=linux GOARCH=arm64 \
+	    CC=$(ARM64_TOOLCHAIN_PATH)/aarch64-linux-gnu-gcc \
+	    CGO_LDFLAGS="-L$(CURDIR)/$(SRC_DIR)/core/build/linux-arm64" \
+	    CGO_CFLAGS="-I$(CURDIR)/$(SRC_DIR)/core" \
+	    go build -o build/linux-arm64/$$prog $$prog.go || exit 1; \
+	done
+
+go-examples-linux-all: go-examples go-examples-arm go-examples-arm64
+
 # ============================================================================
 #  C# Wrapper
 # ============================================================================
@@ -231,9 +314,9 @@ csharp: lib
 
 # Produce a NuGet package containing native binaries for every platform
 # in $(SRC_DIR)/core/build/<rid>/.  Builds the Linux artefacts first;
-# cross-compiles for Windows when MinGW is available.  Optional ARM
-# toolchains may be wired in by extending the lib-arm / lib-arm64
-# targets below.
+# cross-compiles for Windows when MinGW is available and for ARM when
+# the Arm GNU-A toolchains are installed.  Missing native binaries are
+# silently skipped by the .csproj packaging rules.
 csharp-pack: lib
 	@echo "=== Packing C# wrapper ==="
 	@if ! command -v dotnet > /dev/null; then \
@@ -242,6 +325,12 @@ csharp-pack: lib
 	@if command -v x86_64-w64-mingw32-g++ > /dev/null || \
 	    command -v i686-w64-mingw32-g++ > /dev/null; then \
 		$(MAKE) windows; \
+	fi
+	@if [ -x "$(ARMHF_TOOLCHAIN_PATH)/arm-linux-gnueabihf-g++" ]; then \
+		$(MAKE) lib-arm; \
+	fi
+	@if [ -x "$(ARM64_TOOLCHAIN_PATH)/aarch64-linux-gnu-g++" ]; then \
+		$(MAKE) lib-arm64; \
 	fi
 	@rm -rf $(CURDIR)/$(SRC_DIR)/wrappers/csharp/nupkg
 	@mkdir -p $(CURDIR)/$(SRC_DIR)/wrappers/csharp/nupkg
@@ -347,8 +436,27 @@ java: lib
 		echo "Use 'make docker-java' to build inside the Docker container."; \
 	fi
 
-java-pack: java
-	@echo "=== Java wrapper packaged ==="
+# java-pack is the "fat JAR" target -- build every native we can so the
+# resulting JAR is portable to every supported os/arch combination.
+# Missing toolchains are skipped silently; the staging helper drops the
+# matching META-INF/native/<os>-<arch>/ entries when their .so is gone.
+java-pack: lib
+	@echo "=== Packing Java wrapper (multi-arch JAR) ==="
+	@if ! command -v $(MAVEN) > /dev/null; then \
+		echo "$(MAVEN) not found. Install Maven 3.9+ first."; exit 1; \
+	fi
+	@if [ -x "$(ARMHF_TOOLCHAIN_PATH)/arm-linux-gnueabihf-g++" ]; then \
+		$(MAKE) lib-arm; \
+	fi
+	@if [ -x "$(ARM64_TOOLCHAIN_PATH)/aarch64-linux-gnu-g++" ]; then \
+		$(MAKE) lib-arm64; \
+	fi
+	@if command -v x86_64-w64-mingw32-g++ > /dev/null || \
+	    command -v i686-w64-mingw32-g++ > /dev/null; then \
+		$(MAKE) windows; \
+	fi
+	@$(CURDIR)/tools/packaging/stage-java-natives.sh
+	@cd $(JAVA_DIR) && $(MAVEN) -pl itscam-sdk -am package -DskipTests $(MAVEN_REVISION)
 	@echo "  $(JAVA_DIR)/itscam-sdk/target/itscam-sdk-*.jar"
 	@echo "  Native binaries embedded under META-INF/native/<os>-<arch>/"
 
@@ -403,6 +511,17 @@ nodejs: lib
 
 nodejs-pack: nodejs
 	@echo "=== Packing Node.js wrapper (npm pack) ==="
+	@if [ -x "$(ARMHF_TOOLCHAIN_PATH)/arm-linux-gnueabihf-g++" ]; then \
+		$(MAKE) lib-arm; \
+	fi
+	@if [ -x "$(ARM64_TOOLCHAIN_PATH)/aarch64-linux-gnu-g++" ]; then \
+		$(MAKE) lib-arm64; \
+	fi
+	@if command -v x86_64-w64-mingw32-g++ > /dev/null || \
+	    command -v i686-w64-mingw32-g++ > /dev/null; then \
+		$(MAKE) windows; \
+	fi
+	@$(CURDIR)/tools/packaging/stage-nodejs-natives.sh
 	@if command -v $(NPM) > /dev/null; then \
 		$(CURDIR)/tools/packaging/npm-pack-versioned.sh; \
 		echo "Tarball:"; \
@@ -675,6 +794,22 @@ docker-all: docker-build
 docker-linux: docker-build
 	@echo "=== Building Linux library inside Docker ==="
 	$(DOCKER_RUN) $(DOCKER_IMAGE) make lib
+
+docker-linux-arm: docker-build
+	@echo "=== Cross-compiling Linux ARMv7 library inside Docker ==="
+	$(DOCKER_RUN) $(DOCKER_IMAGE) make lib-arm
+
+docker-linux-arm64: docker-build
+	@echo "=== Cross-compiling Linux ARMv8 library inside Docker ==="
+	$(DOCKER_RUN) $(DOCKER_IMAGE) make lib-arm64
+
+docker-linux-all: docker-build
+	@echo "=== Building all Linux libs (x64 + ARMv7 + ARMv8) inside Docker ==="
+	$(DOCKER_RUN) $(DOCKER_IMAGE) make lib-linux-all
+
+docker-qemu-smoke: docker-build
+	@echo "=== Running qemu smoke tests inside Docker ==="
+	$(DOCKER_RUN) $(DOCKER_IMAGE) bash -c 'make examples-arm examples-arm64 go-examples-arm go-examples-arm64 && make qemu-smoke'
 
 docker-windows: docker-build
 	@echo "=== Cross-compiling for Windows inside Docker ==="

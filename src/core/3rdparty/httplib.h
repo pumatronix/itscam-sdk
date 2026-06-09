@@ -4421,8 +4421,12 @@ inline bool mmap::open(const char *path) {
   }
   size_ = static_cast<size_t>(size.QuadPart);
 
-  hMapping_ =
-      ::CreateFileMappingFromApp(hFile_, NULL, PAGE_READONLY, size_, NULL);
+  // Use classic Win32 mapping APIs (the "FromApp" variants are absent from
+  // older mingw-w64 import libs and require linking mincore/onecore on MSVC).
+  hMapping_ = ::CreateFileMappingW(
+      hFile_, NULL, PAGE_READONLY,
+      static_cast<DWORD>((static_cast<ULONGLONG>(size_) >> 32) & 0xFFFFFFFFu),
+      static_cast<DWORD>(static_cast<ULONGLONG>(size_) & 0xFFFFFFFFu), NULL);
 
   // Special treatment for an empty file...
   if (hMapping_ == NULL && size_ == 0) {
@@ -4436,7 +4440,7 @@ inline bool mmap::open(const char *path) {
     return false;
   }
 
-  addr_ = ::MapViewOfFileFromApp(hMapping_, FILE_MAP_READ, 0, 0);
+  addr_ = ::MapViewOfFile(hMapping_, FILE_MAP_READ, 0, 0, 0);
 
   if (addr_ == nullptr) {
     close();

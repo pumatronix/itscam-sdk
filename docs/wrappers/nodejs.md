@@ -31,6 +31,8 @@ const { ItscamCgiClient } = require('@pumatronix/itscam-sdk');
 
 A native lib é resolvida automaticamente; nenhum `LD_LIBRARY_PATH` é necessário.
 
+O tarball npm é um pacote único cuja árvore `native/` inclui todas as plataformas produzidas pelo builder (`linux-x64/`, `linux-arm/`, `linux-arm64/`, `win-x64/`, `win-x86/`). O loader em runtime escolhe a `libitscam_sdk.so` / `itscam_sdk.dll` correta em `native/<platform>-<arch>/` no momento do `require`.
+
 ### Build a partir do source (avançado)
 
 Se você está desenvolvendo dentro do source tree do SDK:

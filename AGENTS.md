@@ -89,15 +89,28 @@ Reference: [`docs/https-tls.md`](docs/https-tls.md).
 
 ```bash
 make version                # regenerate version metadata (git tag + sha + date)
-make lib                  # build libitscam_sdk.{so,a}
-make examples             # build the four C++ examples
+make lib                  # build libitscam_sdk.{so,a} (linux-x64)
+make lib-arm              # cross-compile libitscam_sdk.so for Linux ARMv7 (ITSCAM450)
+make lib-arm64            # cross-compile libitscam_sdk.so for Linux ARMv8 (ITSCAM600)
+make lib-linux-all        # lib + lib-arm + lib-arm64
+make windows              # cross-compile for Windows (win-x64 + win-x86)
+make examples             # build the four C++ examples (linux-x64)
+make examples-arm         # cross-build C++ examples for Linux ARMv7
+make examples-arm64       # cross-build C++ examples for Linux ARMv8
+make check-glibc          # assert every built .so respects its GLIBC floor
+make qemu-smoke           # run ARM-cross-compiled binaries under qemu-user-static
 make csharp               # build Itscam.Sdk.dll
-make csharp-pack          # produce a multi-RID NuGet
+make csharp-pack          # produce a multi-RID NuGet (includes ARM if cross-toolchains are available)
 make go-cgi-example       # build the Go CGI example (needs `go` in PATH)
+make go-examples-arm      # cross-build Go examples for Linux ARMv7
+make go-examples-arm64    # cross-build Go examples for Linux ARMv8
 make docker-all           # everything inside the reproducible builder image
-make sdk-dist             # consumer tar.gz (cpp/c/csharp/python/go)
+make docker-linux-all     # linux-x64 + linux-arm + linux-arm64 in one Docker invocation
+make sdk-dist             # consumer tar.gz (cpp/c/csharp/python/go) for every platform built
 make docker-sdk-dist      # same, inside Docker
 ```
+
+The Docker builder image ships the Arm GNU-A **8.3-2019.03** cross-toolchains (armhf + aarch64, glibc floor 2.28) plus `qemu-user-static`. The linux-x64 floor is GLIBC 2.27 (Ubuntu 18.04 base). `tools/check-glibc.sh` enforces both -- bumping a floor requires updating the Dockerfile (base image) or the toolchain version together with the per-target `GLIBC_FLOOR_*` variables in `src/core/Makefile`.
 
 After any C / C++ change run `make -C src/core linux` (fast incremental build) and `make examples` to confirm the linker is happy. After any wrapper change rebuild that wrapper's example.
 

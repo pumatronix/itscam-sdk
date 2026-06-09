@@ -29,6 +29,16 @@ CGO_CFLAGS="-I$SDK/linux-x64/go/itscam-sdk-go/include" \
     go build -tags static -o my-app main.go
 ```
 
+For other platforms, swap `linux-x64` for `linux-arm` (ITSCAM450 / ARMv7) or `linux-arm64` (ITSCAM600 / ARMv8). Cross-compilation uses `CGO_ENABLED=1`, `GOOS=linux`, `GOARCH=arm GOARM=7` (or `arm64`) and the matching cross-compiler in `CC=`:
+
+```bash
+CGO_ENABLED=1 GOOS=linux GOARCH=arm GOARM=7 \
+    CC=/opt/cross/armhf/bin/arm-linux-gnueabihf-gcc \
+    CGO_LDFLAGS="-L$SDK/linux-arm/cpp/lib" \
+    CGO_CFLAGS="-I$SDK/linux-arm/cpp/include" \
+    go build -o my-app-armv7 main.go
+```
+
 ### Build from source (advanced)
 
 If you are developing inside the SDK source tree:

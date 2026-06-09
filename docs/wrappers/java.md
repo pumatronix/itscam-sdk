@@ -48,6 +48,8 @@ Depois disso, declare no seu `pom.xml`:
 
 A native lib é extraída automaticamente do JAR para um diretório temporário do JVM na primeira chamada.
 
+O JAR empacotado é um artefato fat / multi-arch: `META-INF/native/` inclui todas as plataformas produzidas pelo builder (`linux-x86_64/`, `linux-arm/`, `linux-aarch64/`, `win-x86_64/`, `win-x86/`). O loader em runtime escolhe a entrada que combina com `os.name` + `os.arch` da JVM atual.
+
 ### Build a partir do source (avançado)
 
 Se você está desenvolvendo dentro do source tree do SDK:

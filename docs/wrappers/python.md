@@ -20,6 +20,16 @@ python -c "import itscam; print(itscam.get_version())"
 
 A wheel já embute `libitscam_sdk.so` -- nenhuma configuração de `LD_LIBRARY_PATH` é necessária.
 
+Wheels também são geradas para ARM (instale o diretório correspondente):
+
+| Plataforma | Wheel | Tag |
+| ---------- | ----- | --- |
+| Linux x86_64 | `linux-x64/python/itscam-*-py3-none-any.whl` | `any` |
+| Linux ARMv7 hard-float (ITSCAM450) | `linux-arm/python/itscam-*-manylinux2014_armv7l.whl` | `manylinux2014_armv7l` |
+| Linux ARMv8 / aarch64 (ITSCAM600) | `linux-arm64/python/itscam-*-manylinux2014_aarch64.whl` | `manylinux2014_aarch64` |
+| Windows x64 | `win-x64/python/itscam-*-win_amd64.whl` | `win_amd64` |
+| Windows x86 | `win-x86/python/itscam-*-win32.whl` | `win32` |
+
 ### A partir do source (avançado)
 
 Se você está desenvolvendo no source tree do SDK:
