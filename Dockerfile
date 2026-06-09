@@ -27,7 +27,10 @@ ARG GO_VERSION=1.25.6
 ARG GO_SHA256=f022b6aad78e362bcba9b0b94d09ad58c5a70c6ba3b7582905fababf5fe0181a
 ARG WAILS_VERSION=v2.11.0
 ARG NODE_VERSION=20.18.2
-ARG NODE_SHA256=4e50f727ae09bdafecf2322c72faf7cd82bf3b8851a16b8bb63974e0d8d6eceb
+# Ubuntu 18.04 ships glibc 2.27, but the official nodejs.org binaries for
+# Node 18+ require GLIBC_2.28. Use the nodejs/unofficial-builds glibc-217
+# variant, which is built against glibc 2.17 and runs on every glibc >= 2.17.
+ARG NODE_SHA256=51d7eb3a14d0e148ced83771495a0b8baf9de634b8de22dd48efdd0633a08822
 ARG MAVEN_VERSION=3.9.9
 ARG MAVEN_SHA512=a555254d6b53d267965a3404ecb14e53c3827c09c3b94b5678835887ab404556bfaf78dcfe03ba76fa2508649dca8531c74bca4d5846513522404d48e8c4ac8b
 
@@ -139,14 +142,17 @@ RUN set -eux; \
 #  Install Node.js (for the OpenAPI -> typed REST helpers code generator)
 # =============================================================================
 #
-# Node lives under /opt/node-<ver> and is exposed system-wide via PATH so
-# `make codegen` works for any user inside the container.  We do not rely on
-# the distribution package because Ubuntu 20.04 ships an outdated Node.
+# Node lives under /opt/node and is exposed system-wide via PATH so
+# `make codegen` (and docs-sync) work for any user inside the container.
+# We pull from unofficial-builds.nodejs.org because the official builds
+# require GLIBC_2.28 (see NODE_SHA256 comment above) and would fail at
+# runtime on this bionic base with:
+#   node: /lib/x86_64-linux-gnu/libc.so.6: version `GLIBC_2.28' not found
 RUN set -eux; \
-    curl -fsSLo /tmp/node.tar.xz "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-x64.tar.xz"; \
+    curl -fsSLo /tmp/node.tar.xz "https://unofficial-builds.nodejs.org/download/release/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-x64-glibc-217.tar.xz"; \
     echo "${NODE_SHA256}  /tmp/node.tar.xz" | sha256sum -c -; \
     tar -C /opt -xf /tmp/node.tar.xz; \
-    mv /opt/node-v${NODE_VERSION}-linux-x64 /opt/node; \
+    mv /opt/node-v${NODE_VERSION}-linux-x64-glibc-217 /opt/node; \
     rm -f /tmp/node.tar.xz
 
 # =============================================================================
