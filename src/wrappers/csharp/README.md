@@ -29,6 +29,10 @@ src/wrappers/csharp/
     Exceptions.cs                # ItscamException hierarchy
     build/Itscam.Sdk.targets     # native-binary copy logic
   examples/CaptureExample/       # net6.0 console example
+  examples/BinaryCaptureExample/ # Cougar binary client end-to-end
+  examples/MjpegGrabberExample/  # MJPEG streaming over CGI
+  examples/SoftwareTriggerSnapshotExample/ # software trigger via REST/CGI
+  examples/ProfileConfigExample/ # REST profile + MJPEG config + consume
   Itscam.Sdk.sln
   README.md
 ```

@@ -389,6 +389,9 @@ csharp-examples-publish: lib
 	@dotnet publish -c Release -r $(CSHARP_RID) --self-contained true \
 	    -p:PublishSingleFile=true \
 	    $(SRC_DIR)/wrappers/csharp/examples/BinaryCaptureExample/BinaryCaptureExample.csproj
+	@dotnet publish -c Release -r $(CSHARP_RID) --self-contained true \
+	    -p:PublishSingleFile=true \
+	    $(SRC_DIR)/wrappers/csharp/examples/ProfileConfigExample/ProfileConfigExample.csproj
 	@echo "Binaries in examples/*/bin/Release/net8.0/$(CSHARP_RID)/publish/"
 
 # Publish self-contained C# examples for every platform in the SDK dist.
@@ -912,6 +915,8 @@ clean:
 	        $(SRC_DIR)/wrappers/csharp/examples/SoftwareTriggerSnapshotExample/obj
 	@rm -rf $(SRC_DIR)/wrappers/csharp/examples/BinaryCaptureExample/bin \
 	        $(SRC_DIR)/wrappers/csharp/examples/BinaryCaptureExample/obj
+	@rm -rf $(SRC_DIR)/wrappers/csharp/examples/ProfileConfigExample/bin \
+	        $(SRC_DIR)/wrappers/csharp/examples/ProfileConfigExample/obj
 	@rm -rf $(SRC_DIR)/wrappers/csharp/nupkg
 	@rm -rf $(SRC_DIR)/wrappers/java/itscam-sdk/target \
 	        $(SRC_DIR)/wrappers/java/examples/target \

@@ -136,3 +136,12 @@ dotnet run -- 192.168.254.254 --https --insecure --user admin --password 1234
 ```
 
 CGI is always exercised; the REST section is skipped when no credentials are supplied (REST always requires auth).
+
+For an **equipment-configuration** focused scenario (program the Diurno/Noturno profiles with continuous trigger, tune the MJPEG stream, then consume its frames), see [`src/wrappers/csharp/examples/ProfileConfigExample/`](../../src/wrappers/csharp/examples/ProfileConfigExample/):
+
+```bash
+cd src/wrappers/csharp/examples/ProfileConfigExample
+dotnet run -- 192.168.254.254 --user admin --password 1234 \
+              --day-profile Diurno --night-profile Noturno \
+              --stream-seconds 5
+```

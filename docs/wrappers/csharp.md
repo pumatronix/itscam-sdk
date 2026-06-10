@@ -137,6 +137,15 @@ dotnet run -- 192.168.254.254 --https --insecure --user admin --password 1234
 
 A parte de CGI sempre é executada; a parte de REST é pulada quando credentials não são fornecidas (REST sempre exige auth).
 
+Para um cenário focado em **equipment configuration** (programar profiles Diurno/Noturno com trigger contínuo, ajustar o MJPEG stream e consumir os frames), veja [`src/wrappers/csharp/examples/ProfileConfigExample/`](../../src/wrappers/csharp/examples/ProfileConfigExample/):
+
+```bash
+cd src/wrappers/csharp/examples/ProfileConfigExample
+dotnet run -- 192.168.254.254 --user admin --password 1234 \
+              --day-profile Diurno --night-profile Noturno \
+              --stream-seconds 5
+```
+
 ## Tutorial passo a passo
 
 Para um walkthrough do zero (criar `dotnet new console`, referenciar o SDK e salvar a primeira imagem em disco), veja [Primeira imagem com C#](../tutorials/first-image-csharp.md).

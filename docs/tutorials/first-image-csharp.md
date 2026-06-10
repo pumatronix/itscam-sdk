@@ -152,6 +152,6 @@ Detalhe completo (auto-reconnect, exposure groups, eventos de trigger contínuos
 ## Próximos passos
 
 - [Guia do wrapper C#](../wrappers/csharp.md) -- API completa.
-- [Examples C#](../../src/wrappers/csharp/examples/) -- `CaptureExample`, `MjpegGrabberExample`, `SoftwareTriggerSnapshotExample`.
+- [Examples C#](../../src/wrappers/csharp/examples/) -- `CaptureExample`, `MjpegGrabberExample`, `SoftwareTriggerSnapshotExample`, `ProfileConfigExample`.
 - [HTTPS / TLS](../https-tls.md) -- configurar mbedTLS para produção.
 - [Codegen REST](../codegen.md) -- regenerar `RestTypes.g.cs` para um firmware específico.
