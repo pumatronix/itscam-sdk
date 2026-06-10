@@ -20,9 +20,12 @@
 
 #include <cstdint>
 #include <cstddef>
+#include <functional>
 #include <memory>
+#include <string>
 #include <tuple>
 #include <utility>
+#include <vector>
 
 //=========================================================================
 // Platform Detection
@@ -626,6 +629,140 @@ inline void yield() {
 inline uint64_t monotonicNow() {
     return monotonicMs();
 }
+
+//=========================================================================
+// Filesystem Helpers (internal)
+//=========================================================================
+//
+// Minimal cross-platform filesystem manipulation used by the SDK core.
+// Paths are UTF-8 at the API boundary (Windows uses MultiByteToWideChar
+// to translate to wide-char Win32 calls).
+//
+// These helpers are intentionally narrow: only what the SDK itself needs
+// to read/write files alongside the camera (snapshots, recordings,
+// trigger logs, etc.).  They are not part of the public C API.
+
+namespace fs {
+
+/** @brief Filesystem entry metadata returned by stat() / listDir() / walk(). */
+struct FileInfo {
+    std::string  name;          ///< Basename, no directory part
+    std::string  absPath;       ///< Canonical absolute path (UTF-8)
+    std::uint64_t size = 0;     ///< Size in bytes (0 for directories)
+    std::int64_t mtimeMs = 0;   ///< Last-modified time, ms since Unix epoch UTC
+    bool         isDirectory = false;
+};
+
+/** @brief Ordering option for listDir() and walk()-collected results. */
+enum class Sort {
+    None = 0,
+    NameAsc,
+    NameDesc,
+    TimeAsc,
+    TimeDesc,
+};
+
+// Predicates --------------------------------------------------------------
+
+/** @brief Return true if @p path exists (file, directory or symlink target). */
+bool exists(const std::string& path);
+
+/** @brief Return true if @p path exists and is a directory. */
+bool isDir(const std::string& path);
+
+/** @brief Return true if @p path exists and is a regular file. */
+bool isFile(const std::string& path);
+
+// Create / delete / move --------------------------------------------------
+
+/** @brief Create a single directory.  Parent must exist.  Returns false on error. */
+bool mkdir(const std::string& path);
+
+/** @brief Create @p path and all missing parents (mkdir -p). */
+bool mkpath(const std::string& path);
+
+/** @brief Rename or move @p from to @p to.  Works across files and directories. */
+bool rename(const std::string& from, const std::string& to);
+
+/** @brief Delete a single regular file.  Returns false if missing or on error. */
+bool removeFile(const std::string& path);
+
+/**
+ * @brief Recursively remove a directory tree.
+ * @param path      Directory to remove.
+ * @param emptyOnly If true, only delete the contents of @p path and keep
+ *                  the directory itself.
+ */
+bool removeTree(const std::string& path, bool emptyOnly = false);
+
+// Copy / link -------------------------------------------------------------
+
+/** @brief Copy file @p src to @p dst, overwriting if it exists. */
+bool copyFile(const std::string& src, const std::string& dst);
+
+/** @brief Create a hard link at @p dst pointing to @p src. */
+bool hardLink(const std::string& src, const std::string& dst);
+
+// Inspection --------------------------------------------------------------
+
+/** @brief Populate @p out with metadata about @p path.  Returns false on error. */
+bool stat(const std::string& path, FileInfo& out);
+
+/** @brief Canonicalize @p path (resolve symlinks and relative segments). */
+std::string realpath(const std::string& path);
+
+/** @brief Return the final path component of @p path (matches POSIX basename). */
+std::string basename(const std::string& path);
+
+/** @brief Return @p path with its final component removed (matches POSIX dirname). */
+std::string dirname(const std::string& path);
+
+/**
+ * @brief Join two path fragments with the platform separator.
+ *
+ * Handles trailing separators on @p a and leading separators on @p b so
+ * that join("/var/log", "app.txt") and join("/var/log/", "/app.txt")
+ * both produce "/var/log/app.txt".  If @p b is absolute it is returned
+ * unchanged.
+ */
+std::string join(const std::string& a, const std::string& b);
+
+/** @brief Current working directory as UTF-8.  Empty string on error. */
+std::string cwd();
+
+/** @brief Free space (bytes) on the filesystem containing @p path. 0 on error. */
+std::uint64_t availableSpace(const std::string& path);
+
+// Iteration ---------------------------------------------------------------
+
+/**
+ * @brief List @p path.
+ * @param path      Directory to enumerate.
+ * @param recursive If true, descend into subdirectories.
+ * @param sort      Optional ordering applied to the returned vector.
+ */
+std::vector<FileInfo> listDir(const std::string& path,
+                              bool recursive = false,
+                              Sort sort = Sort::None);
+
+/** @brief Same as listDir(), but only entries whose name ends with @p suffix. */
+std::vector<FileInfo> listDir(const std::string& path,
+                              const std::string& suffix,
+                              bool recursive = false,
+                              Sort sort = Sort::None);
+
+/**
+ * @brief Streaming walk that invokes @p fn for each entry.
+ *
+ * Use this when the directory may contain many entries and you want to
+ * process them without materialising a vector.  Returns false if @p path
+ * cannot be opened.
+ */
+bool walk(const std::string& path,
+          bool recursive,
+          const std::function<void(const FileInfo&)>& fn);
+
+}  // namespace fs
 
 }  // namespace os
 }  // namespace itscam

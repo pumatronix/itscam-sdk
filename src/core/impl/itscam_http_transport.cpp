@@ -32,6 +32,35 @@
 // that httplib pulls in the mbedTLS backend.
 #include "../3rdparty/httplib.h"
 
+// Older mingw-w64 i686 import libraries (shipped with the Ubuntu 18.04
+// base used by the SDK builder image) do not export _mkgmtime32, which
+// cpp-httplib calls through _mkgmtime when time_t is 32-bit.  Provide a
+// portable shim so the win-x86 DLL still links.
+#if defined(__MINGW32__) && !defined(_WIN64)
+extern "C" __time32_t __cdecl _mkgmtime32(struct tm* tm_time) {
+    if (!tm_time) return -1;
+    static const int kMonthDays[] = {
+        0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334
+    };
+    long year  = tm_time->tm_year + 1900;
+    long month = tm_time->tm_mon;
+    if (month < 0 || month > 11) return -1;
+    long day_of_year = kMonthDays[month] + tm_time->tm_mday - 1;
+    // Add a leap day if past Feb in a leap year.
+    bool leap = (year % 4 == 0 && (year % 100 != 0 || year % 400 == 0));
+    if (leap && month > 1) ++day_of_year;
+    long years_from_epoch = year - 1970;
+    long leap_days = (year - 1) / 4 - (year - 1) / 100 + (year - 1) / 400
+                   - (1969 / 4 - 1969 / 100 + 1969 / 400);
+    long days = years_from_epoch * 365 + leap_days + day_of_year;
+    return static_cast<__time32_t>(
+        days * 86400L +
+        tm_time->tm_hour * 3600L +
+        tm_time->tm_min  * 60L +
+        tm_time->tm_sec);
+}
+#endif
+
 namespace itscam {
 namespace detail {
 

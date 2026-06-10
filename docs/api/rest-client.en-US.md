@@ -204,7 +204,7 @@ rest.patchJson("/api/image/profiles/0",
                nlohmann::json{{"trigger", {{"enabled", false}}}});
 ```
 
-The C# `MjpegGrabberExample` and `SoftwareTriggerSnapshotExample` use `GetProfilesAsync()` to find profile ids (read-only) and typed setters or `PatchJsonAsync()` for writes.
+The C# `MjpegGrabberExample` and `SoftwareTriggerSnapshotExample` use `GetProfilesAsync()` to find profile ids (read-only) and typed setters or `PatchJsonAsync()` for writes. The [`ProfileConfigExample`](../../src/wrappers/csharp/examples/ProfileConfigExample/) shows a full equipment-configuration scenario: it programs the `Diurno` (1 exposure) and `Noturno` (2 exposures with flash 100% / 5%) profiles with continuous trigger via `UpdateProfileByIdAsync`, configures the MJPEG stream with `SetStreamConfigAsync` plus a `PatchJsonAsync` for the `useTriggerFrames` flag (not yet in the typed schema), and then consumes the resulting stream through `ItscamCgiClient.MjpegFrame`.
 
 ## Error handling
 

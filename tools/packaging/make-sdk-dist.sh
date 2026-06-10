@@ -32,9 +32,13 @@ VERSION_JSON="$ROOT/VERSION.json"
 VERSION_MK="$ROOT/tools/version/sdk-version.mk"
 
 LINUX_LIB_DIR="$CORE/build/linux"
+LINUX_ARM_LIB_DIR="$CORE/build/linux-arm"
+LINUX_ARM64_LIB_DIR="$CORE/build/linux-arm64"
 WIN_X64_LIB_DIR="$CORE/build/win-x64"
 WIN_X86_LIB_DIR="$CORE/build/win-x86"
 LINUX_LIB="$LINUX_LIB_DIR/libitscam_sdk.so"
+LINUX_ARM_LIB="$LINUX_ARM_LIB_DIR/libitscam_sdk.so"
+LINUX_ARM64_LIB="$LINUX_ARM64_LIB_DIR/libitscam_sdk.so"
 WIN_X64_DLL="$WIN_X64_LIB_DIR/itscam_sdk.dll"
 WIN_X64_IMPLIB="$WIN_X64_LIB_DIR/libitscam_sdk.a"
 WIN_X86_DLL="$WIN_X86_LIB_DIR/itscam_sdk.dll"
@@ -128,6 +132,22 @@ stage_linux_libs() {
     cp -a "$cpp_lib/." "$c_lib/"
 }
 
+# Stage a cross-compiled Linux .so under cpp/lib + c/lib for the given
+# arch dir under $STAGING/.  Used by stage_linux_arm_platform and
+# stage_linux_arm64_platform.
+stage_linux_libs_from() {
+    local cpp_lib="$1/cpp/lib"
+    local c_lib="$2/c/lib"
+    local src_dir="$3"
+    local lib_real="$src_dir/libitscam_sdk.so.${SDK_LIB_VERSION}"
+
+    mkdir -p "$cpp_lib" "$c_lib"
+    cp "$lib_real" "$cpp_lib/libitscam_sdk.so.${SDK_LIB_VERSION}"
+    ln -sf "libitscam_sdk.so.${SDK_LIB_VERSION}" "$cpp_lib/libitscam_sdk.so.$(echo "$SDK_LIB_VERSION" | cut -d. -f1)"
+    ln -sf "libitscam_sdk.so.${SDK_LIB_VERSION}" "$cpp_lib/libitscam_sdk.so"
+    cp -a "$cpp_lib/." "$c_lib/"
+}
+
 stage_windows_libs() {
     local cpp_bin="$1/cpp/bin"
     local c_bin="$2/c/bin"
@@ -185,6 +205,39 @@ stage_python_wheel_linux() {
     local wheels=("$dest"/*.whl)
     shopt -u nullglob
     [ "${#wheels[@]}" -gt 0 ] || die "linux python wheel build produced no .whl in $dest"
+}
+
+# Build a Linux wheel for a non-native arch (ARMv7 or aarch64) by
+# tagging it with the matching manylinux2014 platform tag.  Both target
+# arches were the lowest practical baseline before manylinux_2_28 ;
+# pairing them with the Arm GNU 8.3-2019.03 (glibc 2.28) toolchain means
+# the wheel can declare manylinux2014 cleanly.  We don't run auditwheel
+# because the C extension is not loaded by Python -- ctypes loads the
+# .so directly at import time.
+stage_python_wheel_linux_arch() {
+    local dest="$1/python"
+    local src_dir="$2"     # e.g. $LINUX_ARM_LIB_DIR
+    local plat_name="$3"   # e.g. manylinux2014_armv7l
+    local lib_real="$src_dir/libitscam_sdk.so.${SDK_LIB_VERSION}"
+    mkdir -p "$dest"
+
+    require_cmd python3
+    [ -f "$lib_real" ] || die "missing $lib_real for python wheel ($plat_name)"
+
+    rm -f "$PY/itscam/itscam_sdk.dll"
+    cp "$lib_real" "$PY/itscam/libitscam_sdk.so"
+    trap 'rm -f "$PY/itscam/libitscam_sdk.so"' RETURN
+
+    (cd "$PY" && python3 setup.py bdist_wheel --plat-name "$plat_name" --dist-dir "$dest")
+
+    rm -f "$PY/itscam/libitscam_sdk.so"
+    rm -rf "$PY/build" "$PY/itscam.egg-info"
+    trap - RETURN
+
+    shopt -s nullglob
+    local wheels=("$dest"/*.whl)
+    shopt -u nullglob
+    [ "${#wheels[@]}" -gt 0 ] || die "linux python wheel ($plat_name) produced no .whl in $dest"
 }
 
 stage_python_wheel_windows() {
@@ -256,6 +309,7 @@ stage_go_module() {
     local platform_root="$1"
     local dll="$2"
     local implib="$3"
+    local linux_lib_dir="${4:-$LINUX_LIB_DIR}"
     local dest="$platform_root/go/itscam-sdk-go"
     mkdir -p "$dest/itscam" "$dest/native" "$dest/include"
 
@@ -274,7 +328,7 @@ stage_go_module() {
     patch_go_cgo_block "$dest/itscam/cgi_client.go" "itscam_cgi_client_c.h"
 
     if [[ "$platform_root" == *linux* ]]; then
-        cp "$LINUX_LIB_DIR/libitscam_sdk.so.${SDK_LIB_VERSION}" "$dest/native/libitscam_sdk.so"
+        cp "$linux_lib_dir/libitscam_sdk.so.${SDK_LIB_VERSION}" "$dest/native/libitscam_sdk.so"
         ln -sf libitscam_sdk.so "$dest/native/libitscam_sdk.so.0"
         ln -sf libitscam_sdk.so "$dest/native/libitscam_sdk.so.1"
     else
@@ -519,6 +573,40 @@ stage_linux_platform() {
     stage_nodejs_tarball "$dest"
 }
 
+# linux-arm (ARMv7 hard-float, ITSCAM450 + most Yocto/Buildroot armhf).
+stage_linux_arm_platform() {
+    local dest="$STAGING/linux-arm"
+    if [ ! -f "$LINUX_ARM_LIB_DIR/libitscam_sdk.so.${SDK_LIB_VERSION}" ]; then
+        echo "make-sdk-dist: skipping linux-arm (no build under $LINUX_ARM_LIB_DIR -- run 'make lib-arm' first)" >&2
+        return 0
+    fi
+    mkdir -p "$dest"
+    stage_cpp_headers "$dest/cpp/include"
+    stage_linux_libs_from "$dest" "$dest" "$LINUX_ARM_LIB_DIR"
+    stage_c_headers "$dest"
+    stage_python_wheel_linux_arch "$dest" "$LINUX_ARM_LIB_DIR" "manylinux2014_armv7l"
+    stage_go_module "$dest" "" "" "$LINUX_ARM_LIB_DIR"
+    stage_java_jar "$dest"
+    stage_nodejs_tarball "$dest"
+}
+
+# linux-arm64 (ARMv8 / aarch64, ITSCAM600 + most arm64 servers/SBCs).
+stage_linux_arm64_platform() {
+    local dest="$STAGING/linux-arm64"
+    if [ ! -f "$LINUX_ARM64_LIB_DIR/libitscam_sdk.so.${SDK_LIB_VERSION}" ]; then
+        echo "make-sdk-dist: skipping linux-arm64 (no build under $LINUX_ARM64_LIB_DIR -- run 'make lib-arm64' first)" >&2
+        return 0
+    fi
+    mkdir -p "$dest"
+    stage_cpp_headers "$dest/cpp/include"
+    stage_linux_libs_from "$dest" "$dest" "$LINUX_ARM64_LIB_DIR"
+    stage_c_headers "$dest"
+    stage_python_wheel_linux_arch "$dest" "$LINUX_ARM64_LIB_DIR" "manylinux2014_aarch64"
+    stage_go_module "$dest" "" "" "$LINUX_ARM64_LIB_DIR"
+    stage_java_jar "$dest"
+    stage_nodejs_tarball "$dest"
+}
+
 stage_windows_x64_platform() {
     local dest="$STAGING/win-x64"
     mkdir -p "$dest"
@@ -562,7 +650,7 @@ Pacote consumer gerado por: \`make sdk-dist\`
 Commit Git: ${SDK_GIT_SHA}
 Data do build: ${SDK_BUILD_DATE}
 
-Plataformas: linux-x64, win-x64, win-x86
+Plataformas: linux-x64, linux-arm (ARMv7), linux-arm64 (ARMv8), win-x64, win-x86
 Veja \`VERSION.json\` para metadados legíveis por máquina.
 
 ## Documentação
@@ -579,6 +667,8 @@ Veja \`VERSION.json\` para metadados legíveis por máquina.
 - \`csharp/\` — NuGet (multi-RID: linux-x64 + win-x64 + win-x86 native binaries)
 - \`examples/\` — source dos examples para todas as linguagens; Wails GUI pré-compilado em \`examples/bin/\`
 - \`linux-x64/\` — headers C/C++ + \`.so\`, wheel Python, módulo Go, JAR Java, tarball npm
+- \`linux-arm/\` — mesmas linguagens, \`.so\` ARMv7 hard-float (presente apenas quando \`make lib-arm\` foi executado)
+- \`linux-arm64/\` — mesmas linguagens, \`.so\` ARMv8 / aarch64 (presente apenas quando \`make lib-arm64\` foi executado)
 - \`win-x64/\` — headers C/C++ + \`.dll\`/\`.a\` (64-bit), wheel Python, módulo Go, JAR Java, tarball npm
 - \`win-x86/\` — headers C/C++ + \`.dll\`/\`.a\` (32-bit), wheel Python, módulo Go, JAR Java, tarball npm
 
@@ -703,7 +793,7 @@ Consumer bundle produced by: \`make sdk-dist\`
 Git commit: ${SDK_GIT_SHA}
 Build date: ${SDK_BUILD_DATE}
 
-Platforms: linux-x64, win-x64, win-x86
+Platforms: linux-x64, linux-arm (ARMv7), linux-arm64 (ARMv8), win-x64, win-x86
 See \`VERSION.json\` for machine-readable metadata.
 
 ## Documentation
@@ -720,6 +810,8 @@ See \`VERSION.json\` for machine-readable metadata.
 - \`csharp/\` — NuGet (multi-RID: linux-x64 + win-x64 + win-x86 native binaries)
 - \`examples/\` — example source for all languages; pre-built Wails GUI in \`examples/bin/\`
 - \`linux-x64/\` — C/C++ headers + \`.so\`, Python wheel, Go module, Java JAR, npm tarball
+- \`linux-arm/\` — same set, ARMv7 hard-float \`.so\` (present only when \`make lib-arm\` was run)
+- \`linux-arm64/\` — same set, ARMv8 / aarch64 \`.so\` (present only when \`make lib-arm64\` was run)
 - \`win-x64/\` — C/C++ headers + \`.dll\`/\`.a\` (64-bit), Python wheel, Go module, Java JAR, npm tarball
 - \`win-x86/\` — C/C++ headers + \`.dll\`/\`.a\` (32-bit), Python wheel, Go module, Java JAR, npm tarball
 
@@ -849,12 +941,21 @@ main() {
     require_file "$WIN_X86_DLL"
     require_file "$WIN_X86_IMPLIB"
 
-    echo "=== Staging SDK distribution ${SDK_VERSION} (linux-x64 + win-x64 + win-x86) ==="
+    # ARM builds are optional -- the SDK still ships if a hosting CI
+    # doesn't have the Arm cross-toolchains installed.  Each stage helper
+    # logs and skips when its .so is missing.
+    local platforms="linux-x64 win-x64 win-x86"
+    [ -f "$LINUX_ARM_LIB_DIR/libitscam_sdk.so.${SDK_LIB_VERSION}" ]   && platforms="$platforms linux-arm"
+    [ -f "$LINUX_ARM64_LIB_DIR/libitscam_sdk.so.${SDK_LIB_VERSION}" ] && platforms="$platforms linux-arm64"
+
+    echo "=== Staging SDK distribution ${SDK_VERSION} ($platforms) ==="
     rm -rf "$STAGING"
     mkdir -p "$STAGING"
 
     stage_csharp_nupkg "$STAGING"
     stage_linux_platform
+    stage_linux_arm_platform
+    stage_linux_arm64_platform
     stage_windows_x64_platform
     stage_windows_x86_platform
     stage_examples_source

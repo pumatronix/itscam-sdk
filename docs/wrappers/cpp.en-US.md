@@ -50,8 +50,12 @@ cp $SDK/linux-x64/cpp/lib/libitscam_sdk.so* ./
 
 | File | Platform |
 | ---- | -------- |
-| `libitscam_sdk.so.1.0.0` (+ soname + symlink) | Linux shared |
-| `itscam_sdk.dll` + `libitscam_sdk.a` | Windows |
+| `libitscam_sdk.so.1.0.0` (+ soname + symlink) | Linux x86_64 -- `linux-x64/` directory (glibc >= 2.27) |
+| `libitscam_sdk.so.1.0.0` (+ soname + symlink) | Linux ARMv7 hard-float -- `linux-arm/` directory (glibc >= 2.28; ITSCAM450) |
+| `libitscam_sdk.so.1.0.0` (+ soname + symlink) | Linux ARMv8 / aarch64 -- `linux-arm64/` directory (glibc >= 2.28; ITSCAM600) |
+| `itscam_sdk.dll` + `libitscam_sdk.a` | Windows x64 / x86 |
+
+For ARM, substitute the matching directory for `linux-x64` in the `g++` commands above (use the cross-compiler `arm-linux-gnueabihf-g++` or `aarch64-linux-gnu-g++` in place of `g++`).
 
 Zero system dependencies for TLS: **mbedTLS 3.6 LTS** is statically linked. See [`docs/https-tls.md`](../https-tls.md).
 
@@ -62,10 +66,14 @@ If you need to build the SDK from scratch (contributors, cross-compile, debug):
 ```bash
 git clone https://github.com/pumatronix/itscam-sdk.git && cd itscam-sdk
 make lib            # libitscam_sdk.{so,a} -> src/core/build/linux/
+make lib-arm        # cross-compile for Linux ARMv7 -> src/core/build/linux-arm/
+make lib-arm64      # cross-compile for Linux ARMv8 -> src/core/build/linux-arm64/
 make windows        # itscam_sdk.dll (cross MinGW) -> src/core/build/windows/
 make examples       # C++ binaries under src/examples/build/
 make docker-all     # everything inside the builder image (recommended)
 ```
+
+ARM builds use the Arm GNU-A 8.3-2019.03 toolchains (`/opt/cross/{armhf,arm64}` in the official Docker image). Set `ARMHF_TOOLCHAIN_PATH` and `ARM64_TOOLCHAIN_PATH` if you installed them elsewhere.
 
 To link against the source tree, use the headers under `src/core/` and artefacts under `src/core/build/linux/`:
 

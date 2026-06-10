@@ -9,6 +9,8 @@ src/wrappers/csharp/Itscam.Sdk/bin/
 src/wrappers/csharp/Itscam.Sdk/obj/
 src/wrappers/csharp/examples/CaptureExample/bin/
 src/wrappers/csharp/examples/CaptureExample/obj/
+src/wrappers/csharp/examples/ProfileConfigExample/bin/
+src/wrappers/csharp/examples/ProfileConfigExample/obj/
 src/wrappers/csharp/nupkg/
 
 # IDE and editor files
