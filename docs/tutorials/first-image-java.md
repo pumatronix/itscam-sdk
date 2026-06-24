@@ -6,7 +6,7 @@ Walkthrough do zero: criar um projeto Maven, declarar a dependência `com.pumatr
 
 | Item | Versão mínima | Verificar com |
 | ---- | ------------- | ------------- |
-| JDK | 11+ | `java -version` |
+| JDK | 7+ | `java -version` |
 | Maven | 3.9+ | `mvn -v` |
 | Pacote SDK | `itscam-sdk-<version>.tar.gz` | extrair e localizar `linux-x64/java/` |
 | Câmera ITSCAM | ITSCAM450 / ITSCAM600 alcançável na rede | `ping <ip-da-camera>` |
@@ -48,8 +48,8 @@ Edite `pom.xml` (ajuste `itscam.sdk.version` para coincidir com `-Dversion` do p
     <artifactId>meu-app</artifactId>
     <version>1.0-SNAPSHOT</version>
     <properties>
-        <maven.compiler.source>11</maven.compiler.source>
-        <maven.compiler.target>11</maven.compiler.target>
+        <maven.compiler.source>1.7</maven.compiler.source>
+        <maven.compiler.target>1.7</maven.compiler.target>
         <itscam.sdk.version>0.3.1</itscam.sdk.version>
     </properties>
     <dependencies>
@@ -131,13 +131,14 @@ OK: 87421 bytes salvos em primeira-imagem.jpg (image/jpeg)
 
 ```java
 import com.pumatronix.itscam.*;
+import java.util.List;
 
 try (ItscamClient camera = new ItscamClient()) {
     camera.connect(host, 60000, 10000);
     camera.authenticate("1234", 10000);
     camera.subscribeCaptures(10000);
 
-    var frames = camera.captureSnapshot(15000);
+    List<CaptureResult> frames = camera.captureSnapshot(15000);
     if (frames.isEmpty()) {
         System.err.println("nenhum frame retornado");
         System.exit(2);

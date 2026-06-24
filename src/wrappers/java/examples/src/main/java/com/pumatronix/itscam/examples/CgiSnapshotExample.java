@@ -15,6 +15,8 @@
 package com.pumatronix.itscam.examples;
 
 import com.pumatronix.itscam.CgiImage;
+import com.pumatronix.itscam.CgiStreamFrame;
+import com.pumatronix.itscam.ItscamConsumer;
 import com.pumatronix.itscam.ItscamCgiClient;
 import com.pumatronix.itscam.SnapshotCgiRequest;
 
@@ -86,15 +88,18 @@ public final class CgiSnapshotExample {
             }
 
             System.out.println("Streaming MJPEG for 5 seconds ...");
-            AtomicInteger frameCount = new AtomicInteger();
-            cgi.startMjpegStream(frame -> {
-                int n = frameCount.incrementAndGet();
-                if (n == 1) {
-                    try {
-                        java.nio.file.Files.write(
-                                Paths.get("mjpeg-first.jpg"),
-                                frame.data());
-                    } catch (IOException ignored) {}
+            final AtomicInteger frameCount = new AtomicInteger();
+            cgi.startMjpegStream(new ItscamConsumer<CgiStreamFrame>() {
+                @Override
+                public void accept(CgiStreamFrame frame) {
+                    int n = frameCount.incrementAndGet();
+                    if (n == 1) {
+                        try {
+                            java.nio.file.Files.write(
+                                    Paths.get("mjpeg-first.jpg"),
+                                    frame.data());
+                        } catch (IOException ignored) {}
+                    }
                 }
             }, 10000);
             Thread.sleep(5000);

@@ -13,6 +13,7 @@ package com.pumatronix.itscam.examples;
 
 import com.pumatronix.itscam.AutoReconnectConfig;
 import com.pumatronix.itscam.CaptureResult;
+import com.pumatronix.itscam.ItscamConsumer;
 import com.pumatronix.itscam.ItscamClient;
 import com.pumatronix.itscam.Sdk;
 
@@ -31,7 +32,7 @@ public final class CaptureExample {
 
         System.out.printf("ITSCAM SDK %s%n", Sdk.getNativeLibraryVersion());
 
-        AtomicInteger snapshotCount = new AtomicInteger();
+        final AtomicInteger snapshotCount = new AtomicInteger();
 
         try (ItscamClient camera = new ItscamClient()) {
             System.out.printf("Connecting to %s:60000 ...%n", host);
@@ -43,10 +44,13 @@ public final class CaptureExample {
                 System.out.println("Authenticated.");
             }
 
-            camera.onSnapshotImage(result -> {
-                int n = snapshotCount.incrementAndGet();
-                System.out.printf("  snapshot callback #%d: %d bytes%n",
-                        n, result.jpeg().length);
+            camera.onSnapshotImage(new ItscamConsumer<CaptureResult>() {
+                @Override
+                public void accept(CaptureResult result) {
+                    int n = snapshotCount.incrementAndGet();
+                    System.out.printf("  snapshot callback #%d: %d bytes%n",
+                            n, result.jpeg().length);
+                }
             });
 
             camera.subscribeCaptures(10000);

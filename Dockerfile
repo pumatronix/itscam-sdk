@@ -33,6 +33,9 @@ ARG NODE_VERSION=20.18.2
 ARG NODE_SHA256=51d7eb3a14d0e148ced83771495a0b8baf9de634b8de22dd48efdd0633a08822
 ARG MAVEN_VERSION=3.9.9
 ARG MAVEN_SHA512=a555254d6b53d267965a3404ecb14e53c3827c09c3b94b5678835887ab404556bfaf78dcfe03ba76fa2508649dca8531c74bca4d5846513522404d48e8c4ac8b
+ARG ZULU_JDK7_VERSION=7.56.0.11
+ARG ZULU_JDK7_JAVA_VERSION=7.0.352
+ARG ZULU_JDK7_SHA256=8a7387c1ed151474301b6553c6046f865dc6c1e1890bcf106acc2780c55727c8
 
 # Arm GNU-A 8.3-2019.03 cross-toolchains.  Pinning to this release gives
 # the lowest glibc floor among maintained Arm-signed binaries:
@@ -51,7 +54,20 @@ ENV DEBIAN_FRONTEND=noninteractive
 #  System packages and build tools
 # =============================================================================
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN set -eux; \
+    for attempt in 1 2 3 4 5; do \
+        apt-get clean; \
+        rm -rf /var/lib/apt/lists/*; \
+        if apt-get \
+            -o Acquire::Retries=5 \
+            -o Acquire::http::No-Cache=true \
+            -o Acquire::http::Pipeline-Depth=0 \
+            update; then \
+            break; \
+        fi; \
+        if [ "$attempt" = 5 ]; then exit 1; fi; \
+    done; \
+    apt-get install -y --no-install-recommends \
     # Essential build tools
     build-essential \
     make \
@@ -68,7 +84,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
     python3-pip \
     python3-dev \
-    # OpenJDK 11 for the Java wrapper (JNA-based; Maven installed below)
+    # OpenJDK 11 builder for Maven; JDK 7 is installed below for compiler verification
     openjdk-11-jdk-headless \
     # WebKit2GTK for Wails GUI (Go GUI example)
     libwebkit2gtk-4.0-dev \
@@ -91,6 +107,27 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     doxygen \
     graphviz \
     && rm -rf /var/lib/apt/lists/*
+
+# =============================================================================
+#  Install JDK 7 (for Java wrapper compatibility verification)
+# =============================================================================
+#
+# Maven 3.9.x runs on the OpenJDK 11 installed above, but the Java wrapper's
+# minimum supported runtime is JDK 7.  Keep a real JDK 7 toolchain available so
+# `make java-jdk7-check` can fork /opt/jdk7/bin/javac and catch accidental usage
+# of newer Java APIs or bytecode.
+RUN set -eux; \
+    curl -fsSLo /tmp/zulu7.tar.gz \
+        "https://cdn.azul.com/zulu/bin/zulu${ZULU_JDK7_VERSION}-ca-jdk${ZULU_JDK7_JAVA_VERSION}-linux_x64.tar.gz"; \
+    echo "${ZULU_JDK7_SHA256}  /tmp/zulu7.tar.gz" | sha256sum -c -; \
+    mkdir -p /opt/jdk7; \
+    tar -C /opt/jdk7 --strip-components=1 -xzf /tmp/zulu7.tar.gz; \
+    rm -f /tmp/zulu7.tar.gz; \
+    /opt/jdk7/bin/java -version; \
+    /opt/jdk7/bin/javac -version
+
+ENV JDK7_HOME=/opt/jdk7
+ENV JAVA7_HOME=/opt/jdk7
 
 # =============================================================================
 #  Install .NET 8 SDK (for the C# wrapper package)
@@ -162,10 +199,11 @@ RUN set -eux; \
 # Maven lives under /opt/maven and is exposed via PATH so `make java` and
 # `make docker-java-pack` work for any user inside the container.  The
 # distribution package on Ubuntu 20.04 is too old for our parent POM,
-# so we install the official binary tarball.
+# so we install the official binary tarball. Maven Central mirrors the
+# Apache release artifact and is faster/more reliable than archive.apache.org.
 RUN set -eux; \
     curl -fsSLo /tmp/maven.tar.gz \
-        "https://archive.apache.org/dist/maven/maven-3/${MAVEN_VERSION}/binaries/apache-maven-${MAVEN_VERSION}-bin.tar.gz"; \
+        "https://repo.maven.apache.org/maven2/org/apache/maven/apache-maven/${MAVEN_VERSION}/apache-maven-${MAVEN_VERSION}-bin.tar.gz"; \
     echo "${MAVEN_SHA512}  /tmp/maven.tar.gz" | sha512sum -c -; \
     tar -C /opt -xzf /tmp/maven.tar.gz; \
     ln -sfn "/opt/apache-maven-${MAVEN_VERSION}" /opt/maven; \
@@ -259,7 +297,18 @@ RUN set -eux; \
     # sqlite3, ctypes, readline, tkinter-free).  Headers stay in the
     # final image so site-packages with C extensions (the SDK's wheel,
     # the codegen scripts' deps) can compile against this interpreter.
-    apt-get update; \
+    for attempt in 1 2 3 4 5; do \
+        apt-get clean; \
+        rm -rf /var/lib/apt/lists/*; \
+        if apt-get \
+            -o Acquire::Retries=5 \
+            -o Acquire::http::No-Cache=true \
+            -o Acquire::http::Pipeline-Depth=0 \
+            update; then \
+            break; \
+        fi; \
+        if [ "$attempt" = 5 ]; then exit 1; fi; \
+    done; \
     apt-get install -y --no-install-recommends \
         libssl-dev \
         libffi-dev \
