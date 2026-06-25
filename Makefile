@@ -900,8 +900,13 @@ docker-dist-pristine:
 sdk-dist-examples: go-gui go-gui-windows
 	@echo "=== SDK distribution examples ready (Wails GUI binaries) ==="
 
-sdk-dist: version lib windows csharp-pack java-pack nodejs-pack sdk-dist-examples
-	@echo "=== Packaging SDK distribution ($(SDK_VERSION), linux-x64 + win-x64 + win-x86) ==="
+# Generate version metadata once before package/build helpers stage files in the
+# checkout; recursive makes reuse that snapshot so release archives keep the
+# clean tag version instead of being renamed +dirty by later build artefacts.
+sdk-dist: version
+	$(MAKE) lib windows csharp-pack java-pack nodejs-pack sdk-dist-examples ITSCAM_VERSION_LOCKED=1
+	@SDK_VERSION="$$(python3 -c 'import json; print(json.load(open("VERSION.json"))["version"])')"; \
+		echo "=== Packaging SDK distribution ($$SDK_VERSION, linux-x64 + win-x64 + win-x86) ==="
 	@$(SDK_DIST_SCRIPT)
 
 docker-sdk-dist-examples: docker-build

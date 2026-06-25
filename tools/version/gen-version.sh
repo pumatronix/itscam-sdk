@@ -21,6 +21,7 @@ python3 - "$ROOT" "$OUT_MK" <<'PY'
 from __future__ import annotations
 
 import datetime as dt
+import json
 import os
 import re
 import subprocess
@@ -74,6 +75,22 @@ def parse_semver(version: str) -> dict[str, str | int]:
         "prerelease": match.group("prerelease") or "",
         "buildmeta": match.group("buildmeta") or "",
     }
+
+
+def reuse_locked_version() -> bool:
+    if os.environ.get("ITSCAM_VERSION_LOCKED") != "1":
+        return False
+
+    version_json = root / "VERSION.json"
+    if not version_json.exists():
+        return False
+
+    data = json.loads(version_json.read_text(encoding="utf-8"))
+    print(
+        f"SDK version {data['version']} "
+        f"(lib {data['libVersion']}, {data['gitShaShort']}, {data['buildDate'][:10]})"
+    )
+    return True
 
 
 def compute() -> dict[str, str | int]:
@@ -177,6 +194,9 @@ def compute() -> dict[str, str | int]:
         "dirty": "1" if dirty else "0",
     }
 
+
+if reuse_locked_version():
+    raise SystemExit(0)
 
 info = compute()
 
@@ -313,7 +333,7 @@ safe_write(out_mk,
 
 version_json = root / "VERSION.json"
 safe_write(version_json,
-    __import__("json").dumps(
+    json.dumps(
         {
             "version": info["package_version"],
             "nugetVersion": info["nuget_version"],
