@@ -28,7 +28,7 @@
 .PHONY: java java-pack java-examples java-jdk7-check
 .PHONY: nodejs nodejs-pack nodejs-examples
 .PHONY: install
-.PHONY: version sdk-dist sdk-dist-clean docker-sdk-dist docker-sdk-dist-examples
+.PHONY: version sdk-dist sdk-dist-clean docker-dist-pristine docker-sdk-dist docker-sdk-dist-examples
 .PHONY: docker-build docker-all docker-linux docker-windows docker-shell docker-go-gui
 .PHONY: docker-linux-arm docker-linux-arm64 docker-linux-all docker-qemu-smoke
 .PHONY: docker-csharp docker-csharp-examples docker-csharp-examples-publish
@@ -846,7 +846,7 @@ docker-shell: docker-build
 
 docker-go-gui: docker-build
 	@echo "=== Building Go GUI (Wails) inside Docker ==="
-	$(DOCKER_RUN) $(DOCKER_IMAGE) make go-gui
+	$(DOCKER_RUN) $(DOCKER_IMAGE) make docker-dist-pristine go-gui
 
 docker-go-gui-windows: docker-build
 	@echo "=== Building Go GUI for Windows inside Docker ==="
@@ -887,6 +887,15 @@ all: linux windows examples wrappers
 
 SDK_DIST_SCRIPT := $(CURDIR)/tools/packaging/make-sdk-dist.sh
 
+# Docker distribution builds must not reuse host-built native artefacts from the
+# bind-mounted workspace.  A host compiler may emit C++ ABI references newer
+# than the pinned builder image can link, even when make considers the files
+# up-to-date.
+docker-dist-pristine:
+	@echo "=== Cleaning Docker distribution build artefacts ==="
+	@$(MAKE) -C $(SRC_DIR)/core clean
+	@rm -rf $(GO_GUI_DIR)/build/bin
+
 # Build Wails GUI binaries for the consumer tarball (source for everything else).
 sdk-dist-examples: go-gui go-gui-windows
 	@echo "=== SDK distribution examples ready (Wails GUI binaries) ==="
@@ -897,7 +906,7 @@ sdk-dist: version lib windows csharp-pack java-pack nodejs-pack sdk-dist-example
 
 docker-sdk-dist-examples: docker-build
 	@echo "=== Building SDK distribution examples inside Docker ==="
-	$(DOCKER_RUN) $(DOCKER_IMAGE) make sdk-dist-examples
+	$(DOCKER_RUN) $(DOCKER_IMAGE) make docker-dist-pristine sdk-dist-examples
 
 sdk-dist-clean:
 	@echo "=== Removing SDK distribution artefacts ==="
@@ -905,7 +914,7 @@ sdk-dist-clean:
 
 docker-sdk-dist: docker-build
 	@echo "=== Packaging SDK distribution inside Docker ==="
-	$(DOCKER_RUN) $(DOCKER_IMAGE) make sdk-dist
+	$(DOCKER_RUN) $(DOCKER_IMAGE) make docker-dist-pristine sdk-dist
 
 # ============================================================================
 #  Installation
