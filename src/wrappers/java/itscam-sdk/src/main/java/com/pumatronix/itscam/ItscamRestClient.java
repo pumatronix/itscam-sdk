@@ -83,6 +83,7 @@ public final class ItscamRestClient implements AutoCloseable {
 
     private final ItscamLibrary lib;
     private Pointer handle;
+    private volatile String apiPrefix = "/api";
 
     public ItscamRestClient() {
         this.lib = NativeLibrary.get();
@@ -117,6 +118,9 @@ public final class ItscamRestClient implements AutoCloseable {
     public void setApiPrefix(String prefix) {
         requireOpen();
         lib.ITSCAM_RestClient_setApiPrefix(handle, prefix);
+        if (prefix != null) {
+            apiPrefix = prefix;
+        }
     }
 
     public void setCaCertFile(String pemPath) {
@@ -253,25 +257,25 @@ public final class ItscamRestClient implements AutoCloseable {
         });
     }
 
-    public String getProfilesJson(int timeoutMs) { return httpGet("/api/image/profiles", timeoutMs); }
-    public String getProfileJson(int profileId, int timeoutMs) { return httpGet("/api/image/profiles?id=" + profileId, timeoutMs); }
-    public String createProfileJson(String jsonProfile, int timeoutMs) { return httpPost("/api/image/profiles", jsonProfile, timeoutMs); }
-    public String updateProfileJson(int profileId, String jsonProfile, int timeoutMs) { return httpPut("/api/image/profiles/" + profileId, jsonProfile, timeoutMs); }
-    public String updateProfilesJson(String jsonProfiles, int timeoutMs) { return httpPut("/api/image/profiles", jsonProfiles, timeoutMs); }
-    public String getVolatileInfoJson(int timeoutMs) { return httpGet("/api/equipment/misc/readonly/volatile", timeoutMs); }
-    public String getGeneralConfigJson(int timeoutMs) { return httpGet("/api/equipment/misc", timeoutMs); }
-    public String setGeneralConfigJson(String json, int timeoutMs) { return httpPut("/api/equipment/misc", json, timeoutMs); }
-    public String getOcrConfigJson(int timeoutMs) { return httpGet("/api/equipment/ocr", timeoutMs); }
-    public String setOcrConfigJson(String json, int timeoutMs) { return httpPut("/api/equipment/ocr", json, timeoutMs); }
-    public String getAnalyticsConfigJson(int timeoutMs) { return httpGet("/api/equipment/analytics", timeoutMs); }
-    public String setAnalyticsConfigJson(String json, int timeoutMs) { return httpPut("/api/equipment/analytics", json, timeoutMs); }
-    public String getClassifierConfigJson(int timeoutMs) { return httpGet("/api/equipment/classifier", timeoutMs); }
-    public String setClassifierConfigJson(String json, int timeoutMs) { return httpPut("/api/equipment/classifier", json, timeoutMs); }
-    public String getLanesConfigJson(int timeoutMs) { return httpGet("/api/equipment/lanes", timeoutMs); }
-    public String setLanesConfigJson(String json, int timeoutMs) { return httpPut("/api/equipment/lanes", json, timeoutMs); }
-    public String getItscamproConfigJson(int timeoutMs) { return httpGet("/api/equipment/servers/itscampro", timeoutMs); }
-    public String setItscamproConfigJson(String json, int timeoutMs) { return httpPut("/api/equipment/servers/itscampro", json, timeoutMs); }
-    public String getItscamproStatusJson(int timeoutMs) { return httpGet("/api/equipment/servers/itscampro/status", timeoutMs); }
+    public String getProfilesJson(int timeoutMs) { return httpGet(apiPath("/image/profiles"), timeoutMs); }
+    public String getProfileJson(int profileId, int timeoutMs) { return httpGet(apiPath("/image/profiles?id=" + profileId), timeoutMs); }
+    public String createProfileJson(String jsonProfile, int timeoutMs) { return httpPost(apiPath("/image/profiles"), jsonProfile, timeoutMs); }
+    public String updateProfileJson(int profileId, String jsonProfile, int timeoutMs) { return httpPut(apiPath("/image/profiles/" + profileId), jsonProfile, timeoutMs); }
+    public String updateProfilesJson(String jsonProfiles, int timeoutMs) { return httpPut(apiPath("/image/profiles"), jsonProfiles, timeoutMs); }
+    public String getVolatileInfoJson(int timeoutMs) { return httpGet(apiPath("/equipment/misc/readonly/volatile"), timeoutMs); }
+    public String getGeneralConfigJson(int timeoutMs) { return httpGet(apiPath("/equipment/misc"), timeoutMs); }
+    public String setGeneralConfigJson(String json, int timeoutMs) { return httpPut(apiPath("/equipment/misc"), json, timeoutMs); }
+    public String getOcrConfigJson(int timeoutMs) { return httpGet(apiPath("/equipment/ocr"), timeoutMs); }
+    public String setOcrConfigJson(String json, int timeoutMs) { return httpPut(apiPath("/equipment/ocr"), json, timeoutMs); }
+    public String getAnalyticsConfigJson(int timeoutMs) { return httpGet(apiPath("/equipment/analytics"), timeoutMs); }
+    public String setAnalyticsConfigJson(String json, int timeoutMs) { return httpPut(apiPath("/equipment/analytics"), json, timeoutMs); }
+    public String getClassifierConfigJson(int timeoutMs) { return httpGet(apiPath("/equipment/classifier"), timeoutMs); }
+    public String setClassifierConfigJson(String json, int timeoutMs) { return httpPut(apiPath("/equipment/classifier"), json, timeoutMs); }
+    public String getLanesConfigJson(int timeoutMs) { return httpGet(apiPath("/equipment/lanes"), timeoutMs); }
+    public String setLanesConfigJson(String json, int timeoutMs) { return httpPut(apiPath("/equipment/lanes"), json, timeoutMs); }
+    public String getItscamproConfigJson(int timeoutMs) { return httpGet(apiPath("/equipment/servers/itscampro"), timeoutMs); }
+    public String setItscamproConfigJson(String json, int timeoutMs) { return httpPut(apiPath("/equipment/servers/itscampro"), json, timeoutMs); }
+    public String getItscamproStatusJson(int timeoutMs) { return httpGet(apiPath("/equipment/servers/itscampro/status"), timeoutMs); }
 
     public List<ProfileConfig> getProfiles(int timeoutMs) {
         return ProfileConfig.listFromJson(getProfilesJson(timeoutMs));
@@ -291,13 +295,13 @@ public final class ItscamRestClient implements AutoCloseable {
     }
 
     public ProfileConfig createProfile(ProfileConfig profile, int timeoutMs) {
-        return new ProfileConfig(httpPost("/api/image/profiles",
+        return new ProfileConfig(httpPost(apiPath("/image/profiles"),
                 require(profile, "profile").toJsonString(), timeoutMs));
     }
 
     public ProfileConfig updateProfileById(int profileId, ProfileConfig profile,
                                            int timeoutMs) {
-        return new ProfileConfig(httpPut("/api/image/profiles/" + profileId,
+        return new ProfileConfig(httpPut(apiPath("/image/profiles/" + profileId),
                 require(profile, "profile").toJsonString(), timeoutMs));
     }
 
@@ -312,12 +316,12 @@ public final class ItscamRestClient implements AutoCloseable {
     }
 
     public ProfileConfig updateProfiles(List<ProfileConfig> profiles, int timeoutMs) {
-        return new ProfileConfig(httpPut("/api/image/profiles",
+        return new ProfileConfig(httpPut(apiPath("/image/profiles"),
                 RestObject.listToJson(profiles), timeoutMs));
     }
 
     public String deleteProfile(int profileId, int timeoutMs) {
-        return httpDelete("/api/image/profiles?id=" + profileId, timeoutMs);
+        return httpDelete(apiPath("/image/profiles?id=" + profileId), timeoutMs);
     }
 
     public MiscVolatile getVolatileInfo(int timeoutMs) {
@@ -325,11 +329,11 @@ public final class ItscamRestClient implements AutoCloseable {
     }
 
     public Misc getMisc(int timeoutMs) {
-        return new Misc(httpGet("/api/equipment/misc", timeoutMs));
+        return new Misc(httpGet(apiPath("/equipment/misc"), timeoutMs));
     }
 
     public Misc setMisc(Misc config, int timeoutMs) {
-        return new Misc(httpPut("/api/equipment/misc",
+        return new Misc(httpPut(apiPath("/equipment/misc"),
                 require(config, "config").toJsonString(), timeoutMs));
     }
 
@@ -338,93 +342,97 @@ public final class ItscamRestClient implements AutoCloseable {
 
     public OcrConfig getOcrConfig(int timeoutMs) { return new OcrConfig(getOcrConfigJson(timeoutMs)); }
     public OcrConfig setOcrConfig(OcrConfig config, int timeoutMs) {
-        return new OcrConfig(httpPut("/api/equipment/ocr", require(config, "config").toJsonString(), timeoutMs));
+        return new OcrConfig(httpPut(apiPath("/equipment/ocr"), require(config, "config").toJsonString(), timeoutMs));
     }
 
     public AnalyticsConfig getAnalyticsConfig(int timeoutMs) { return new AnalyticsConfig(getAnalyticsConfigJson(timeoutMs)); }
     public AnalyticsConfig setAnalyticsConfig(AnalyticsConfig config, int timeoutMs) {
-        return new AnalyticsConfig(httpPut("/api/equipment/analytics", require(config, "config").toJsonString(), timeoutMs));
+        return new AnalyticsConfig(httpPut(apiPath("/equipment/analytics"), require(config, "config").toJsonString(), timeoutMs));
     }
 
     public ClassifierConfig getClassifierConfig(int timeoutMs) { return new ClassifierConfig(getClassifierConfigJson(timeoutMs)); }
     public ClassifierConfig setClassifierConfig(ClassifierConfig config, int timeoutMs) {
-        return new ClassifierConfig(httpPut("/api/equipment/classifier", require(config, "config").toJsonString(), timeoutMs));
+        return new ClassifierConfig(httpPut(apiPath("/equipment/classifier"), require(config, "config").toJsonString(), timeoutMs));
     }
 
-    public AutoFocus getAutoFocus(int timeoutMs) { return new AutoFocus(httpGet("/api/equipment/autofocus", timeoutMs)); }
+    public AutoFocus getAutoFocus(int timeoutMs) { return new AutoFocus(httpGet(apiPath("/equipment/autofocus"), timeoutMs)); }
     public AutoFocus setAutoFocus(AutoFocus config, int timeoutMs) {
-        return new AutoFocus(httpPut("/api/equipment/autofocus", require(config, "config").toJsonString(), timeoutMs));
+        return new AutoFocus(httpPut(apiPath("/equipment/autofocus"), require(config, "config").toJsonString(), timeoutMs));
     }
 
-    public StreamConfig getStreamConfig(int timeoutMs) { return new StreamConfig(httpGet("/api/video/streams", timeoutMs)); }
+    public StreamConfig getStreamConfig(int timeoutMs) { return new StreamConfig(httpGet(apiPath("/video/streams"), timeoutMs)); }
     public StreamConfig setStreamConfig(StreamConfig config, int timeoutMs) {
-        return new StreamConfig(httpPut("/api/video/streams", require(config, "config").toJsonString(), timeoutMs));
+        return new StreamConfig(httpPut(apiPath("/video/streams"), require(config, "config").toJsonString(), timeoutMs));
     }
 
     public LanesConfig getLanesConfig(int timeoutMs) { return new LanesConfig(getLanesConfigJson(timeoutMs)); }
     public LanesConfig setLanesConfig(LanesConfig config, int timeoutMs) {
-        return new LanesConfig(httpPut("/api/equipment/lanes", require(config, "config").toJsonString(), timeoutMs));
+        return new LanesConfig(httpPut(apiPath("/equipment/lanes"), require(config, "config").toJsonString(), timeoutMs));
     }
 
     public ItscamproConfig getItscamproConfig(int timeoutMs) { return new ItscamproConfig(getItscamproConfigJson(timeoutMs)); }
     public ItscamproConfig setItscamproConfig(ItscamproConfig config, int timeoutMs) {
-        return new ItscamproConfig(httpPut("/api/equipment/servers/itscampro", require(config, "config").toJsonString(), timeoutMs));
+        return new ItscamproConfig(httpPut(apiPath("/equipment/servers/itscampro"), require(config, "config").toJsonString(), timeoutMs));
     }
 
     public ItscamproStatus getItscamproStatus(int timeoutMs) { return new ItscamproStatus(getItscamproStatusJson(timeoutMs)); }
-    public ImageSignConfig getImageSignConfig(int timeoutMs) { return new ImageSignConfig(httpGet("/api/equipment/imageSign", timeoutMs)); }
+    public ImageSignConfig getImageSignConfig(int timeoutMs) { return new ImageSignConfig(httpGet(apiPath("/equipment/imageSign"), timeoutMs)); }
 
-    public FtpConfig getFtpConfig(int timeoutMs) { return new FtpConfig(httpGet("/api/equipment/servers/ftp", timeoutMs)); }
+    public FtpConfig getFtpConfig(int timeoutMs) { return new FtpConfig(httpGet(apiPath("/equipment/servers/ftp"), timeoutMs)); }
     public FtpConfig setFtpConfig(FtpConfig config, int timeoutMs) {
-        return new FtpConfig(httpPut("/api/equipment/servers/ftp", require(config, "config").toJsonString(), timeoutMs));
+        return new FtpConfig(httpPut(apiPath("/equipment/servers/ftp"), require(config, "config").toJsonString(), timeoutMs));
     }
 
-    public LinceConfig getLinceConfig(int timeoutMs) { return new LinceConfig(httpGet("/api/equipment/servers/lince", timeoutMs)); }
+    public LinceConfig getLinceConfig(int timeoutMs) { return new LinceConfig(httpGet(apiPath("/equipment/servers/lince"), timeoutMs)); }
     public LinceConfig setLinceConfig(LinceConfig config, int timeoutMs) {
-        return new LinceConfig(httpPut("/api/equipment/servers/lince", require(config, "config").toJsonString(), timeoutMs));
+        return new LinceConfig(httpPut(apiPath("/equipment/servers/lince"), require(config, "config").toJsonString(), timeoutMs));
     }
-    public LinceStatus getLinceStatus(int timeoutMs) { return new LinceStatus(httpGet("/api/equipment/servers/lince/status", timeoutMs)); }
+    public LinceStatus getLinceStatus(int timeoutMs) { return new LinceStatus(httpGet(apiPath("/equipment/servers/lince/status"), timeoutMs)); }
 
-    public VehicleIndicatorConfig getVehicleIndicatorConfig(int timeoutMs) { return new VehicleIndicatorConfig(httpGet("/api/equipment/vehicleIndicator", timeoutMs)); }
+    public VehicleIndicatorConfig getVehicleIndicatorConfig(int timeoutMs) { return new VehicleIndicatorConfig(httpGet(apiPath("/equipment/vehicleIndicator"), timeoutMs)); }
     public VehicleIndicatorConfig setVehicleIndicatorConfig(VehicleIndicatorConfig config, int timeoutMs) {
-        return new VehicleIndicatorConfig(httpPut("/api/equipment/vehicleIndicator", require(config, "config").toJsonString(), timeoutMs));
+        return new VehicleIndicatorConfig(httpPut(apiPath("/equipment/vehicleIndicator"), require(config, "config").toJsonString(), timeoutMs));
     }
 
-    public ProtocolsConfig getProtocolsConfig(int timeoutMs) { return new ProtocolsConfig(httpGet("/api/equipment/servers/protocols", timeoutMs)); }
+    public ProtocolsConfig getProtocolsConfig(int timeoutMs) { return new ProtocolsConfig(httpGet(apiPath("/equipment/servers/protocols"), timeoutMs)); }
     public ProtocolsConfig setProtocolsConfig(ProtocolsConfig config, int timeoutMs) {
-        return new ProtocolsConfig(httpPut("/api/equipment/servers/protocols", require(config, "config").toJsonString(), timeoutMs));
+        return new ProtocolsConfig(httpPut(apiPath("/equipment/servers/protocols"), require(config, "config").toJsonString(), timeoutMs));
     }
 
-    public ProfileTransitioner getProfileTransitioner(int timeoutMs) { return new ProfileTransitioner(httpGet("/api/equipment/transitioner", timeoutMs)); }
+    public ProfileTransitioner getProfileTransitioner(int timeoutMs) { return new ProfileTransitioner(httpGet(apiPath("/equipment/transitioner"), timeoutMs)); }
     public ProfileTransitioner setProfileTransitioner(ProfileTransitioner config, int timeoutMs) {
-        return new ProfileTransitioner(httpPut("/api/equipment/transitioner", require(config, "config").toJsonString(), timeoutMs));
+        return new ProfileTransitioner(httpPut(apiPath("/equipment/transitioner"), require(config, "config").toJsonString(), timeoutMs));
     }
 
-    public List<IoConfig> getIoPorts(int timeoutMs) { return IoConfig.listFromJson(httpGet("/api/equipment/ioPorts", timeoutMs)); }
+    public List<IoConfig> getIoPorts(int timeoutMs) { return IoConfig.listFromJson(httpGet(apiPath("/equipment/ioPorts"), timeoutMs)); }
     public List<IoConfig> setIoPorts(List<IoConfig> ports, int timeoutMs) {
-        return IoConfig.listFromJson(httpPut("/api/equipment/ioPorts", RestObject.listToJson(ports), timeoutMs));
+        return IoConfig.listFromJson(httpPut(apiPath("/equipment/ioPorts"), RestObject.listToJson(ports), timeoutMs));
     }
-    public IoConfig getIoPort(int portId, int timeoutMs) { return new IoConfig(httpGet("/api/equipment/ioPorts/" + portId, timeoutMs)); }
+    public IoConfig getIoPort(int portId, int timeoutMs) { return new IoConfig(httpGet(apiPath("/equipment/ioPorts/" + portId), timeoutMs)); }
     public IoConfig setIoPort(int portId, IoConfig port, int timeoutMs) {
-        return new IoConfig(httpPut("/api/equipment/ioPorts/" + portId, require(port, "port").toJsonString(), timeoutMs));
+        return new IoConfig(httpPut(apiPath("/equipment/ioPorts/" + portId), require(port, "port").toJsonString(), timeoutMs));
     }
 
-    public List<IoBasic> getIoBasic(int timeoutMs) { return IoBasic.listFromJson(httpGet("/api/equipment/ioBasic", timeoutMs)); }
+    public List<IoBasic> getIoBasic(int timeoutMs) { return IoBasic.listFromJson(httpGet(apiPath("/equipment/ioBasic"), timeoutMs)); }
     public List<IoBasic> setIoBasic(List<IoBasic> ports, int timeoutMs) {
-        return IoBasic.listFromJson(httpPut("/api/equipment/ioBasic", RestObject.listToJson(ports), timeoutMs));
+        return IoBasic.listFromJson(httpPut(apiPath("/equipment/ioBasic"), RestObject.listToJson(ports), timeoutMs));
     }
 
     public RestApiClientConfig getRestApiClientConfig(int serverId, int timeoutMs) {
-        return new RestApiClientConfig(httpGet("/api/equipment/servers/restapiclient/" + serverId + "/config", timeoutMs));
+        return new RestApiClientConfig(httpGet(apiPath("/equipment/servers/restapiclient/" + serverId + "/config"), timeoutMs));
     }
     public RestApiClientConfig setRestApiClientConfig(int serverId, RestApiClientConfig config, int timeoutMs) {
-        return new RestApiClientConfig(httpPut("/api/equipment/servers/restapiclient/" + serverId + "/config", require(config, "config").toJsonString(), timeoutMs));
+        return new RestApiClientConfig(httpPut(apiPath("/equipment/servers/restapiclient/" + serverId + "/config"), require(config, "config").toJsonString(), timeoutMs));
     }
     public RestApiClientStatus getRestApiClientStatus(int serverId, int timeoutMs) {
-        return new RestApiClientStatus(httpGet("/api/equipment/servers/restapiclient/" + serverId + "/status", timeoutMs));
+        return new RestApiClientStatus(httpGet(apiPath("/equipment/servers/restapiclient/" + serverId + "/status"), timeoutMs));
     }
 
-    public Licenses getLicenses(int timeoutMs) { return new Licenses(httpGet("/api/system/licenses", timeoutMs)); }
+    public Licenses getLicenses(int timeoutMs) { return new Licenses(httpGet(apiPath("/system/licenses"), timeoutMs)); }
+
+    private String apiPath(String tail) {
+        return apiPrefix + tail;
+    }
 
     private <T extends RestObject> T require(T value, String name) {
         if (value == null) throw new IllegalArgumentException(name + " is null");

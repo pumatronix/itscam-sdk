@@ -13,7 +13,11 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 /** Shared background executor for the Java wrapper's JDK 7 async surface. */
 public final class Async {
-    private static final ExecutorService EXECUTOR = Executors.newCachedThreadPool(
+    private static final int THREAD_COUNT = Math.max(2,
+        Runtime.getRuntime().availableProcessors());
+
+    private static final ExecutorService EXECUTOR = Executors.newFixedThreadPool(
+        THREAD_COUNT,
             new ThreadFactory() {
                 private final AtomicInteger nextId = new AtomicInteger(1);
 
