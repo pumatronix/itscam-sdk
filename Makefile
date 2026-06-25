@@ -462,7 +462,10 @@ java-pack: lib
 	fi
 	@$(CURDIR)/tools/packaging/stage-java-natives.sh
 	@cd $(JAVA_DIR) && $(MAVEN) -pl itscam-sdk -am package -DskipTests $(MAVEN_REVISION)
+	@cd $(JAVA_DIR)/itscam-sdk && $(MAVEN) org.apache.maven.plugins:maven-dependency-plugin:3.1.2:copy-dependencies \
+		-DincludeScope=runtime -DoutputDirectory=target/dependency $(MAVEN_REVISION)
 	@echo "  $(JAVA_DIR)/itscam-sdk/target/itscam-sdk-*.jar"
+	@echo "  $(JAVA_DIR)/itscam-sdk/target/dependency/{jna,gson}-*.jar"
 	@echo "  Native binaries embedded under META-INF/native/<os>-<arch>/"
 
 java-examples: lib

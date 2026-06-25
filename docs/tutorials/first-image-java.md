@@ -1,31 +1,23 @@
 # Primeira imagem com Java
 
-Walkthrough do zero: criar um projeto Maven, declarar a dependência `com.pumatronix:itscam-sdk` e salvar a primeira imagem JPEG da câmera em disco. Caminho principal usa o **`ItscamCgiClient`** (HTTP, anônimo por default) e há uma seção opcional no final usando o **`ItscamClient`** (Cougar TCP :60000).
+Walkthrough do zero: criar um projeto Java mínimo, usar o JAR do SDK e salvar a primeira imagem JPEG da câmera em disco. Caminho principal usa o **`ItscamCgiClient`** (HTTP, anônimo por default) e há uma seção opcional no final usando o **`ItscamClient`** (Cougar TCP :60000).
 
 ## 1. Pré-requisitos
 
 | Item | Versão mínima | Verificar com |
 | ---- | ------------- | ------------- |
 | JDK | 7+ | `java -version` |
-| Maven | 3.9+ | `mvn -v` |
-| Pacote SDK | `itscam-sdk-<version>.tar.gz` | extrair e localizar `linux-x64/java/` |
+| Pacote SDK | `itscam-sdk-<version>.tar.gz` | extrair e localizar `<plataforma>/java/` |
 | Câmera ITSCAM | ITSCAM450 / ITSCAM600 alcançável na rede | `ping <ip-da-camera>` |
 
-## 2. Extrair o SDK e instalar o JAR no Maven local
+## 2. Extrair o SDK
 
 Baixe `itscam-sdk-<version>.tar.gz` na [página de releases](https://github.com/pumatronix/itscam-sdk/releases):
 
 ```bash
 tar xzf itscam-sdk-<version>.tar.gz
 export SDK=$PWD/itscam-sdk-<version>
-
-mvn install:install-file \
-    -Dfile=$SDK/linux-x64/java/itscam-sdk-<version>.jar \
-    -DgroupId=com.pumatronix \
-    -DartifactId=itscam-sdk \
-    -Dversion=<version> \
-    -Dpackaging=jar \
-    -DgeneratePom=true
+export JAVA_SDK_DIR=$SDK/linux-x64/java   # use linux-arm64/java, win-x64/java, etc. quando apropriado
 ```
 
 > **Compilando o SDK do zero?** Se você precisa buildar a partir do source em vez de usar o pacote pré-compilado, veja a [seção avançada de build](../getting-started.md#build-do-sdk-a-partir-do-source). Após `make java`, o JAR fica em `src/wrappers/java/itscam-sdk/target/itscam-sdk-<version>.jar`.
@@ -33,38 +25,8 @@ mvn install:install-file \
 ## 3. Criar o projeto
 
 ```bash
-mvn archetype:generate -DgroupId=com.example -DartifactId=meu-app \
-    -DarchetypeArtifactId=maven-archetype-quickstart \
-    -DinteractiveMode=false
+mkdir -p meu-app/src/main/java/com/example
 cd meu-app
-```
-
-Edite `pom.xml` (ajuste `itscam.sdk.version` para coincidir com `-Dversion` do passo 2):
-
-```xml
-<project>
-    <modelVersion>4.0.0</modelVersion>
-    <groupId>com.example</groupId>
-    <artifactId>meu-app</artifactId>
-    <version>1.0-SNAPSHOT</version>
-    <properties>
-        <maven.compiler.source>1.7</maven.compiler.source>
-        <maven.compiler.target>1.7</maven.compiler.target>
-        <itscam.sdk.version>0.3.1</itscam.sdk.version>
-    </properties>
-    <dependencies>
-        <dependency>
-            <groupId>com.pumatronix</groupId>
-            <artifactId>itscam-sdk</artifactId>
-            <version>${itscam.sdk.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>net.java.dev.jna</groupId>
-            <artifactId>jna</artifactId>
-            <version>5.14.0</version>
-        </dependency>
-    </dependencies>
-</project>
 ```
 
 ## 4. Escrever o código mínimo
@@ -107,8 +69,13 @@ public final class MeuApp {
 ## 5. Executar
 
 ```bash
-mvn -q -DskipTests package
-java -cp target/meu-app-1.0-SNAPSHOT.jar:$(mvn -q dependency:build-classpath -Dmdep.outputFile=/dev/stdout) \
+SDK_CP="$JAVA_SDK_DIR/itscam-sdk-<version>.jar:$JAVA_SDK_DIR/lib/*"
+mkdir -p target/classes
+javac -source 1.7 -target 1.7 -cp "$SDK_CP" -d target/classes \
+    src/main/java/com/example/MeuApp.java
+jar cf target/meu-app-1.0-SNAPSHOT.jar -C target/classes .
+
+java -cp "target/meu-app-1.0-SNAPSHOT.jar:$SDK_CP" \
      com.example.MeuApp 192.168.254.254
 ```
 
@@ -126,6 +93,7 @@ OK: 87421 bytes salvos em primeira-imagem.jpg (image/jpeg)
 | `ItscamConnectionException` | IP errado ou porta 80 bloqueada | `curl -v http://<ip>/api/lastframe.cgi -o /dev/null` |
 | `ItscamAuthException` em CGI | A câmera tem `configCgi.blockAPI=true` | Chame `cgi.login("user", "pass", 10000)` antes do `getLastFrame()`. |
 | TLS errors em HTTPS | CA bundle não configurado | `cgi.setCaCertFile("/etc/ssl/certs/ca-bundle.pem")` ou, só em dev, `cgi.setVerifyServerCertificate(false)`. |
+| `javac: invalid target release: 1.7` | JDK antigo demais ou `javac` não está no `PATH` | Verifique `javac -version` e use um JDK 7+. |
 
 ## 7. Opcional: capture via `ItscamClient` (TCP :60000)
 

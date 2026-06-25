@@ -38,7 +38,47 @@ import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Future;
 
-/** REST/JSON client for the ITSCAM webapp on port 80/443. */
+/**
+ * REST/JSON client for the ITSCAM webapp on port 80/443.  Use this
+ * client for equipment configuration: profiles, OCR, classifier, lanes,
+ * analytics, ITSCAM PRO server hooks, networking, etc.
+ *
+ * <h2>Authentication</h2>
+ *
+ * <p><strong>REST always requires authentication.</strong>  Call
+ * {@link #login(String, String, int)} or {@link #setAuthToken(String)}
+ * before any other REST method.  A missing or expired token is reported
+ * as an {@link ItscamAuthException}.
+ *
+ * <h2>Two surfaces, one client</h2>
+ *
+ * <ul>
+ *   <li><b>Typed convenience helpers</b> &mdash; methods such as
+ *       {@link #getProfiles(int)}, {@link #setOcrConfig(OcrConfig, int)},
+ *       {@link #setItscamproConfig(ItscamproConfig, int)} and
+ *       {@link #getAutoFocus(int)} return objects from
+ *       {@code com.pumatronix.itscam.resttypes}.  Prefer these for
+ *       known configuration endpoints.</li>
+ *   <li><b>Generic verbs</b> &mdash;
+ *       {@link #httpGet(String, int)}, {@link #httpPut(String, String, int)},
+ *       {@link #httpPost(String, String, int)},
+ *       {@link #httpDelete(String, int)} and
+ *       {@link #patchJson(String, String, int)} return the raw JSON body
+ *       as a {@link String}.  Use these for untyped payloads, diagnostic
+ *       calls, fields newer than this SDK snapshot, or endpoints without
+ *       a typed helper.</li>
+ * </ul>
+ *
+ * <h2>Partial updates</h2>
+ *
+ * <p>Typed setters use partial serialization: unset fields are omitted
+ * from the {@code PUT} body and the daemon merges the supplied fields
+ * into the existing configuration.  Construct a typed resttypes object
+ * with only the fields you intend to change and pass it directly to the
+ * setter.  For raw JSON patches, use
+ * {@link #patchJson(String, String, int)} or
+ * {@link #patchJson(String, RestObject, int)}.
+ */
 public final class ItscamRestClient implements AutoCloseable {
 
     private final ItscamLibrary lib;
