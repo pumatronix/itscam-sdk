@@ -93,7 +93,7 @@ public final class RestExample {
     }
 
     private static Integer optionalIntFlag(String[] args, String name) {
-        for (int i = 0; i < args.length - 1; i++) {
+        for (int i = 3; i < args.length - 1; i++) {
             if (name.equals(args[i])) {
                 return Integer.valueOf(args[i + 1]);
             }

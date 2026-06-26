@@ -11,6 +11,7 @@ import com.pumatronix.itscam.resttypes.AnalyticsConfig;
 import com.pumatronix.itscam.resttypes.AutoFocus;
 import com.pumatronix.itscam.resttypes.ClassifierConfig;
 import com.pumatronix.itscam.resttypes.FtpConfig;
+import com.pumatronix.itscam.resttypes.GeneralConfig;
 import com.pumatronix.itscam.resttypes.ImageSignConfig;
 import com.pumatronix.itscam.resttypes.IoBasic;
 import com.pumatronix.itscam.resttypes.IoConfig;
@@ -263,8 +264,8 @@ public final class ItscamRestClient implements AutoCloseable {
     public String updateProfileJson(int profileId, String jsonProfile, int timeoutMs) { return httpPut(apiPath("/image/profiles/" + profileId), jsonProfile, timeoutMs); }
     public String updateProfilesJson(String jsonProfiles, int timeoutMs) { return httpPut(apiPath("/image/profiles"), jsonProfiles, timeoutMs); }
     public String getVolatileInfoJson(int timeoutMs) { return httpGet(apiPath("/equipment/misc/readonly/volatile"), timeoutMs); }
-    public String getGeneralConfigJson(int timeoutMs) { return httpGet(apiPath("/equipment/misc"), timeoutMs); }
-    public String setGeneralConfigJson(String json, int timeoutMs) { return httpPut(apiPath("/equipment/misc"), json, timeoutMs); }
+    public String getGeneralConfigJson(int timeoutMs) { return httpGet(apiPath("/equipment/general"), timeoutMs); }
+    public String setGeneralConfigJson(String json, int timeoutMs) { return httpPut(apiPath("/equipment/general"), json, timeoutMs); }
     public String getOcrConfigJson(int timeoutMs) { return httpGet(apiPath("/equipment/ocr"), timeoutMs); }
     public String setOcrConfigJson(String json, int timeoutMs) { return httpPut(apiPath("/equipment/ocr"), json, timeoutMs); }
     public String getAnalyticsConfigJson(int timeoutMs) { return httpGet(apiPath("/equipment/analytics"), timeoutMs); }
@@ -337,8 +338,10 @@ public final class ItscamRestClient implements AutoCloseable {
                 require(config, "config").toJsonString(), timeoutMs));
     }
 
-    public Misc getGeneralConfig(int timeoutMs) { return getMisc(timeoutMs); }
-    public Misc setGeneralConfig(Misc config, int timeoutMs) { return setMisc(config, timeoutMs); }
+    public GeneralConfig getGeneralConfig(int timeoutMs) { return new GeneralConfig(getGeneralConfigJson(timeoutMs)); }
+    public GeneralConfig setGeneralConfig(GeneralConfig config, int timeoutMs) {
+        return new GeneralConfig(httpPut(apiPath("/equipment/general"), require(config, "config").toJsonString(), timeoutMs));
+    }
 
     public OcrConfig getOcrConfig(int timeoutMs) { return new OcrConfig(getOcrConfigJson(timeoutMs)); }
     public OcrConfig setOcrConfig(OcrConfig config, int timeoutMs) {
