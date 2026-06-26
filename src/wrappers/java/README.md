@@ -37,6 +37,7 @@ make java-examples        # library + runnable examples
 # Reproducible Docker build:
 make docker-java
 make docker-java-examples
+make docker-java-jdk7-check # compile wrapper + examples with a real JDK 7 javac
 ```
 
 `make java-pack` stages the native binaries from `src/core/build/<rid>/`
@@ -79,7 +80,7 @@ try (ItscamClient cam = new ItscamClient()) {
     cam.connect("192.168.254.254", 60000, 10000);
     cam.authenticate("1234", 10000);
     cam.subscribeCaptures(10000);
-    var frames = cam.captureSnapshot(15000);
+    java.util.List<CaptureResult> frames = cam.captureSnapshot(15000);
     frames.get(0).save("snapshot.jpg");
 }
 ```
@@ -87,7 +88,7 @@ try (ItscamClient cam = new ItscamClient()) {
 ```java
 try (ItscamCgiClient cgi = new ItscamCgiClient()) {
     cgi.setBaseUrl("192.168.254.254", 80, "http");
-    var last = cgi.getLastFrame(10000);
+    CgiImage last = cgi.getLastFrame(10000);
     java.nio.file.Files.write(java.nio.file.Paths.get("lastframe.jpg"),
                               last.data());
 }
@@ -98,20 +99,24 @@ try (ItscamRestClient rest = new ItscamRestClient()) {
     rest.setBaseUrl("192.168.254.254", 80, "http");
     rest.login("admin", "1234", 10000);
 
-    String profilesJson = rest.httpGet("/api/image/profiles", 10000);
+    java.util.List<com.pumatronix.itscam.resttypes.ProfileConfig> profiles =
+        rest.getProfiles(10000);
 
-    // Partial PUT -- preferred for image profiles (full PUT returns HTTP 500):
-    rest.patchJson("/api/image/profiles/0",
-                   "{\"trigger\":{\"enabled\":false}}", 10000);
+    com.pumatronix.itscam.resttypes.LensConfig lens =
+        new com.pumatronix.itscam.resttypes.LensConfig()
+            .setZoom(1200)
+            .setFocus(300);
+    rest.updateProfileById(0,
+        new com.pumatronix.itscam.resttypes.ProfileConfig().setLens(lens),
+        10000);
 }
 ```
 
 ## Async surface
 
 Every blocking call has a `*Async` counterpart returning
-`CompletableFuture<T>`. The futures complete on the JVM's common
-fork-join pool; chain or compose them with the standard
-`thenApply`/`thenCompose`/etc. operators.
+`java.util.concurrent.Future<T>`. The futures complete on a daemon-backed
+SDK executor so the API stays compatible with JDK 7.
 
 ## Errors
 

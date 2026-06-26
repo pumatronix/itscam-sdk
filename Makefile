@@ -25,14 +25,14 @@
 .PHONY: go-examples-arm go-examples-arm64 go-examples-linux-all
 .PHONY: csharp csharp-pack csharp-examples csharp-examples-publish csharp-examples-publish-all
 .PHONY: csharp-mjpeg-grabber-example csharp-software-trigger-example
-.PHONY: java java-pack java-examples
+.PHONY: java java-pack java-examples java-jdk7-check
 .PHONY: nodejs nodejs-pack nodejs-examples
 .PHONY: install
-.PHONY: version sdk-dist sdk-dist-clean docker-sdk-dist docker-sdk-dist-examples
+.PHONY: version sdk-dist sdk-dist-clean docker-dist-pristine docker-sdk-dist docker-sdk-dist-examples
 .PHONY: docker-build docker-all docker-linux docker-windows docker-shell docker-go-gui
 .PHONY: docker-linux-arm docker-linux-arm64 docker-linux-all docker-qemu-smoke
 .PHONY: docker-csharp docker-csharp-examples docker-csharp-examples-publish
-.PHONY: docker-java docker-java-pack docker-nodejs docker-nodejs-pack
+.PHONY: docker-java docker-java-pack docker-java-jdk7-check docker-nodejs docker-nodejs-pack
 .PHONY: regression-examples docker-regression-examples
 .PHONY: docs-api docs-api-cpp docs-api-python docs-api-csharp docs-api-go
 .PHONY: docs-api-java docs-api-nodejs
@@ -422,11 +422,13 @@ csharp-software-trigger-example: csharp-examples
 # tools/packaging/stage-java-natives.sh so consumers do not need to
 # install libitscam_sdk system-wide.
 #
-# Maven 3.9+ and a JDK 11+ are required.
+# Maven 3.3+ and a JDK 7+ are required.
 
 JAVA_DIR := $(SRC_DIR)/wrappers/java
 MAVEN ?= mvn
 MAVEN_REVISION := $(if $(SDK_MAVEN_VERSION),-Drevision=$(SDK_MAVEN_VERSION),)
+JDK7_HOME ?= /opt/jdk7
+JDK7_JAVAC ?= $(JDK7_HOME)/bin/javac
 
 java: lib
 	@echo "=== Building Java wrapper (JAR) ==="
@@ -435,7 +437,7 @@ java: lib
 		cd $(JAVA_DIR) && $(MAVEN) -pl itscam-sdk -am package -DskipTests $(MAVEN_REVISION); \
 		echo "Java JAR: $(JAVA_DIR)/itscam-sdk/target/itscam-sdk-*.jar"; \
 	else \
-		echo "$(MAVEN) not found. Install Maven 3.9+ and a JDK 11+ to build the Java wrapper."; \
+		echo "$(MAVEN) not found. Install Maven 3.3+ and a JDK 7+ to build the Java wrapper."; \
 		echo "Use 'make docker-java' to build inside the Docker container."; \
 	fi
 
@@ -446,7 +448,7 @@ java: lib
 java-pack: lib
 	@echo "=== Packing Java wrapper (multi-arch JAR) ==="
 	@if ! command -v $(MAVEN) > /dev/null; then \
-		echo "$(MAVEN) not found. Install Maven 3.9+ first."; exit 1; \
+		echo "$(MAVEN) not found. Install Maven 3.3+ first."; exit 1; \
 	fi
 	@if [ -x "$(ARMHF_TOOLCHAIN_PATH)/arm-linux-gnueabihf-g++" ]; then \
 		$(MAKE) lib-arm; \
@@ -460,7 +462,10 @@ java-pack: lib
 	fi
 	@$(CURDIR)/tools/packaging/stage-java-natives.sh
 	@cd $(JAVA_DIR) && $(MAVEN) -pl itscam-sdk -am package -DskipTests $(MAVEN_REVISION)
+	@cd $(JAVA_DIR)/itscam-sdk && $(MAVEN) org.apache.maven.plugins:maven-dependency-plugin:3.1.2:copy-dependencies \
+		-DincludeScope=runtime -DoutputDirectory=target/dependency $(MAVEN_REVISION)
 	@echo "  $(JAVA_DIR)/itscam-sdk/target/itscam-sdk-*.jar"
+	@echo "  $(JAVA_DIR)/itscam-sdk/target/dependency/{jna,gson}-*.jar"
 	@echo "  Native binaries embedded under META-INF/native/<os>-<arch>/"
 
 java-examples: lib
@@ -472,9 +477,25 @@ java-examples: lib
 		echo "Run: java -cp $(JAVA_DIR)/examples/target/itscam-sdk-examples-*-all.jar \\"; \
 		echo "          com.pumatronix.itscam.examples.CaptureExample <camera_ip> [password]"; \
 	else \
-		echo "$(MAVEN) not found. Install Maven 3.9+ and a JDK 11+ to build the Java examples."; \
+		echo "$(MAVEN) not found. Install Maven 3.3+ and a JDK 7+ to build the Java examples."; \
 		echo "Use 'make docker-java-examples' to build inside the Docker container."; \
 	fi
+
+java-jdk7-check: version
+	@echo "=== Verifying Java wrapper with JDK 7 javac ==="
+	@if ! command -v $(MAVEN) > /dev/null; then \
+		echo "$(MAVEN) not found. Install Maven and run again, or use 'make docker-java-jdk7-check'."; \
+		exit 1; \
+	fi
+	@if [ ! -x "$(JDK7_JAVAC)" ]; then \
+		echo "JDK 7 javac not found at $(JDK7_JAVAC)."; \
+		echo "Set JDK7_HOME=/path/to/jdk7, or use 'make docker-java-jdk7-check'."; \
+		exit 1; \
+	fi
+	@cd $(JAVA_DIR) && $(MAVEN) -DskipTests \
+		-Dmaven.compiler.fork=true \
+		-Dmaven.compiler.executable="$(JDK7_JAVAC)" \
+		compile $(MAVEN_REVISION)
 
 docker-java: docker-build
 	@echo "=== Building Java wrapper inside Docker ==="
@@ -487,6 +508,10 @@ docker-java-pack: docker-build
 docker-java-examples: docker-build
 	@echo "=== Building Java wrapper + examples inside Docker ==="
 	$(DOCKER_RUN) $(DOCKER_IMAGE) make java-examples
+
+docker-java-jdk7-check: docker-build
+	@echo "=== Verifying Java wrapper with JDK 7 javac inside Docker ==="
+	$(DOCKER_RUN) $(DOCKER_IMAGE) make java-jdk7-check
 
 # ============================================================================
 #  Node.js Wrapper (koffi)
@@ -824,7 +849,7 @@ docker-shell: docker-build
 
 docker-go-gui: docker-build
 	@echo "=== Building Go GUI (Wails) inside Docker ==="
-	$(DOCKER_RUN) $(DOCKER_IMAGE) make go-gui
+	$(DOCKER_RUN) $(DOCKER_IMAGE) make docker-dist-pristine go-gui
 
 docker-go-gui-windows: docker-build
 	@echo "=== Building Go GUI for Windows inside Docker ==="
@@ -865,17 +890,31 @@ all: linux windows examples wrappers
 
 SDK_DIST_SCRIPT := $(CURDIR)/tools/packaging/make-sdk-dist.sh
 
+# Docker distribution builds must not reuse host-built native artefacts from the
+# bind-mounted workspace.  A host compiler may emit C++ ABI references newer
+# than the pinned builder image can link, even when make considers the files
+# up-to-date.
+docker-dist-pristine:
+	@echo "=== Cleaning Docker distribution build artefacts ==="
+	@$(MAKE) -C $(SRC_DIR)/core clean
+	@rm -rf $(GO_GUI_DIR)/build/bin
+
 # Build Wails GUI binaries for the consumer tarball (source for everything else).
 sdk-dist-examples: go-gui go-gui-windows
 	@echo "=== SDK distribution examples ready (Wails GUI binaries) ==="
 
-sdk-dist: version lib windows csharp-pack java-pack nodejs-pack sdk-dist-examples
-	@echo "=== Packaging SDK distribution ($(SDK_VERSION), linux-x64 + win-x64 + win-x86) ==="
+# Generate version metadata once before package/build helpers stage files in the
+# checkout; recursive makes reuse that snapshot so release archives keep the
+# clean tag version instead of being renamed +dirty by later build artefacts.
+sdk-dist: version
+	$(MAKE) lib windows csharp-pack java-pack nodejs-pack sdk-dist-examples ITSCAM_VERSION_LOCKED=1
+	@SDK_VERSION="$$(python3 -c 'import json; print(json.load(open("VERSION.json"))["version"])')"; \
+		echo "=== Packaging SDK distribution ($$SDK_VERSION, linux-x64 + win-x64 + win-x86) ==="
 	@$(SDK_DIST_SCRIPT)
 
 docker-sdk-dist-examples: docker-build
 	@echo "=== Building SDK distribution examples inside Docker ==="
-	$(DOCKER_RUN) $(DOCKER_IMAGE) make sdk-dist-examples
+	$(DOCKER_RUN) $(DOCKER_IMAGE) make docker-dist-pristine sdk-dist-examples
 
 sdk-dist-clean:
 	@echo "=== Removing SDK distribution artefacts ==="
@@ -883,7 +922,7 @@ sdk-dist-clean:
 
 docker-sdk-dist: docker-build
 	@echo "=== Packaging SDK distribution inside Docker ==="
-	$(DOCKER_RUN) $(DOCKER_IMAGE) make sdk-dist
+	$(DOCKER_RUN) $(DOCKER_IMAGE) make docker-dist-pristine sdk-dist
 
 # ============================================================================
 #  Installation
@@ -966,9 +1005,10 @@ help:
 	@echo "  csharp-pack-linux  NuGet with Linux native binary only (sdk-dist)"
 	@echo "  csharp-mjpeg-grabber-example     Build + print run instructions"
 	@echo "  csharp-software-trigger-example  Build + print run instructions"
-	@echo "  java            Build Java wrapper JAR (Maven; requires JDK 11+)"
+	@echo "  java            Build Java wrapper JAR (Maven; requires JDK 7+)"
 	@echo "  java-pack       Same as java; embeds native binaries into JAR"
 	@echo "  java-examples   Build Java wrapper + runnable examples"
+	@echo "  java-jdk7-check Verify Java wrapper/examples using a real JDK 7 javac"
 	@echo "  nodejs          Build Node.js wrapper (npm install + stage natives)"
 	@echo "  nodejs-pack     Run 'npm pack' to produce a publish-ready tarball"
 	@echo "  nodejs-examples Build Node.js wrapper + show example commands"
@@ -988,6 +1028,7 @@ help:
 	@echo "  docker-csharp-examples          Build C# wrapper + examples inside Docker"
 	@echo "  docker-csharp-examples-publish  Publish self-contained C# binaries inside Docker"
 	@echo "  docker-java[-pack|-examples]    Build/pack Java wrapper inside Docker"
+	@echo "  docker-java-jdk7-check          Verify Java wrapper using JDK 7 javac in Docker"
 	@echo "  docker-nodejs[-pack]            Build/pack Node.js wrapper inside Docker"
 	@echo "  docker-go-gui   Build Go GUI inside Docker (Linux)"
 	@echo "  docker-go-gui-windows  Build Go GUI for Windows inside Docker"

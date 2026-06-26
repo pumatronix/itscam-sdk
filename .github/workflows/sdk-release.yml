@@ -77,7 +77,7 @@ jobs:
             -e GOMODCACHE=/tmp/go/pkg/mod \
             -e GOCACHE=/tmp/go/build-cache \
             itscam-sdk-builder:ci \
-            make sdk-dist
+            make docker-dist-pristine sdk-dist
 
       - name: Extract version metadata
         id: version

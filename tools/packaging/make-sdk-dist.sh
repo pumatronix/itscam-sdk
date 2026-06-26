@@ -354,6 +354,27 @@ stage_java_jar() {
     fi
 
     cp "${jars[@]}" "$dest/"
+
+    local jna_version gson_version
+    jna_version="$(sed -n 's:.*<jna.version>\(.*\)</jna.version>.*:\1:p' "$JAVA/itscam-sdk/pom.xml" | head -n 1)"
+    gson_version="$(sed -n 's:.*<gson.version>\(.*\)</gson.version>.*:\1:p' "$JAVA/itscam-sdk/pom.xml" | head -n 1)"
+
+    local dep_src="$JAVA/itscam-sdk/target/dependency"
+    local dep_dir="$dest/lib"
+    local jna_jar="$dep_src/jna-$jna_version.jar"
+    local gson_jar="$dep_src/gson-$gson_version.jar"
+
+    if [ ! -f "$jna_jar" ] || [ ! -f "$gson_jar" ]; then
+        local m2_repo="${M2_REPO:-${HOME:-}/.m2/repository}"
+        jna_jar="$m2_repo/net/java/dev/jna/jna/$jna_version/jna-$jna_version.jar"
+        gson_jar="$m2_repo/com/google/code/gson/gson/$gson_version/gson-$gson_version.jar"
+    fi
+
+    [ -f "$jna_jar" ] || die "missing Java runtime dependency jna-$jna_version.jar (run 'make java-pack' first)"
+    [ -f "$gson_jar" ] || die "missing Java runtime dependency gson-$gson_version.jar (run 'make java-pack' first)"
+
+    mkdir -p "$dep_dir"
+    cp "$jna_jar" "$gson_jar" "$dep_dir/"
 }
 
 write_consumer_cpp_makefile() {
@@ -465,14 +486,12 @@ C# (examples/csharp/)
 
 Java (examples/java/)
 ---------------------
-  Install the SDK JAR first:
-    mvn install:install-file \\
-        -Dfile=linux-x64/java/itscam-sdk-${MAVEN_VERSION}.jar \\
-        -DgroupId=com.pumatronix -DartifactId=itscam-sdk \\
-        -Dversion=${MAVEN_VERSION} -Dpackaging=jar -DgeneratePom=true
-  javac -cp ~/.m2/repository/com/pumatronix/itscam-sdk/${MAVEN_VERSION}/itscam-sdk-${MAVEN_VERSION}.jar \\
+    Compile directly with the SDK JAR and bundled runtime dependencies:
+    JAVA_SDK_DIR=linux-x64/java   # or linux-arm64/java, win-x64/java, ...
+    javac -cp "\$JAVA_SDK_DIR/itscam-sdk-${MAVEN_VERSION}.jar:\$JAVA_SDK_DIR/lib/*" \\
         examples/java/src/main/java/com/pumatronix/itscam/examples/CaptureExample.java
-  java -cp ... com.pumatronix.itscam.examples.CaptureExample 192.168.254.254 1234
+    java -cp "\$JAVA_SDK_DIR/itscam-sdk-${MAVEN_VERSION}.jar:\$JAVA_SDK_DIR/lib/*:examples/java/src/main/java" \\
+                com.pumatronix.itscam.examples.CaptureExample 192.168.254.254 1234
 
 Python (examples/python/)
 -------------------------
@@ -761,19 +780,14 @@ Build no Windows com CGO; \`native/itscam_sdk.dll\` deve estar no PATH ou ao lad
 ## Java (qualquer plataforma)
 
 O JAR contém native libraries para linux-x64, win-x64, win-x86, etc.
-embutidas em \`META-INF/native/<os>-<arch>/\`; sem compilação JNI.
+embutidas em \`META-INF/native/<os>-<arch>/\`; as dependências Java ficam em
+\`<plataforma>/java/lib/\`. Sem compilação JNI.
 
 \`\`\`bash
-mvn install:install-file \\
-    -Dfile=linux-x64/java/itscam-sdk-${SDK_VERSION}.jar \\
-    -DgroupId=com.pumatronix \\
-    -DartifactId=itscam-sdk \\
-    -Dversion=${SDK_VERSION} \\
-    -Dpackaging=jar \\
-    -DgeneratePom=true
+JAVA_SDK_DIR=linux-x64/java   # ou linux-arm64/java, win-x64/java, ...
+javac -cp "\$JAVA_SDK_DIR/itscam-sdk-${SDK_VERSION}.jar:\$JAVA_SDK_DIR/lib/*" SeuApp.java
+java -cp ".:\$JAVA_SDK_DIR/itscam-sdk-${SDK_VERSION}.jar:\$JAVA_SDK_DIR/lib/*" SeuApp
 \`\`\`
-
-Depois declare \`com.pumatronix:itscam-sdk:${SDK_VERSION}\` + JNA 5.14+ no \`pom.xml\`.
 
 ## Node.js (qualquer plataforma)
 
@@ -904,19 +918,14 @@ Build on Windows with CGO; \`native/itscam_sdk.dll\` must be on PATH or beside t
 ## Java (any platform)
 
 The JAR contains native libraries for linux-x64, win-x64, win-x86, etc.
-embedded under \`META-INF/native/<os>-<arch>/\`; no JNI compilation needed.
+embedded under \`META-INF/native/<os>-<arch>/\`; Java dependencies are bundled
+under \`<platform>/java/lib/\`. No JNI compilation needed.
 
 \`\`\`bash
-mvn install:install-file \\
-    -Dfile=linux-x64/java/itscam-sdk-${SDK_VERSION}.jar \\
-    -DgroupId=com.pumatronix \\
-    -DartifactId=itscam-sdk \\
-    -Dversion=${SDK_VERSION} \\
-    -Dpackaging=jar \\
-    -DgeneratePom=true
+JAVA_SDK_DIR=linux-x64/java   # or linux-arm64/java, win-x64/java, ...
+javac -cp "\$JAVA_SDK_DIR/itscam-sdk-${SDK_VERSION}.jar:\$JAVA_SDK_DIR/lib/*" YourApp.java
+java -cp ".:\$JAVA_SDK_DIR/itscam-sdk-${SDK_VERSION}.jar:\$JAVA_SDK_DIR/lib/*" YourApp
 \`\`\`
-
-Then declare \`com.pumatronix:itscam-sdk:${SDK_VERSION}\` + JNA 5.14+ in your \`pom.xml\`.
 
 ## Node.js (any platform)
 

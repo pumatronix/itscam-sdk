@@ -35,7 +35,7 @@ public final class FrameInfo {
         this.width = width;
         this.height = height;
         this.timestamp = timestamp;
-        this.plates = plates == null ? Collections.emptyList()
+        this.plates = plates == null ? Collections.<String>emptyList()
                                      : Collections.unmodifiableList(plates);
     }
 

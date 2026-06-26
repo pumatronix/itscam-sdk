@@ -4,12 +4,40 @@
  */
 package com.pumatronix.itscam;
 
+import com.pumatronix.itscam.internal.Async;
 import com.pumatronix.itscam.internal.ItscamLibrary;
 import com.pumatronix.itscam.internal.NativeLibrary;
+import com.pumatronix.itscam.resttypes.AnalyticsConfig;
+import com.pumatronix.itscam.resttypes.AutoFocus;
+import com.pumatronix.itscam.resttypes.ClassifierConfig;
+import com.pumatronix.itscam.resttypes.FtpConfig;
+import com.pumatronix.itscam.resttypes.GeneralConfig;
+import com.pumatronix.itscam.resttypes.ImageSignConfig;
+import com.pumatronix.itscam.resttypes.IoBasic;
+import com.pumatronix.itscam.resttypes.IoConfig;
+import com.pumatronix.itscam.resttypes.ItscamproConfig;
+import com.pumatronix.itscam.resttypes.ItscamproStatus;
+import com.pumatronix.itscam.resttypes.LanesConfig;
+import com.pumatronix.itscam.resttypes.Licenses;
+import com.pumatronix.itscam.resttypes.LinceConfig;
+import com.pumatronix.itscam.resttypes.LinceStatus;
+import com.pumatronix.itscam.resttypes.Misc;
+import com.pumatronix.itscam.resttypes.MiscVolatile;
+import com.pumatronix.itscam.resttypes.OcrConfig;
+import com.pumatronix.itscam.resttypes.ProfileConfig;
+import com.pumatronix.itscam.resttypes.ProfileTransitioner;
+import com.pumatronix.itscam.resttypes.ProtocolsConfig;
+import com.pumatronix.itscam.resttypes.RestApiClientConfig;
+import com.pumatronix.itscam.resttypes.RestApiClientStatus;
+import com.pumatronix.itscam.resttypes.RestObject;
+import com.pumatronix.itscam.resttypes.StreamConfig;
+import com.pumatronix.itscam.resttypes.VehicleIndicatorConfig;
 import com.sun.jna.Pointer;
 import com.sun.jna.ptr.PointerByReference;
 
-import java.util.concurrent.CompletableFuture;
+import java.util.List;
+import java.util.concurrent.Callable;
+import java.util.concurrent.Future;
 
 /**
  * REST/JSON client for the ITSCAM webapp on port 80/443.  Use this
@@ -19,36 +47,44 @@ import java.util.concurrent.CompletableFuture;
  * <h2>Authentication</h2>
  *
  * <p><strong>REST always requires authentication.</strong>  Call
- * {@link #login(String, String, int)} (or
- * {@link #setAuthToken(String)}) before any other method.
+ * {@link #login(String, String, int)} or {@link #setAuthToken(String)}
+ * before any other REST method.  A missing or expired token is reported
+ * as an {@link ItscamAuthException}.
  *
  * <h2>Two surfaces, one client</h2>
  *
  * <ul>
- *   <li><b>Generic verbs</b> &mdash; {@link #httpGet}, {@link #httpPut},
- *       {@link #httpPost}, {@link #httpDelete} return the raw JSON
- *       response as a {@link String}.  Use these for partial updates
- *       (preferred) and for endpoints not yet covered by a typed
- *       helper.</li>
- *   <li><b>Typed convenience helpers</b> &mdash; {@link #getProfiles},
- *       {@link #setOcrConfig}, {@link #setItscamproConfig}, etc. wrap
- *       the typed C-API endpoints.  They return raw JSON; use a JSON
- *       library (Jackson, Gson, ...) of your choice to deserialise
- *       into POJOs.</li>
+ *   <li><b>Typed convenience helpers</b> &mdash; methods such as
+ *       {@link #getProfiles(int)}, {@link #setOcrConfig(OcrConfig, int)},
+ *       {@link #setItscamproConfig(ItscamproConfig, int)} and
+ *       {@link #getAutoFocus(int)} return objects from
+ *       {@code com.pumatronix.itscam.resttypes}.  Prefer these for
+ *       known configuration endpoints.</li>
+ *   <li><b>Generic verbs</b> &mdash;
+ *       {@link #httpGet(String, int)}, {@link #httpPut(String, String, int)},
+ *       {@link #httpPost(String, String, int)},
+ *       {@link #httpDelete(String, int)} and
+ *       {@link #patchJson(String, String, int)} return the raw JSON body
+ *       as a {@link String}.  Use these for untyped payloads, diagnostic
+ *       calls, fields newer than this SDK snapshot, or endpoints without
+ *       a typed helper.</li>
  * </ul>
  *
  * <h2>Partial updates</h2>
  *
- * <p>The ITSCAM daemon merges {@code PUT} bodies, so prefer
- * {@link #patchJson(String, String, int)} (which is just an alias for
- * {@code httpPut}) and send only the fields you intend to change.
- * Round-tripping a full {@code ProfileConfig} document via
- * {@code PUT /api/image/profiles/{id}} returns HTTP 500.
+ * <p>Typed setters use partial serialization: unset fields are omitted
+ * from the {@code PUT} body and the daemon merges the supplied fields
+ * into the existing configuration.  Construct a typed resttypes object
+ * with only the fields you intend to change and pass it directly to the
+ * setter.  For raw JSON patches, use
+ * {@link #patchJson(String, String, int)} or
+ * {@link #patchJson(String, RestObject, int)}.
  */
 public final class ItscamRestClient implements AutoCloseable {
 
     private final ItscamLibrary lib;
     private Pointer handle;
+    private volatile String apiPrefix = "/api";
 
     public ItscamRestClient() {
         this.lib = NativeLibrary.get();
@@ -73,10 +109,6 @@ public final class ItscamRestClient implements AutoCloseable {
         }
     }
 
-    // ====================================================================
-    //  Configuration
-    // ====================================================================
-
     public void setBaseUrl(String host, int port, String scheme) {
         requireOpen();
         int rc = lib.ITSCAM_RestClient_setBaseUrl(handle, host,
@@ -87,6 +119,9 @@ public final class ItscamRestClient implements AutoCloseable {
     public void setApiPrefix(String prefix) {
         requireOpen();
         lib.ITSCAM_RestClient_setApiPrefix(handle, prefix);
+        if (prefix != null) {
+            apiPrefix = prefix;
+        }
     }
 
     public void setCaCertFile(String pemPath) {
@@ -109,10 +144,6 @@ public final class ItscamRestClient implements AutoCloseable {
         lib.ITSCAM_RestClient_setClientCertificate(handle, certPem, keyPem);
     }
 
-    // ====================================================================
-    //  Authentication
-    // ====================================================================
-
     public String login(String username, String password, int timeoutMs) {
         requireOpen();
         PointerByReference out = new PointerByReference();
@@ -123,10 +154,14 @@ public final class ItscamRestClient implements AutoCloseable {
         return body;
     }
 
-    public CompletableFuture<String> loginAsync(String username, String password,
-                                                int timeoutMs) {
-        return CompletableFuture.supplyAsync(
-                () -> login(username, password, timeoutMs));
+    public Future<String> loginAsync(final String username, final String password,
+                                     final int timeoutMs) {
+        return Async.submit(new Callable<String>() {
+            @Override
+            public String call() {
+                return login(username, password, timeoutMs);
+            }
+        });
     }
 
     public void setAuthToken(String token) {
@@ -138,10 +173,6 @@ public final class ItscamRestClient implements AutoCloseable {
         requireOpen();
         lib.ITSCAM_RestClient_clearAuthToken(handle);
     }
-
-    // ====================================================================
-    //  Generic HTTP verbs
-    // ====================================================================
 
     public String httpGet(String path, int timeoutMs) {
         requireOpen();
@@ -181,189 +212,234 @@ public final class ItscamRestClient implements AutoCloseable {
         return body;
     }
 
-    /**
-     * Send a partial JSON body via HTTP PUT.  Alias of {@link #httpPut}.
-     * Use this for ITSCAM daemon endpoints that merge incoming bodies
-     * (notably {@code /api/image/profiles/{id}} which rejects full
-     * documents with HTTP 500).
-     */
     public String patchJson(String path, String partialJson, int timeoutMs) {
         return httpPut(path, partialJson, timeoutMs);
     }
 
-    public CompletableFuture<String> getAsync(String path, int timeoutMs) {
-        return CompletableFuture.supplyAsync(() -> httpGet(path, timeoutMs));
+    public String patchJson(String path, RestObject patch, int timeoutMs) {
+        return httpPut(path, require(patch, "patch").toJsonString(), timeoutMs);
     }
 
-    public CompletableFuture<String> putAsync(String path, String body,
-                                              int timeoutMs) {
-        return CompletableFuture.supplyAsync(() -> httpPut(path, body, timeoutMs));
+    public Future<String> getAsync(final String path, final int timeoutMs) {
+        return Async.submit(new Callable<String>() {
+            @Override
+            public String call() {
+                return httpGet(path, timeoutMs);
+            }
+        });
     }
 
-    public CompletableFuture<String> postAsync(String path, String body,
-                                               int timeoutMs) {
-        return CompletableFuture.supplyAsync(() -> httpPost(path, body, timeoutMs));
+    public Future<String> putAsync(final String path, final String body,
+                                   final int timeoutMs) {
+        return Async.submit(new Callable<String>() {
+            @Override
+            public String call() {
+                return httpPut(path, body, timeoutMs);
+            }
+        });
     }
 
-    public CompletableFuture<String> deleteAsync(String path, int timeoutMs) {
-        return CompletableFuture.supplyAsync(() -> httpDelete(path, timeoutMs));
+    public Future<String> postAsync(final String path, final String body,
+                                    final int timeoutMs) {
+        return Async.submit(new Callable<String>() {
+            @Override
+            public String call() {
+                return httpPost(path, body, timeoutMs);
+            }
+        });
     }
 
-    // ====================================================================
-    //  Typed convenience helpers
-    //
-    //  These wrap the ITSCAM_RestClient_get/setXxx C entry points and
-    //  return the raw JSON string.  Plug your favourite JSON library
-    //  (Jackson, Gson, JSON-B) on top to deserialise into POJOs.
-    // ====================================================================
-
-    public String getProfiles(int timeoutMs) {
-        return invokeJson("getProfiles", timeoutMs,
-                (h, t, o) -> lib.ITSCAM_RestClient_getProfiles(h, t, o));
+    public Future<String> deleteAsync(final String path, final int timeoutMs) {
+        return Async.submit(new Callable<String>() {
+            @Override
+            public String call() {
+                return httpDelete(path, timeoutMs);
+            }
+        });
     }
 
-    public String getProfile(int profileId, int timeoutMs) {
-        requireOpen();
-        PointerByReference out = new PointerByReference();
-        int rc = lib.ITSCAM_RestClient_getProfile(handle, profileId,
-                timeoutMs, out);
-        String body = takeString(out.getValue());
-        ItscamException.throwIfFailed(rc, "getProfile(" + profileId + ")");
-        return body;
+    public String getProfilesJson(int timeoutMs) { return httpGet(apiPath("/image/profiles"), timeoutMs); }
+    public String getProfileJson(int profileId, int timeoutMs) { return httpGet(apiPath("/image/profiles?id=" + profileId), timeoutMs); }
+    public String createProfileJson(String jsonProfile, int timeoutMs) { return httpPost(apiPath("/image/profiles"), jsonProfile, timeoutMs); }
+    public String updateProfileJson(int profileId, String jsonProfile, int timeoutMs) { return httpPut(apiPath("/image/profiles/" + profileId), jsonProfile, timeoutMs); }
+    public String updateProfilesJson(String jsonProfiles, int timeoutMs) { return httpPut(apiPath("/image/profiles"), jsonProfiles, timeoutMs); }
+    public String getVolatileInfoJson(int timeoutMs) { return httpGet(apiPath("/equipment/misc/readonly/volatile"), timeoutMs); }
+    public String getGeneralConfigJson(int timeoutMs) { return httpGet(apiPath("/equipment/general"), timeoutMs); }
+    public String setGeneralConfigJson(String json, int timeoutMs) { return httpPut(apiPath("/equipment/general"), json, timeoutMs); }
+    public String getOcrConfigJson(int timeoutMs) { return httpGet(apiPath("/equipment/ocr"), timeoutMs); }
+    public String setOcrConfigJson(String json, int timeoutMs) { return httpPut(apiPath("/equipment/ocr"), json, timeoutMs); }
+    public String getAnalyticsConfigJson(int timeoutMs) { return httpGet(apiPath("/equipment/analytics"), timeoutMs); }
+    public String setAnalyticsConfigJson(String json, int timeoutMs) { return httpPut(apiPath("/equipment/analytics"), json, timeoutMs); }
+    public String getClassifierConfigJson(int timeoutMs) { return httpGet(apiPath("/equipment/classifier"), timeoutMs); }
+    public String setClassifierConfigJson(String json, int timeoutMs) { return httpPut(apiPath("/equipment/classifier"), json, timeoutMs); }
+    public String getLanesConfigJson(int timeoutMs) { return httpGet(apiPath("/equipment/lanes"), timeoutMs); }
+    public String setLanesConfigJson(String json, int timeoutMs) { return httpPut(apiPath("/equipment/lanes"), json, timeoutMs); }
+    public String getItscamproConfigJson(int timeoutMs) { return httpGet(apiPath("/equipment/servers/itscampro"), timeoutMs); }
+    public String setItscamproConfigJson(String json, int timeoutMs) { return httpPut(apiPath("/equipment/servers/itscampro"), json, timeoutMs); }
+    public String getItscamproStatusJson(int timeoutMs) { return httpGet(apiPath("/equipment/servers/itscampro/status"), timeoutMs); }
+
+    public List<ProfileConfig> getProfiles(int timeoutMs) {
+        return ProfileConfig.listFromJson(getProfilesJson(timeoutMs));
     }
 
-    public String createProfile(String jsonProfile, int timeoutMs) {
-        requireOpen();
-        PointerByReference out = new PointerByReference();
-        int rc = lib.ITSCAM_RestClient_createProfile(handle, jsonProfile,
-                timeoutMs, out);
-        String body = takeString(out.getValue());
-        ItscamException.throwIfFailed(rc, "createProfile");
-        return body;
+    public List<ProfileConfig> getProfile(int profileId, int timeoutMs) {
+        return ProfileConfig.listFromJson(getProfileJson(profileId, timeoutMs));
     }
 
-    public String updateProfile(String jsonProfile, int timeoutMs) {
-        requireOpen();
-        PointerByReference out = new PointerByReference();
-        int rc = lib.ITSCAM_RestClient_updateProfile(handle, jsonProfile,
-                timeoutMs, out);
-        String body = takeString(out.getValue());
-        ItscamException.throwIfFailed(rc, "updateProfile");
-        return body;
+    public ProfileConfig getProfileByName(String name, int timeoutMs) {
+        if (name == null) throw new IllegalArgumentException("name is null");
+        List<ProfileConfig> profiles = getProfiles(timeoutMs);
+        for (ProfileConfig profile : profiles) {
+            if (name.equals(profile.getName())) return profile;
+        }
+        throw new ItscamInvalidParameterException("profile not found: \"" + name + "\"");
+    }
+
+    public ProfileConfig createProfile(ProfileConfig profile, int timeoutMs) {
+        return new ProfileConfig(httpPost(apiPath("/image/profiles"),
+                require(profile, "profile").toJsonString(), timeoutMs));
+    }
+
+    public ProfileConfig updateProfileById(int profileId, ProfileConfig profile,
+                                           int timeoutMs) {
+        return new ProfileConfig(httpPut(apiPath("/image/profiles/" + profileId),
+                require(profile, "profile").toJsonString(), timeoutMs));
+    }
+
+    public ProfileConfig updateProfileByName(String name, ProfileConfig profile,
+                                             int timeoutMs) {
+        ProfileConfig found = getProfileByName(name, timeoutMs);
+        Long id = found.getId();
+        if (id == null) {
+            throw new ItscamInvalidParameterException("profile has no id: \"" + name + "\"");
+        }
+        return updateProfileById(id.intValue(), profile, timeoutMs);
+    }
+
+    public ProfileConfig updateProfiles(List<ProfileConfig> profiles, int timeoutMs) {
+        return new ProfileConfig(httpPut(apiPath("/image/profiles"),
+                RestObject.listToJson(profiles), timeoutMs));
     }
 
     public String deleteProfile(int profileId, int timeoutMs) {
-        requireOpen();
-        PointerByReference out = new PointerByReference();
-        int rc = lib.ITSCAM_RestClient_deleteProfile(handle, profileId,
-                timeoutMs, out);
-        String body = takeString(out.getValue());
-        ItscamException.throwIfFailed(rc, "deleteProfile(" + profileId + ")");
-        return body;
+        return httpDelete(apiPath("/image/profiles?id=" + profileId), timeoutMs);
     }
 
-    public String getVolatileInfo(int timeoutMs) {
-        return invokeJson("getVolatileInfo", timeoutMs,
-                (h, t, o) -> lib.ITSCAM_RestClient_getVolatileInfo(h, t, o));
+    public MiscVolatile getVolatileInfo(int timeoutMs) {
+        return new MiscVolatile(getVolatileInfoJson(timeoutMs));
     }
 
-    public String getGeneralConfig(int timeoutMs) {
-        return invokeJson("getGeneralConfig", timeoutMs,
-                (h, t, o) -> lib.ITSCAM_RestClient_getGeneralConfig(h, t, o));
+    public Misc getMisc(int timeoutMs) {
+        return new Misc(httpGet(apiPath("/equipment/misc"), timeoutMs));
     }
 
-    public String setGeneralConfig(String json, int timeoutMs) {
-        return invokeJsonWithBody("setGeneralConfig", json, timeoutMs,
-                (h, j, t, o) -> lib.ITSCAM_RestClient_setGeneralConfig(h, j, t, o));
+    public Misc setMisc(Misc config, int timeoutMs) {
+        return new Misc(httpPut(apiPath("/equipment/misc"),
+                require(config, "config").toJsonString(), timeoutMs));
     }
 
-    public String getOcrConfig(int timeoutMs) {
-        return invokeJson("getOcrConfig", timeoutMs,
-                (h, t, o) -> lib.ITSCAM_RestClient_getOcrConfig(h, t, o));
+    public GeneralConfig getGeneralConfig(int timeoutMs) { return new GeneralConfig(getGeneralConfigJson(timeoutMs)); }
+    public GeneralConfig setGeneralConfig(GeneralConfig config, int timeoutMs) {
+        return new GeneralConfig(httpPut(apiPath("/equipment/general"), require(config, "config").toJsonString(), timeoutMs));
     }
 
-    public String setOcrConfig(String json, int timeoutMs) {
-        return invokeJsonWithBody("setOcrConfig", json, timeoutMs,
-                (h, j, t, o) -> lib.ITSCAM_RestClient_setOcrConfig(h, j, t, o));
+    public OcrConfig getOcrConfig(int timeoutMs) { return new OcrConfig(getOcrConfigJson(timeoutMs)); }
+    public OcrConfig setOcrConfig(OcrConfig config, int timeoutMs) {
+        return new OcrConfig(httpPut(apiPath("/equipment/ocr"), require(config, "config").toJsonString(), timeoutMs));
     }
 
-    public String getAnalyticsConfig(int timeoutMs) {
-        return invokeJson("getAnalyticsConfig", timeoutMs,
-                (h, t, o) -> lib.ITSCAM_RestClient_getAnalyticsConfig(h, t, o));
+    public AnalyticsConfig getAnalyticsConfig(int timeoutMs) { return new AnalyticsConfig(getAnalyticsConfigJson(timeoutMs)); }
+    public AnalyticsConfig setAnalyticsConfig(AnalyticsConfig config, int timeoutMs) {
+        return new AnalyticsConfig(httpPut(apiPath("/equipment/analytics"), require(config, "config").toJsonString(), timeoutMs));
     }
 
-    public String setAnalyticsConfig(String json, int timeoutMs) {
-        return invokeJsonWithBody("setAnalyticsConfig", json, timeoutMs,
-                (h, j, t, o) -> lib.ITSCAM_RestClient_setAnalyticsConfig(h, j, t, o));
+    public ClassifierConfig getClassifierConfig(int timeoutMs) { return new ClassifierConfig(getClassifierConfigJson(timeoutMs)); }
+    public ClassifierConfig setClassifierConfig(ClassifierConfig config, int timeoutMs) {
+        return new ClassifierConfig(httpPut(apiPath("/equipment/classifier"), require(config, "config").toJsonString(), timeoutMs));
     }
 
-    public String getClassifierConfig(int timeoutMs) {
-        return invokeJson("getClassifierConfig", timeoutMs,
-                (h, t, o) -> lib.ITSCAM_RestClient_getClassifierConfig(h, t, o));
+    public AutoFocus getAutoFocus(int timeoutMs) { return new AutoFocus(httpGet(apiPath("/equipment/autofocus"), timeoutMs)); }
+    public AutoFocus setAutoFocus(AutoFocus config, int timeoutMs) {
+        return new AutoFocus(httpPut(apiPath("/equipment/autofocus"), require(config, "config").toJsonString(), timeoutMs));
     }
 
-    public String setClassifierConfig(String json, int timeoutMs) {
-        return invokeJsonWithBody("setClassifierConfig", json, timeoutMs,
-                (h, j, t, o) -> lib.ITSCAM_RestClient_setClassifierConfig(h, j, t, o));
+    public StreamConfig getStreamConfig(int timeoutMs) { return new StreamConfig(httpGet(apiPath("/video/streams"), timeoutMs)); }
+    public StreamConfig setStreamConfig(StreamConfig config, int timeoutMs) {
+        return new StreamConfig(httpPut(apiPath("/video/streams"), require(config, "config").toJsonString(), timeoutMs));
     }
 
-    public String getLanesConfig(int timeoutMs) {
-        return invokeJson("getLanesConfig", timeoutMs,
-                (h, t, o) -> lib.ITSCAM_RestClient_getLanesConfig(h, t, o));
+    public LanesConfig getLanesConfig(int timeoutMs) { return new LanesConfig(getLanesConfigJson(timeoutMs)); }
+    public LanesConfig setLanesConfig(LanesConfig config, int timeoutMs) {
+        return new LanesConfig(httpPut(apiPath("/equipment/lanes"), require(config, "config").toJsonString(), timeoutMs));
     }
 
-    public String setLanesConfig(String json, int timeoutMs) {
-        return invokeJsonWithBody("setLanesConfig", json, timeoutMs,
-                (h, j, t, o) -> lib.ITSCAM_RestClient_setLanesConfig(h, j, t, o));
+    public ItscamproConfig getItscamproConfig(int timeoutMs) { return new ItscamproConfig(getItscamproConfigJson(timeoutMs)); }
+    public ItscamproConfig setItscamproConfig(ItscamproConfig config, int timeoutMs) {
+        return new ItscamproConfig(httpPut(apiPath("/equipment/servers/itscampro"), require(config, "config").toJsonString(), timeoutMs));
     }
 
-    public String getItscamproConfig(int timeoutMs) {
-        return invokeJson("getItscamproConfig", timeoutMs,
-                (h, t, o) -> lib.ITSCAM_RestClient_getItscamproConfig(h, t, o));
+    public ItscamproStatus getItscamproStatus(int timeoutMs) { return new ItscamproStatus(getItscamproStatusJson(timeoutMs)); }
+    public ImageSignConfig getImageSignConfig(int timeoutMs) { return new ImageSignConfig(httpGet(apiPath("/equipment/imageSign"), timeoutMs)); }
+
+    public FtpConfig getFtpConfig(int timeoutMs) { return new FtpConfig(httpGet(apiPath("/equipment/servers/ftp"), timeoutMs)); }
+    public FtpConfig setFtpConfig(FtpConfig config, int timeoutMs) {
+        return new FtpConfig(httpPut(apiPath("/equipment/servers/ftp"), require(config, "config").toJsonString(), timeoutMs));
     }
 
-    public String setItscamproConfig(String json, int timeoutMs) {
-        return invokeJsonWithBody("setItscamproConfig", json, timeoutMs,
-                (h, j, t, o) -> lib.ITSCAM_RestClient_setItscamproConfig(h, j, t, o));
+    public LinceConfig getLinceConfig(int timeoutMs) { return new LinceConfig(httpGet(apiPath("/equipment/servers/lince"), timeoutMs)); }
+    public LinceConfig setLinceConfig(LinceConfig config, int timeoutMs) {
+        return new LinceConfig(httpPut(apiPath("/equipment/servers/lince"), require(config, "config").toJsonString(), timeoutMs));
+    }
+    public LinceStatus getLinceStatus(int timeoutMs) { return new LinceStatus(httpGet(apiPath("/equipment/servers/lince/status"), timeoutMs)); }
+
+    public VehicleIndicatorConfig getVehicleIndicatorConfig(int timeoutMs) { return new VehicleIndicatorConfig(httpGet(apiPath("/equipment/vehicleIndicator"), timeoutMs)); }
+    public VehicleIndicatorConfig setVehicleIndicatorConfig(VehicleIndicatorConfig config, int timeoutMs) {
+        return new VehicleIndicatorConfig(httpPut(apiPath("/equipment/vehicleIndicator"), require(config, "config").toJsonString(), timeoutMs));
     }
 
-    public String getItscamproStatus(int timeoutMs) {
-        return invokeJson("getItscamproStatus", timeoutMs,
-                (h, t, o) -> lib.ITSCAM_RestClient_getItscamproStatus(h, t, o));
+    public ProtocolsConfig getProtocolsConfig(int timeoutMs) { return new ProtocolsConfig(httpGet(apiPath("/equipment/servers/protocols"), timeoutMs)); }
+    public ProtocolsConfig setProtocolsConfig(ProtocolsConfig config, int timeoutMs) {
+        return new ProtocolsConfig(httpPut(apiPath("/equipment/servers/protocols"), require(config, "config").toJsonString(), timeoutMs));
     }
 
-    // ====================================================================
-    //  Helpers
-    // ====================================================================
-
-    @FunctionalInterface
-    private interface JsonGet {
-        int call(Pointer h, int timeoutMs, PointerByReference out);
+    public ProfileTransitioner getProfileTransitioner(int timeoutMs) { return new ProfileTransitioner(httpGet(apiPath("/equipment/transitioner"), timeoutMs)); }
+    public ProfileTransitioner setProfileTransitioner(ProfileTransitioner config, int timeoutMs) {
+        return new ProfileTransitioner(httpPut(apiPath("/equipment/transitioner"), require(config, "config").toJsonString(), timeoutMs));
     }
 
-    @FunctionalInterface
-    private interface JsonPut {
-        int call(Pointer h, String body, int timeoutMs,
-                 PointerByReference out);
+    public List<IoConfig> getIoPorts(int timeoutMs) { return IoConfig.listFromJson(httpGet(apiPath("/equipment/ioPorts"), timeoutMs)); }
+    public List<IoConfig> setIoPorts(List<IoConfig> ports, int timeoutMs) {
+        return IoConfig.listFromJson(httpPut(apiPath("/equipment/ioPorts"), RestObject.listToJson(ports), timeoutMs));
+    }
+    public IoConfig getIoPort(int portId, int timeoutMs) { return new IoConfig(httpGet(apiPath("/equipment/ioPorts/" + portId), timeoutMs)); }
+    public IoConfig setIoPort(int portId, IoConfig port, int timeoutMs) {
+        return new IoConfig(httpPut(apiPath("/equipment/ioPorts/" + portId), require(port, "port").toJsonString(), timeoutMs));
     }
 
-    private String invokeJson(String label, int timeoutMs, JsonGet fn) {
-        requireOpen();
-        PointerByReference out = new PointerByReference();
-        int rc = fn.call(handle, timeoutMs, out);
-        String body = takeString(out.getValue());
-        ItscamException.throwIfFailed(rc, label);
-        return body;
+    public List<IoBasic> getIoBasic(int timeoutMs) { return IoBasic.listFromJson(httpGet(apiPath("/equipment/ioBasic"), timeoutMs)); }
+    public List<IoBasic> setIoBasic(List<IoBasic> ports, int timeoutMs) {
+        return IoBasic.listFromJson(httpPut(apiPath("/equipment/ioBasic"), RestObject.listToJson(ports), timeoutMs));
     }
 
-    private String invokeJsonWithBody(String label, String json,
-                                      int timeoutMs, JsonPut fn) {
-        requireOpen();
-        PointerByReference out = new PointerByReference();
-        int rc = fn.call(handle, json == null ? "" : json, timeoutMs, out);
-        String body = takeString(out.getValue());
-        ItscamException.throwIfFailed(rc, label);
-        return body;
+    public RestApiClientConfig getRestApiClientConfig(int serverId, int timeoutMs) {
+        return new RestApiClientConfig(httpGet(apiPath("/equipment/servers/restapiclient/" + serverId + "/config"), timeoutMs));
+    }
+    public RestApiClientConfig setRestApiClientConfig(int serverId, RestApiClientConfig config, int timeoutMs) {
+        return new RestApiClientConfig(httpPut(apiPath("/equipment/servers/restapiclient/" + serverId + "/config"), require(config, "config").toJsonString(), timeoutMs));
+    }
+    public RestApiClientStatus getRestApiClientStatus(int serverId, int timeoutMs) {
+        return new RestApiClientStatus(httpGet(apiPath("/equipment/servers/restapiclient/" + serverId + "/status"), timeoutMs));
+    }
+
+    public Licenses getLicenses(int timeoutMs) { return new Licenses(httpGet(apiPath("/system/licenses"), timeoutMs)); }
+
+    private String apiPath(String tail) {
+        return apiPrefix + tail;
+    }
+
+    private <T extends RestObject> T require(T value, String name) {
+        if (value == null) throw new IllegalArgumentException(name + " is null");
+        return value;
     }
 
     private String takeString(Pointer p) {

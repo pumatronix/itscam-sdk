@@ -5,6 +5,7 @@
 package com.pumatronix.itscam;
 
 import com.pumatronix.itscam.internal.ItscamLibrary;
+import com.pumatronix.itscam.internal.Async;
 import com.pumatronix.itscam.internal.NativeLibrary;
 import com.sun.jna.Memory;
 import com.sun.jna.Pointer;
@@ -14,8 +15,8 @@ import com.sun.jna.ptr.PointerByReference;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
-import java.util.function.Consumer;
+import java.util.concurrent.Callable;
+import java.util.concurrent.Future;
 
 /**
  * Legacy CGI client: {@code lastframe.cgi}, {@code snapshot.cgi},
@@ -32,7 +33,7 @@ import java.util.function.Consumer;
  * <h2>MJPEG streaming</h2>
  *
  * <p>Frame callbacks installed via
- * {@link #startMjpegStream(Consumer, int)} are delivered on the SDK's
+ * {@link #startMjpegStream(ItscamConsumer, int)} are delivered on the SDK's
  * worker thread.  <strong>Never block</strong> in the callback &mdash;
  * push frames to a queue and return immediately.
  */
@@ -112,9 +113,14 @@ public final class ItscamCgiClient implements AutoCloseable {
         ItscamException.throwIfFailed(rc, "login");
     }
 
-    public CompletableFuture<Void> loginAsync(String username, String password,
-                                              int timeoutMs) {
-        return CompletableFuture.runAsync(() -> login(username, password, timeoutMs));
+    public Future<Void> loginAsync(final String username, final String password,
+                                   final int timeoutMs) {
+        return Async.run(new Runnable() {
+            @Override
+            public void run() {
+                login(username, password, timeoutMs);
+            }
+        });
     }
 
     public void setAuthToken(String token) {
@@ -149,8 +155,13 @@ public final class ItscamCgiClient implements AutoCloseable {
         return consumeImage(out.getValue());
     }
 
-    public CompletableFuture<CgiImage> getLastFrameAsync(int timeoutMs) {
-        return CompletableFuture.supplyAsync(() -> getLastFrame(timeoutMs));
+    public Future<CgiImage> getLastFrameAsync(final int timeoutMs) {
+        return Async.submit(new Callable<CgiImage>() {
+            @Override
+            public CgiImage call() {
+                return getLastFrame(timeoutMs);
+            }
+        });
     }
 
     // ====================================================================
@@ -232,32 +243,40 @@ public final class ItscamCgiClient implements AutoCloseable {
         }
     }
 
-    public CompletableFuture<List<CgiImage>> getSnapshotAsync(
-            SnapshotCgiRequest request, int timeoutMs) {
-        return CompletableFuture.supplyAsync(
-                () -> getSnapshot(request, timeoutMs));
+    public Future<List<CgiImage>> getSnapshotAsync(
+            final SnapshotCgiRequest request, final int timeoutMs) {
+        return Async.submit(new Callable<List<CgiImage>>() {
+            @Override
+            public List<CgiImage> call() {
+                return getSnapshot(request, timeoutMs);
+            }
+        });
     }
 
     // ====================================================================
     //  /api/mjpegvideo.cgi
     // ====================================================================
 
-    public synchronized void startMjpegStream(Consumer<CgiStreamFrame> onFrame,
+    public synchronized void startMjpegStream(final ItscamConsumer<CgiStreamFrame> onFrame,
                                               int timeoutMs) {
         requireOpen();
         if (streamCallback != null) {
             throw new IllegalStateException("MJPEG stream already running");
         }
-        ItscamLibrary.CgiStreamCallback cb = (frame, ud) -> {
-            if (frame == null) return;
-            String mime = frame.mimeType == null ? "" : frame.mimeType;
-            byte[] body = (frame.data == null || frame.dataLen <= 0)
-                    ? new byte[0]
-                    : frame.data.getByteArray(0, (int) frame.dataLen);
-            try {
-                onFrame.accept(new CgiStreamFrame(frame.sequence, mime, body));
-            } catch (Throwable ignored) {
-                /* never let exceptions cross into native code */
+        ItscamLibrary.CgiStreamCallback cb = new ItscamLibrary.CgiStreamCallback() {
+            @Override
+            public void invoke(ItscamLibrary.ITSCAMCgiStreamFrame frame,
+                               Pointer userData) {
+                if (frame == null) return;
+                String mime = frame.mimeType == null ? "" : frame.mimeType;
+                byte[] body = (frame.data == null || frame.dataLen <= 0)
+                        ? new byte[0]
+                        : frame.data.getByteArray(0, (int) frame.dataLen);
+                try {
+                    onFrame.accept(new CgiStreamFrame(frame.sequence, mime, body));
+                } catch (Throwable ignored) {
+                    /* never let exceptions cross into native code */
+                }
             }
         };
         streamCallback = cb;

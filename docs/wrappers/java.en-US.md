@@ -2,7 +2,7 @@
 
 [Português (Brasil)](java.md) | [English (US)](java.en-US.md)
 
-The Java wrapper lives under [`src/wrappers/java/`](../../src/wrappers/java/) and uses **JNA** (Java Native Access) on top of the SDK's C ABI. It supports JDK 11+ on Linux, Windows, and macOS.
+The Java wrapper lives under [`src/wrappers/java/`](../../src/wrappers/java/) and uses **JNA** (Java Native Access) on top of the SDK's C ABI. It supports JDK 7+ on Linux, Windows, and macOS.
 
 > The wrapper exposes the SDK's three client surfaces:
 >
@@ -59,6 +59,7 @@ make lib                        # build libitscam_sdk.so first
 make java                       # JAR with native binaries bundled
 make java-examples              # JAR + runnable examples
 make docker-java                # same, inside the Docker builder
+make docker-java-jdk7-check     # compile wrapper + examples with a real JDK 7 javac
 ```
 
 `make java` does three things:
@@ -92,9 +93,9 @@ The `com.pumatronix.itscam.internal.NativeLibrary` class searches for `libitscam
 
 | Concern | What you get |
 | ------- | ------------ |
-| Async | Every blocking call has an `*Async` companion returning `CompletableFuture<T>`. |
+| Async | Every blocking call has an `*Async` companion returning `java.util.concurrent.Future<T>`. |
 | Lifetime | Every client implements `AutoCloseable`; use try-with-resources. |
-| Streaming | `startMjpegStream(Consumer<CgiStreamFrame>)` invokes the callback on the SDK worker thread. |
+| Streaming | `startMjpegStream(ItscamConsumer<CgiStreamFrame>)` invokes the callback on the SDK worker thread. |
 | Errors | `RuntimeException` hierarchy rooted in `ItscamException` (`ItscamTimeoutException`, `ItscamAuthException`, ...). |
 | Strings | UTF-8 by default (delegated to JNA marshalling). |
 
@@ -112,11 +113,13 @@ try (ItscamCgiClient cgi = new ItscamCgiClient()) {
     CgiImage last = cgi.getLastFrame(10000);
     last.save("lastframe.jpg");
 
-    var images = cgi.getSnapshot(
+    java.util.List<CgiImage> images = cgi.getSnapshot(
         new SnapshotCgiRequest().setQuality(80), 15000);
 
-    cgi.startMjpegStream(frame -> {
-        // Runs on the SDK worker thread; do not block.
+    cgi.startMjpegStream(new ItscamConsumer<CgiStreamFrame>() {
+        @Override public void accept(CgiStreamFrame frame) {
+            // Runs on the SDK worker thread; do not block.
+        }
     }, 10000);
     Thread.sleep(5000);
     cgi.stopMjpegStream();
@@ -127,8 +130,8 @@ try (ItscamCgiClient cgi = new ItscamCgiClient()) {
 
 The REST client exposes two surfaces that coexist:
 
-* **Generic verbs** (escape hatch): `httpGet`, `httpPut`, `httpPost`, `httpDelete`, `patchJson`. They return the raw JSON body as a `String`. Combine with your favourite JSON library (Jackson, Gson, JSON-B).
-* **Typed convenience helpers** (preferred): `getProfiles`, `setOcrConfig`, `setItscamproConfig`, etc. They use partial serialization -- only the fields you set are included in the PUT body. Typed POCO codegen for Java is a follow-up. See [`docs/codegen.md`](../codegen.md) for status.
+* **Typed convenience helpers** (preferred): `getProfiles`, `setOcrConfig`, `setItscamproConfig`, `getAutoFocus`, etc. return objects from `com.pumatronix.itscam.resttypes`. They use partial serialization -- only the fields you set are included in the PUT body.
+* **Generic verbs** (escape hatch): `httpGet`, `httpPut`, `httpPost`, `httpDelete`, `patchJson`. They return the raw JSON body as a `String` for endpoints without a typed helper.
 
 * **Generic partial PUT** -- `patchJson(path, partialJson, timeoutMs)` sends only changed fields. Available for untyped payloads or endpoints without a typed helper. See [`docs/api/rest-client.md`](../api/rest-client.md).
 
@@ -137,13 +140,13 @@ try (ItscamRestClient rest = new ItscamRestClient()) {
     rest.setBaseUrl("192.168.254.254", 80, "http");
     rest.login("admin", "1234", 10000);
 
-    String profilesJson = rest.httpGet("/api/image/profiles", 10000);
+    java.util.List<ProfileConfig> profiles = rest.getProfiles(10000);
 
-    rest.patchJson("/api/image/profiles/0",
-                   "{\"trigger\":{\"enabled\":false}}", 10000);
+    LensConfig lens = new LensConfig().setZoom(1200).setFocus(300);
+    rest.updateProfileById(0, new ProfileConfig().setLens(lens), 10000);
 
-    String volatileInfo =
-        rest.httpGet("/api/equipment/misc/readonly/volatile", 10000);
+    AutoFocus autofocus = rest.getAutoFocus(10000);
+    rest.setAutoFocus(new AutoFocus().setRun(Boolean.TRUE), 10000);
 }
 ```
 
@@ -156,8 +159,8 @@ try (ItscamClient camera = new ItscamClient()) {
     camera.authenticate("1234", 10000);
     camera.subscribeCaptures(10000);
 
-    var frames = camera.captureSnapshot(15000);
-    for (var f : frames) {
+    java.util.List<CaptureResult> frames = camera.captureSnapshot(15000);
+    for (CaptureResult f : frames) {
         f.save("snap-" + f.info().requestId() + ".jpg");
     }
 }

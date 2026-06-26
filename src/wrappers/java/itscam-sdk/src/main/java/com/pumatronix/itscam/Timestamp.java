@@ -4,9 +4,11 @@
  */
 package com.pumatronix.itscam;
 
-import java.time.LocalDateTime;
-import java.time.OffsetDateTime;
-import java.time.ZoneOffset;
+import java.util.Calendar;
+import java.util.Date;
+import java.util.GregorianCalendar;
+import java.util.SimpleTimeZone;
+import java.util.TimeZone;
 
 /**
  * Timestamp returned by the camera, broken down into calendar fields
@@ -46,16 +48,21 @@ public final class Timestamp {
     public int millisecond() { return millisecond; }
     public int timezoneOffsetSeconds() { return timezoneOffsetSeconds; }
 
-    /** Convert to a naive {@link LocalDateTime} (timezone discarded). */
-    public LocalDateTime toLocalDateTime() {
-        return LocalDateTime.of(year, Math.max(1, month), Math.max(1, day),
-                hour, minute, second, millisecond * 1_000_000);
+    /** Convert to a {@link Calendar} carrying the original tz offset. */
+    public Calendar toCalendar() {
+        TimeZone zone = new SimpleTimeZone(timezoneOffsetSeconds * 1000,
+                offsetTimeZoneId(timezoneOffsetSeconds));
+        Calendar calendar = new GregorianCalendar(zone);
+        calendar.clear();
+        calendar.set(Math.max(1, year), Math.max(1, month) - 1,
+                Math.max(1, day), hour, minute, second);
+        calendar.set(Calendar.MILLISECOND, millisecond);
+        return calendar;
     }
 
-    /** Convert to {@link OffsetDateTime} carrying the original tz offset. */
-    public OffsetDateTime toOffsetDateTime() {
-        return OffsetDateTime.of(toLocalDateTime(),
-                ZoneOffset.ofTotalSeconds(timezoneOffsetSeconds));
+    /** Convert to an instant represented by {@link Date}. */
+    public Date toDate() {
+        return toCalendar().getTime();
     }
 
     /** ISO 8601 string with millisecond precision. */
@@ -66,4 +73,12 @@ public final class Timestamp {
 
     @Override
     public String toString() { return toIso8601(); }
+
+    private static String offsetTimeZoneId(int offsetSeconds) {
+        int absoluteSeconds = Math.abs(offsetSeconds);
+        int hours = absoluteSeconds / 3600;
+        int minutes = (absoluteSeconds % 3600) / 60;
+        return String.format("GMT%s%02d:%02d",
+                offsetSeconds < 0 ? "-" : "+", hours, minutes);
+    }
 }

@@ -50,10 +50,10 @@ Você **não** vai escrever código C++ novo para um wrapper de linguagem. Sua t
 | Padrão | Quando usar |
 | ------ | ----------- |
 | Sync apenas | Linguagens sem suporte ao async idiomático (Lua, shell scripting). |
-| Sync + async parallel | Default. Toda blocking call tem uma versão `*Async` que retorna o tipo async nativo (`Promise`, `Future`, `CompletableFuture`, `Task<T>`, `coroutine`, ...). Wrapper interno usa `Task.Run` / `runAsync` / `Promise.resolve(() => syncFn())`. |
+| Sync + async parallel | Default. Toda blocking call tem uma versão `*Async` que retorna o tipo async nativo (`Promise`, `Future<T>`, `Task<T>`, `coroutine`, ...). Wrapper interno usa `Task.Run` / um executor / `Promise.resolve(() => syncFn())`. |
 | Async-first | Só faz sentido se a linguagem **não tem** APIs sync (raramente o caso). |
 
-**Default seguro:** sync + async parallel. C# faz `Task<T>`, Java faz `CompletableFuture<T>`, Node faz `Promise<T>`, Python expõe sync (asyncio é opcional).
+**Default seguro:** sync + async parallel. C# faz `Task<T>`, Java faz `Future<T>` para compatibilidade com JDK 7, Node faz `Promise<T>`, Python expõe sync (asyncio é opcional).
 
 ## 5. Layout de diretório esperado
 
@@ -133,7 +133,7 @@ Status atual:
 | C# | sim (`RestTypes/RestTypes.g.cs`) |
 | Python | sim (`itscam/rest_types.py`) |
 | Go | sim (`itscam/rest_types.go`) |
-| Java | **follow-up** — generic verbs cobrem todo o caso de uso; codegen vai retornar POJOs (Jackson-compatible). |
+| Java | sim (`resttypes/`, source mantido com Gson) |
 | Node.js | **follow-up** — generic verbs retornam `JsonValue` parseado; codegen vai retornar interfaces TS. |
 
 **Como adicionar codegen para uma nova linguagem:**

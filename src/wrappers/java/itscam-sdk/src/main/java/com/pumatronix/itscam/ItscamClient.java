@@ -5,6 +5,7 @@
 package com.pumatronix.itscam;
 
 import com.pumatronix.itscam.internal.ItscamLibrary;
+import com.pumatronix.itscam.internal.Async;
 import com.pumatronix.itscam.internal.NativeLibrary;
 import com.sun.jna.Pointer;
 import com.sun.jna.ptr.IntByReference;
@@ -14,9 +15,9 @@ import com.sun.jna.ptr.PointerByReference;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Callable;
+import java.util.concurrent.Future;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.Consumer;
 
 /**
  * Binary TCP client for the ITSCAM Cougar protocol on port 60000.  Use
@@ -88,11 +89,15 @@ public final class ItscamClient implements AutoCloseable {
         ItscamException.throwIfFailed(rc, "connect(" + address + ":" + port + ")");
     }
 
-    public CompletableFuture<Void> connectAsync(String address, int port,
-                                                int timeoutMs,
-                                                AutoReconnectConfig reconnect) {
-        return CompletableFuture.runAsync(
-                () -> connect(address, port, timeoutMs, reconnect));
+    public Future<Void> connectAsync(final String address, final int port,
+                                     final int timeoutMs,
+                                     final AutoReconnectConfig reconnect) {
+        return Async.run(new Runnable() {
+            @Override
+            public void run() {
+                connect(address, port, timeoutMs, reconnect);
+            }
+        });
     }
 
     public void disconnect() {
@@ -115,9 +120,14 @@ public final class ItscamClient implements AutoCloseable {
         ItscamException.throwIfFailed(rc, "authenticate");
     }
 
-    public CompletableFuture<Void> authenticateAsync(String password,
-                                                     int timeoutMs) {
-        return CompletableFuture.runAsync(() -> authenticate(password, timeoutMs));
+    public Future<Void> authenticateAsync(final String password,
+                                          final int timeoutMs) {
+        return Async.run(new Runnable() {
+            @Override
+            public void run() {
+                authenticate(password, timeoutMs);
+            }
+        });
     }
 
     // ====================================================================
@@ -183,9 +193,14 @@ public final class ItscamClient implements AutoCloseable {
         }
     }
 
-    public CompletableFuture<List<CaptureResult>> captureSnapshotAsync(
-            int timeoutMs) {
-        return CompletableFuture.supplyAsync(() -> captureSnapshot(timeoutMs));
+    public Future<List<CaptureResult>> captureSnapshotAsync(
+            final int timeoutMs) {
+        return Async.submit(new Callable<List<CaptureResult>>() {
+            @Override
+            public List<CaptureResult> call() {
+                return captureSnapshot(timeoutMs);
+            }
+        });
     }
 
     public byte[] getLastFrame(int quality, int timeoutMs) {
@@ -263,73 +278,91 @@ public final class ItscamClient implements AutoCloseable {
     //  Callbacks
     // ====================================================================
 
-    public void onTriggerImage(Consumer<CaptureResult> callback) {
-        setCaptureCallback("trigger", callback,
-                (h, cb, ud) -> lib.ITSCAM_Client_onTriggerImage(h, cb, ud));
+    public void onTriggerImage(ItscamConsumer<CaptureResult> callback) {
+        setCaptureCallback("trigger", callback, new CaptureSetter() {
+            @Override
+            public void apply(Pointer h, ItscamLibrary.CaptureCallback cb,
+                              Pointer userData) {
+                lib.ITSCAM_Client_onTriggerImage(h, cb, userData);
+            }
+        });
     }
 
-    public void onSnapshotImage(Consumer<CaptureResult> callback) {
-        setCaptureCallback("snapshot", callback,
-                (h, cb, ud) -> lib.ITSCAM_Client_onSnapshotImage(h, cb, ud));
+    public void onSnapshotImage(ItscamConsumer<CaptureResult> callback) {
+        setCaptureCallback("snapshot", callback, new CaptureSetter() {
+            @Override
+            public void apply(Pointer h, ItscamLibrary.CaptureCallback cb,
+                              Pointer userData) {
+                lib.ITSCAM_Client_onSnapshotImage(h, cb, userData);
+            }
+        });
     }
 
-    public void onDisconnect(Consumer<String> callback) {
+    public void onDisconnect(final ItscamConsumer<String> callback) {
         if (handle == null) return;
         if (callback == null) {
             callbacks.remove("disconnect");
             lib.ITSCAM_Client_onDisconnect(handle, null, null);
             return;
         }
-        ItscamLibrary.DisconnectCallback cb = (reason, ud) -> {
-            try { callback.accept(reason == null ? "" : reason); }
-            catch (Throwable ignored) { /* never let exceptions cross FFI */ }
+        ItscamLibrary.DisconnectCallback cb = new ItscamLibrary.DisconnectCallback() {
+            @Override
+            public void invoke(String reason, Pointer userData) {
+                try { callback.accept(reason == null ? "" : reason); }
+                catch (Throwable ignored) { /* never let exceptions cross FFI */ }
+            }
         };
         callbacks.put("disconnect", cb);
         lib.ITSCAM_Client_onDisconnect(handle, cb, null);
     }
 
     public void onConnectionState(
-            java.util.function.BiConsumer<ConnectionState, String> callback) {
+            final ItscamBiConsumer<ConnectionState, String> callback) {
         if (handle == null) return;
         if (callback == null) {
             callbacks.remove("connectionState");
             lib.ITSCAM_Client_onConnectionState(handle, null, null);
             return;
         }
-        ItscamLibrary.ConnectionStateCallback cb = (state, reason, ud) -> {
-            try {
-                callback.accept(ConnectionState.fromInt(state),
-                        reason == null ? "" : reason);
-            } catch (Throwable ignored) {}
+        ItscamLibrary.ConnectionStateCallback cb = new ItscamLibrary.ConnectionStateCallback() {
+            @Override
+            public void invoke(int state, String reason, Pointer userData) {
+                try {
+                    callback.accept(ConnectionState.fromInt(state),
+                            reason == null ? "" : reason);
+                } catch (Throwable ignored) {}
+            }
         };
         callbacks.put("connectionState", cb);
         lib.ITSCAM_Client_onConnectionState(handle, cb, null);
     }
 
-    public void onLog(java.util.function.BiConsumer<LogLevel, String> callback) {
+    public void onLog(final ItscamBiConsumer<LogLevel, String> callback) {
         if (handle == null) return;
         if (callback == null) {
             callbacks.remove("log");
             lib.ITSCAM_Client_onLog(handle, null, null);
             return;
         }
-        ItscamLibrary.LogCallback cb = (level, message, ud) -> {
-            try {
-                callback.accept(LogLevel.fromInt(level),
-                        message == null ? "" : message);
-            } catch (Throwable ignored) {}
+        ItscamLibrary.LogCallback cb = new ItscamLibrary.LogCallback() {
+            @Override
+            public void invoke(int level, String message, Pointer userData) {
+                try {
+                    callback.accept(LogLevel.fromInt(level),
+                            message == null ? "" : message);
+                } catch (Throwable ignored) {}
+            }
         };
         callbacks.put("log", cb);
         lib.ITSCAM_Client_onLog(handle, cb, null);
     }
 
-    @FunctionalInterface
     private interface CaptureSetter {
         void apply(Pointer h, ItscamLibrary.CaptureCallback cb, Pointer userData);
     }
 
     private void setCaptureCallback(String key,
-                                    Consumer<CaptureResult> userCallback,
+                                    final ItscamConsumer<CaptureResult> userCallback,
                                     CaptureSetter setter) {
         if (handle == null) return;
         if (userCallback == null) {
@@ -337,11 +370,14 @@ public final class ItscamClient implements AutoCloseable {
             setter.apply(handle, null, null);
             return;
         }
-        ItscamLibrary.CaptureCallback cb = (resultPtr, ud) -> {
-            try {
-                CaptureResult r = convertResult(resultPtr);
-                userCallback.accept(r);
-            } catch (Throwable ignored) {}
+        ItscamLibrary.CaptureCallback cb = new ItscamLibrary.CaptureCallback() {
+            @Override
+            public void invoke(Pointer resultPtr, Pointer userData) {
+                try {
+                    CaptureResult r = convertResult(resultPtr);
+                    userCallback.accept(r);
+                } catch (Throwable ignored) {}
+            }
         };
         callbacks.put(key, cb);
         setter.apply(handle, cb, null);

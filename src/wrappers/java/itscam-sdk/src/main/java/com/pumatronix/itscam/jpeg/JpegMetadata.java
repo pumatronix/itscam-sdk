@@ -45,8 +45,8 @@ public final class JpegMetadata {
     public List<ObjectDetection> objects() { return objects; }
 
     public static JpegMetadata empty() {
-        return new JpegMetadata("", new LinkedHashMap<>(),
-                new ArrayList<>(), new ArrayList<>());
+        return new JpegMetadata("", new LinkedHashMap<String, String>(),
+            new ArrayList<PlateRecognition>(), new ArrayList<ObjectDetection>());
     }
 
     public static JpegMetadata parse(byte[] jpeg) {
@@ -99,7 +99,7 @@ public final class JpegMetadata {
 
     public static List<PlateRecognition> extractPlateRecognitions(
             Map<String, String> tags) {
-        String placa = tags.getOrDefault("Placa", "");
+        String placa = getOrDefault(tags, "Placa", "");
         if (placa.isEmpty()) return new ArrayList<>();
 
         String[] plates = placa.split("_");
@@ -138,11 +138,11 @@ public final class JpegMetadata {
 
     public static List<ObjectDetection> extractObjectDetections(
             Map<String, String> tags) {
-        String classifierList = tags.getOrDefault("ClassifierList", "");
+        String classifierList = getOrDefault(tags, "ClassifierList", "");
         if (classifierList.isEmpty()) return new ArrayList<>();
 
         List<String> cls = parseBrackets(classifierList);
-        List<String> bmc = parseBrackets(tags.getOrDefault("BMCList", ""));
+        List<String> bmc = parseBrackets(getOrDefault(tags, "BMCList", ""));
 
         List<ObjectDetection> out = new ArrayList<>();
         for (int i = 0; i < cls.size(); i++) {
@@ -204,5 +204,11 @@ public final class JpegMetadata {
         } catch (NumberFormatException ex) {
             return 0;
         }
+    }
+
+    private static String getOrDefault(Map<String, String> map,
+                                       String key, String defaultValue) {
+        String value = map.get(key);
+        return value == null ? defaultValue : value;
     }
 }
