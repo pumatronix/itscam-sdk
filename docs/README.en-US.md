@@ -10,6 +10,7 @@ Chapter-style reference for the ITSCAM Client SDK. Start with [Overview](overvie
 - [Getting started](getting-started.en-US.md) -- download the pre-compiled SDK from the [releases page](https://github.com/pumatronix/itscam-sdk/releases), integrate into your app, run examples, and (optionally) advanced build from source.
 - [Error handling](error-handling.en-US.md) -- `Result<T>`, `Future<T>`, error codes, and logging.
 - [JPEG metadata (COM marker)](jpeg-metadata.en-US.md) -- extracting plate-recognition and classification metadata embedded in JPEG images.
+- [JPEG Metadata Visualizer](metadata-visualizer.en-US.md) -- local Pumatronix JPEG/multipart upload, exposure carousel, searchable/sortable tag table, and bounding boxes.
 - [HTTPS / TLS](https-tls.en-US.md) -- vendored mbedTLS, configuration, and failure modes.
 - [Typed REST helpers and codegen](codegen.en-US.md) -- bundled OpenAPI snapshot and regeneration workflows.
 
