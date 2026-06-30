@@ -37,18 +37,6 @@ const COMMENT_HEADER_BYTES = 4;
 const PLATE_EXPANSION_PX = 5;
 const PLATE_LABEL_HEIGHT_PX = 24;
 
-const vehicleTypes: Record<number, string> = {
-  0: "Unknown",
-  1: "Car",
-  2: "Motorcycle",
-  3: "Truck",
-  4: "Bus",
-  5: "Pickup",
-  6: "SUV",
-  7: "Van",
-  8: "Tow",
-};
-
 const fileName = ref("");
 const error = ref("");
 const search = ref("");
@@ -66,11 +54,75 @@ const labels = computed(() => {
         uploadTitle: "Upload a Pumatronix JPEG or multipart capture",
         uploadCopy:
           "The file stays in your browser. The page extracts each JPEG exposure, reads the COM marker, and draws plate and vehicle boxes when the tags include coordinates.",
+        noExposureComment: "No JPEG COM marker was found in this exposure.",
+        emptyExposureComment:
+          "The COM marker was found, but it has no key=value tags.",
+        invalidCommentLength: "Invalid JPEG COM marker length.",
+        noJpegImage: "No JPEG image was found in this file.",
+        noCommentInAnyExposure:
+          "No JPEG COM marker was found in any exposure.",
+        couldNotReadFile: "Could not read file.",
+        plate: "Plate",
+        vehicle: "Vehicle",
+        vehicleTypes: {
+          0: "Unknown",
+          1: "Car",
+          2: "Motorcycle",
+          3: "Truck",
+          4: "Bus",
+          5: "Pickup",
+          6: "SUV",
+          7: "Van",
+          8: "Tow",
+        } as Record<number, string>,
+        exposure: "Exposure",
+        previous: "Previous",
+        next: "Next",
+        imageAlt: "Uploaded JPEG exposure preview",
+        searchMetadata: "Search metadata",
+        searchPlaceholder: "Filter by tag or value",
+        tags: "tags",
+        tagColumn: "Tag",
+        valueColumn: "Value",
+        emptyRows: "No metadata tags to show.",
+        rawComment: "Raw COM marker",
       }
     : {
         uploadTitle: "Envie um JPEG ou captura multipart Pumatronix",
         uploadCopy:
           "O arquivo fica no seu navegador. A página extrai cada exposição JPEG, lê o COM marker e desenha caixas de placas e veículos quando as tags incluem coordenadas.",
+        noExposureComment: "Nenhum COM marker JPEG foi encontrado nesta exposição.",
+        emptyExposureComment:
+          "O COM marker foi encontrado, mas não contém tags chave=valor.",
+        invalidCommentLength: "Tamanho inválido do COM marker JPEG.",
+        noJpegImage: "Nenhuma imagem JPEG foi encontrada neste arquivo.",
+        noCommentInAnyExposure:
+          "Nenhum COM marker JPEG foi encontrado nas exposições.",
+        couldNotReadFile: "Não foi possível ler o arquivo.",
+        plate: "Placa",
+        vehicle: "Veículo",
+        vehicleTypes: {
+          0: "Desconhecido",
+          1: "Carro",
+          2: "Motocicleta",
+          3: "Caminhão",
+          4: "Ônibus",
+          5: "Pickup",
+          6: "SUV",
+          7: "Van",
+          8: "Guincho",
+        } as Record<number, string>,
+        exposure: "Exposição",
+        previous: "Anterior",
+        next: "Próxima",
+        imageAlt: "Prévia da exposição JPEG enviada",
+        searchMetadata: "Pesquisar metadados",
+        searchPlaceholder: "Filtrar por tag ou valor",
+        tags: "tags",
+        tagColumn: "Tag",
+        valueColumn: "Valor",
+        emptyRows: "Nenhuma tag de metadados para exibir.",
+        rawComment: "COM marker bruto",
       };
 });
 
@@ -82,10 +134,10 @@ const activeNotice = computed(() => {
   if (error.value) return error.value;
   if (!activeExposure.value) return "";
   if (!activeExposure.value.rawComment) {
-    return "No JPEG COM marker was found in this exposure.";
+    return labels.value.noExposureComment;
   }
   if (activeExposure.value.rows.length === 0) {
-    return "The COM marker was found, but it has no key=value tags.";
+    return labels.value.emptyExposureComment;
   }
   return "";
 });
@@ -114,12 +166,15 @@ function extractJpegComment(bytes: Uint8Array): string {
       bytes[index] === JPEG_SECTION_TAG &&
       bytes[index + 1] === JPEG_COMMENT_TAG
     ) {
+      if (index + COMMENT_HEADER_BYTES > bytes.length) {
+        throw new Error(labels.value.invalidCommentLength);
+      }
       const commentLength =
         bytes[index + 2] * 256 + bytes[index + 3] - COMMENT_LENGTH_BYTES;
       const start = index + COMMENT_HEADER_BYTES;
       const end = start + commentLength;
-      if (commentLength < 0 || end > bytes.length) {
-        throw new Error("Invalid JPEG COM marker length.");
+      if (!Number.isFinite(commentLength) || commentLength < 0 || end > bytes.length) {
+        throw new Error(labels.value.invalidCommentLength);
       }
 
       let comment = "";
@@ -188,7 +243,7 @@ function buildBoxes(tags: Record<string, string>): BoundingBox[] {
     nextBoxes.push({
       id: `plate-${index}`,
       kind: "plate",
-      label: `Plate${plateTexts[index] ? ` - ${plateTexts[index]}` : ""}`,
+      label: `${labels.value.plate}${plateTexts[index] ? ` - ${plateTexts[index]}` : ""}`,
       x: Math.max(0, x - PLATE_EXPANSION_PX),
       y: Math.max(0, y - PLATE_EXPANSION_PX),
       width: width + PLATE_EXPANSION_PX * 2,
@@ -205,13 +260,13 @@ function buildBoxes(tags: Record<string, string>): BoundingBox[] {
     if (!parsedWidth || !parsedHeight) continue;
 
     const bmc = bmcEntries[index] || [];
-    const vehicleType = vehicleTypes[parseNumber(type)] || "Vehicle";
+    const vehicleType = labels.value.vehicleTypes[parseNumber(type)] || labels.value.vehicle;
     const details = [bmc[0], bmc[2], bmc[4]].filter(Boolean).join(" ");
 
     nextBoxes.push({
       id: `vehicle-${index}`,
       kind: "vehicle",
-      label: `Vehicle - ${vehicleType} ${parseNumber(probability)}%${
+      label: `${labels.value.vehicle} - ${vehicleType} ${parseNumber(probability)}%${
         details ? ` - ${details}` : ""
       }`,
       x: parseNumber(x),
@@ -328,7 +383,7 @@ async function loadFile(event: Event) {
     const bytes = new Uint8Array(await file.arrayBuffer());
     const images = extractJpegImages(bytes);
     if (images.length === 0) {
-      error.value = "No JPEG image was found in this file.";
+      error.value = labels.value.noJpegImage;
       return;
     }
 
@@ -347,10 +402,12 @@ async function loadFile(event: Event) {
     });
 
     if (!exposures.value.some((exposure) => exposure.rawComment)) {
-      error.value = "No JPEG COM marker was found in any exposure.";
+      error.value = labels.value.noCommentInAnyExposure;
     }
   } catch (caught) {
-    error.value = caught instanceof Error ? caught.message : "Could not read file.";
+    error.value = caught instanceof Error ? caught.message : labels.value.couldNotReadFile;
+  } finally {
+    input.value = "";
   }
 }
 
@@ -394,13 +451,15 @@ onBeforeUnmount(() => {
             v-if="activeExposure.width && activeExposure.height"
             class="metadata-visualizer__preview-meta"
           >
-            Exposure {{ activeExposure.index + 1 }} / {{ exposures.length }} -
+            {{ labels.exposure }} {{ activeExposure.index + 1 }} / {{ exposures.length }} -
             {{ activeExposure.width }} x {{ activeExposure.height }} px
           </span>
         </div>
 
         <div v-if="exposures.length > 1" class="metadata-visualizer__carousel">
-          <button type="button" @click="stepExposure(-1)">Previous</button>
+          <button type="button" @click="stepExposure(-1)">
+            {{ labels.previous }}
+          </button>
           <div class="metadata-visualizer__carousel-track">
             <button
               v-for="exposure in exposures"
@@ -415,14 +474,16 @@ onBeforeUnmount(() => {
               {{ exposure.index + 1 }}
             </button>
           </div>
-          <button type="button" @click="stepExposure(1)">Next</button>
+          <button type="button" @click="stepExposure(1)">
+            {{ labels.next }}
+          </button>
         </div>
 
         <div class="metadata-visualizer__image-wrap">
           <img
             :key="activeExposure.url"
             :src="activeExposure.url"
-            alt="Uploaded JPEG exposure preview"
+            :alt="labels.imageAlt"
             @load="onImageLoad"
           />
           <button
@@ -445,19 +506,19 @@ onBeforeUnmount(() => {
         </div>
 
         <div v-if="activeBoxes.length" class="metadata-visualizer__legend">
-          <span><i class="metadata-visualizer__swatch metadata-visualizer__swatch--plate" /> Plate</span>
-          <span><i class="metadata-visualizer__swatch metadata-visualizer__swatch--vehicle" /> Vehicle</span>
+          <span><i class="metadata-visualizer__swatch metadata-visualizer__swatch--plate" /> {{ labels.plate }}</span>
+          <span><i class="metadata-visualizer__swatch metadata-visualizer__swatch--vehicle" /> {{ labels.vehicle }}</span>
         </div>
       </div>
 
       <div class="metadata-visualizer__table-panel">
         <div class="metadata-visualizer__table-toolbar">
           <label>
-            <span>Search metadata</span>
-            <input v-model="search" type="search" placeholder="Filter by tag or value" />
+            <span>{{ labels.searchMetadata }}</span>
+            <input v-model="search" type="search" :placeholder="labels.searchPlaceholder" />
           </label>
           <span class="metadata-visualizer__tag-count">
-            {{ filteredRows.length }} / {{ activeRows.length }} tags
+            {{ filteredRows.length }} / {{ activeRows.length }} {{ labels.tags }}
           </span>
         </div>
 
@@ -466,8 +527,8 @@ onBeforeUnmount(() => {
             <thead>
               <tr>
                 <th><button type="button" @click="sortBy('index')">#</button></th>
-                <th><button type="button" @click="sortBy('key')">Tag</button></th>
-                <th><button type="button" @click="sortBy('value')">Value</button></th>
+                <th><button type="button" @click="sortBy('key')">{{ labels.tagColumn }}</button></th>
+                <th><button type="button" @click="sortBy('value')">{{ labels.valueColumn }}</button></th>
               </tr>
             </thead>
             <tbody>
@@ -477,14 +538,14 @@ onBeforeUnmount(() => {
                 <td>{{ row.value }}</td>
               </tr>
               <tr v-if="activeRows.length === 0">
-                <td colspan="3">No metadata tags to show.</td>
+                <td colspan="3">{{ labels.emptyRows }}</td>
               </tr>
             </tbody>
           </table>
         </div>
 
         <details v-if="rawComment" class="metadata-visualizer__raw">
-          <summary>Raw COM marker</summary>
+          <summary>{{ labels.rawComment }}</summary>
           <pre>{{ rawComment }}</pre>
         </details>
       </div>
