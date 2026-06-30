@@ -10,6 +10,7 @@ Referência organizada por chapters para o ITSCAM Client SDK. Comece pelo [Overv
 - [Getting started](getting-started.md) -- baixe o SDK pré-compilado na [página de releases](https://github.com/pumatronix/itscam-sdk/releases), integre no seu app, rode examples e (opcional) build avançado a partir do source.
 - [Error handling](error-handling.md) -- `Result<T>`, `Future<T>`, error codes e logging.
 - [JPEG metadata (COM marker)](jpeg-metadata.md) -- extração de metadados de reconhecimento e classificação embutidos nas imagens JPEG.
+- [Visualizador de metadados JPEG](metadata-visualizer.md) -- upload local de JPEG/multipart Pumatronix, carrossel de exposições, tabela pesquisável/ordenável e bounding boxes.
 - [HTTPS / TLS](https-tls.md) -- mbedTLS vendored, configuration e failure modes.
 
 ## Camera surfaces (C++)

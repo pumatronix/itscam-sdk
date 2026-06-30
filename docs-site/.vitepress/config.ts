@@ -59,6 +59,7 @@ export default withMermaid(
     nav: [
       { text: "Guia", link: "/overview" },
       { text: "API", link: "/api/binary-client" },
+      { text: "Metadados", link: "/metadata-visualizer" },
       { text: "Wrappers", link: "/wrappers/python" },
       { text: "Assistant", link: "/assistant" },
       {
@@ -84,6 +85,7 @@ export default withMermaid(
         items: [
           { text: "Error handling", link: "/error-handling" },
           { text: "HTTPS / TLS", link: "/https-tls" },
+          { text: "Visualizador de metadados", link: "/metadata-visualizer" },
         ],
       },
       {

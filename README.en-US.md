@@ -4,6 +4,8 @@
 
 **Documentation:** [pumatronix.github.io/itscam-sdk](https://pumatronix.github.io/itscam-sdk/)
 
+**JPEG Metadata Visualizer:** [pumatronix.github.io/itscam-sdk/metadata-visualizer.en-US](https://pumatronix.github.io/itscam-sdk/metadata-visualizer.en-US)
+
 A cross-platform library for integrating [Pumatronix](https://www.pumatronix.com) ITSCAM cameras (ITSCAM450 / ITSCAM600). HTTPS support and the mbedTLS backend are bundled with the SDK, no external dependency is required beyond a C++ compiler.
 
 The SDK exposes three independent client classes across C++, C#, Python, Go, Java, and Node.js. Choose the client by protocol and task. They can run side by side in the same process. The binary client uses the **Cougar** protocol on TCP port **60000**. REST and CGI use HTTP/HTTPS on ports **80/443**.
@@ -153,6 +155,7 @@ This README is intentionally concise. Chapter-style documentation lives under [`
 - [HTTPS / TLS](docs/https-tls.md) -- vendored mbedTLS, configuration, and troubleshooting.
 - [Error handling](docs/error-handling.md) -- `Result<T>`, `Future<T>`, error codes, and logging.
 - [JPEG metadata (COM marker)](docs/jpeg-metadata.en-US.md) -- extracting plate-recognition and classification metadata embedded in JPEG images.
+- [JPEG Metadata Visualizer](docs/metadata-visualizer.en-US.md) -- interactive page for local Pumatronix JPEG/multipart upload, exposure carousel, tag table, and bounding boxes.
 - [Typed REST helpers & codegen](docs/codegen.md) -- bundled OpenAPI snapshot and regeneration workflows.
 - API reference: [Binary client](docs/api/binary-client.md) -- [REST client](docs/api/rest-client.md) -- [CGI client](docs/api/cgi-client.md).
 - Wrappers: [C++](docs/wrappers/cpp.md) -- [C# / .NET](docs/wrappers/csharp.md) -- [Python](docs/wrappers/python.md) -- [Go](docs/wrappers/go.md) -- [Java](docs/wrappers/java.en-US.md) -- [Node.js](docs/wrappers/nodejs.en-US.md).
