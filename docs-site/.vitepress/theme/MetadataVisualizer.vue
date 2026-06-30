@@ -129,6 +129,11 @@ const labels = computed(() => {
 const activeExposure = computed(() => exposures.value[activeExposureIndex.value]);
 const activeRows = computed(() => activeExposure.value?.rows ?? []);
 const activeBoxes = computed(() => activeExposure.value?.boxes ?? []);
+const drawableBoxes = computed(() =>
+  activeExposure.value?.width && activeExposure.value?.height
+    ? activeBoxes.value
+    : [],
+);
 const rawComment = computed(() => activeExposure.value?.rawComment ?? "");
 const activeNotice = computed(() => {
   if (error.value) return error.value;
@@ -280,8 +285,10 @@ function buildBoxes(tags: Record<string, string>): BoundingBox[] {
 }
 
 function boxStyle(box: BoundingBox) {
-  const width = activeExposure.value?.width || 1;
-  const height = activeExposure.value?.height || 1;
+  const width = activeExposure.value?.width;
+  const height = activeExposure.value?.height;
+  if (!width || !height) return { display: "none" };
+
   return {
     left: `${(box.x / width) * 100}%`,
     top: `${(box.y / height) * 100}%`,
@@ -376,6 +383,8 @@ async function loadFile(event: Event) {
   const file = input.files?.[0];
   if (!file) return;
 
+  let nextExposures: Exposure[] = [];
+
   resetPreview();
   fileName.value = file.name;
 
@@ -387,24 +396,42 @@ async function loadFile(event: Event) {
       return;
     }
 
-    exposures.value = images.map((imageBytes, index) => {
-      const comment = extractJpegComment(imageBytes);
-      const parsedRows = parseRows(comment);
-      return {
+    let firstParseError = "";
+    nextExposures = images.map((imageBytes, index) => {
+      const exposure: Exposure = {
         index,
         url: imageUrlFromBytes(imageBytes),
-        rawComment: comment,
-        rows: parsedRows,
-        boxes: buildBoxes(parseTags(parsedRows)),
+        rawComment: "",
+        rows: [],
+        boxes: [],
         width: 0,
         height: 0,
       };
-    });
 
-    if (!exposures.value.some((exposure) => exposure.rawComment)) {
+      try {
+        exposure.rawComment = extractJpegComment(imageBytes);
+        exposure.rows = parseRows(exposure.rawComment);
+        exposure.boxes = buildBoxes(parseTags(exposure.rows));
+      } catch (caught) {
+        if (!firstParseError) {
+          firstParseError =
+            caught instanceof Error ? caught.message : labels.value.couldNotReadFile;
+        }
+      }
+
+      return exposure;
+    });
+    exposures.value = nextExposures;
+
+    if (firstParseError) {
+      error.value = firstParseError;
+    } else if (!exposures.value.some((exposure) => exposure.rawComment)) {
       error.value = labels.value.noCommentInAnyExposure;
     }
   } catch (caught) {
+    for (const exposure of nextExposures) {
+      URL.revokeObjectURL(exposure.url);
+    }
     error.value = caught instanceof Error ? caught.message : labels.value.couldNotReadFile;
   } finally {
     input.value = "";
@@ -487,7 +514,7 @@ onBeforeUnmount(() => {
             @load="onImageLoad"
           />
           <button
-            v-for="box in activeBoxes"
+            v-for="box in drawableBoxes"
             :key="box.id"
             class="metadata-visualizer__box"
             :class="[
@@ -505,7 +532,7 @@ onBeforeUnmount(() => {
           </button>
         </div>
 
-        <div v-if="activeBoxes.length" class="metadata-visualizer__legend">
+        <div v-if="drawableBoxes.length" class="metadata-visualizer__legend">
           <span><i class="metadata-visualizer__swatch metadata-visualizer__swatch--plate" /> {{ labels.plate }}</span>
           <span><i class="metadata-visualizer__swatch metadata-visualizer__swatch--vehicle" /> {{ labels.vehicle }}</span>
         </div>
