@@ -148,6 +148,7 @@ The SDK has no external runtime dependencies. **mbedTLS 3.6 LTS** is statically 
 | ---------------- | --------- | -------------------------------------- |
 | cpp-httplib      | 0.31.0    | Embedded in the binary (build-time)    |
 | nlohmann/json    | single h  | Embedded in the binary (build-time)    |
+| optional-lite    | 3.6.0     | Header-only C++17 compatibility layer  |
 | mbedTLS          | 3.6.2 LTS | Statically linked in `.so` / `.dll`    |
 
 See [`docs/https-tls.md`](https-tls.md) for production TLS configuration.
@@ -164,7 +165,7 @@ If you need to **build the SDK from scratch** -- for example, to contribute to t
 - Alternatively, for native builds: a C++17 compiler (GCC 7+, Clang 5+, MinGW-w64 for Windows) and GNU `make`.
 - Optional: `dotnet` (C# wrapper), `go` (Go wrapper), `python3` (Python wrapper) -- only required on the host if you are **not** using the Docker builder.
 
-All C++ dependencies (cpp-httplib, nlohmann/json, mbedTLS) are vendored under [`src/core/3rdparty/`](../src/core/3rdparty), so no system packages are required.
+All C++ dependencies (cpp-httplib, nlohmann/json, optional-lite, mbedTLS) are vendored under [`src/core/3rdparty/`](../src/core/3rdparty), so no system packages are required.
 
 ### Build via Docker (recommended)
 

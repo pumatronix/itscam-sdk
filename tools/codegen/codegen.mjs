@@ -112,7 +112,7 @@ const TARGETS = [
     },
     outRel: "src/core/itscam_rest_types.h",
     notice: NOTICE_HEAD,
-    postProcess: (text) => addCppPartialJson(fixCppOptionalInit(text)),
+    postProcess: (text) => useVendoredCppOptional(addCppPartialJson(fixCppOptionalInit(text))),
   },
   {
     name: "C#",
@@ -166,6 +166,17 @@ function fixCppOptionalInit(text) {
   return text.replace(/return std::optional<T>\(\);/g, "return std::nullopt;")
 }
 
+/// quicktype emits C++17 std::optional, but the SDK still supports old
+/// libstdc++ targets such as GCC 5.4 on Ubuntu 16.04 where <optional> is
+/// absent. Use the vendored nonstd::optional shim instead.
+function useVendoredCppOptional(text) {
+  return text
+    .replace(/#include <optional>/g, "#include <nonstd/optional.hpp>")
+    .replace(/std::optional/g, "nonstd::optional")
+    .replace(/std::nullopt/g, "nonstd::nullopt")
+    .replace(/std::make_optional/g, "nonstd::make_optional")
+}
+
 /// Generate `to_partial_json()` free functions for every struct that has a
 /// `to_json()`.  The partial variant omits keys whose `std::optional<T>`
 /// member is `nullopt`, and recurses into nested structs via their own
@@ -183,7 +194,7 @@ function addCppPartialJson(text) {
     const name = m[1]
     const body = m[2]
     const fields = new Map()
-    const fieldRe = /^\s*(?:std::optional<(.+?)>|(.+?))\s+(\w+)\s*;/gm
+    const fieldRe = /^\s*(?:(?:std|nonstd)::optional<(.+?)>|(.+?))\s+(\w+)\s*;/gm
     let fm
     while ((fm = fieldRe.exec(body)) !== null) {
       const optInner = fm[1] // e.g. "bool", "Advanced", "std::vector<Power>"

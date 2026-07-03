@@ -22,7 +22,7 @@ A API nativa fica em [`src/core/`](../../src/core/) e é o ponto de partida para
 | [`src/core/itscam_cgi_client.h`](../../src/core/itscam_cgi_client.h) | `ItscamCgiClient` -- HTTP/HTTPS para CGI endpoints. |
 | [`src/core/itscam_types.h`](../../src/core/itscam_types.h) | `Result<T>`, `Future<T>`, `Error`, `LogLevel`, enums. |
 | [`src/core/itscam_sdk_utils.h`](../../src/core/itscam_sdk_utils.h) | Helpers (versão, conversões). |
-| [`src/core/3rdparty/`](../../src/core/3rdparty/) | Dependências vendoradas (cpp-httplib, nlohmann/json, mbedTLS). |
+| [`src/core/3rdparty/`](../../src/core/3rdparty/) | Dependências vendoradas (cpp-httplib, nlohmann/json, optional-lite, mbedTLS). |
 | [`src/examples/`](../../src/examples/) | Quatro programas C++ standalone. |
 
 ## Integração com o SDK pré-compilado (recomendado)

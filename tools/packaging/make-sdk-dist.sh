@@ -94,7 +94,7 @@ PY
 
 stage_cpp_headers() {
     local dest="$1"
-    mkdir -p "$dest/c_api" "$dest/3rdparty/nlohmann"
+    mkdir -p "$dest/c_api" "$dest/3rdparty/nlohmann" "$dest/3rdparty/nonstd"
 
     local headers=(
         itscam_sdk.h
@@ -118,6 +118,9 @@ stage_cpp_headers() {
        "$dest/c_api/"
 
     cp "$CORE/3rdparty/nlohmann/json.hpp" "$dest/3rdparty/nlohmann/"
+    cp "$CORE/3rdparty/nonstd/optional.hpp" \
+       "$CORE/3rdparty/nonstd/LICENSE.txt" \
+       "$dest/3rdparty/nonstd/"
 }
 
 stage_linux_libs() {
