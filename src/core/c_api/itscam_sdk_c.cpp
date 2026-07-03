@@ -23,14 +23,16 @@
 // itscam::c_internal::setLastError().
 static thread_local char s_lastError[512] = {0};
 
-namespace itscam::c_internal {
+namespace itscam {
+namespace c_internal {
 void setLastError(const char* fmt, ...) {
     va_list args;
     va_start(args, fmt);
     vsnprintf(s_lastError, sizeof(s_lastError), fmt, args);
     va_end(args);
 }
-}  // namespace itscam::c_internal
+}  // namespace c_internal
+}  // namespace itscam
 
 // Local alias so the existing call sites in this file remain readable.
 using itscam::c_internal::setLastError;
