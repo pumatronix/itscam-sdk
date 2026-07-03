@@ -103,6 +103,12 @@
 #define MBEDTLS_AES_C
 #endif
 
+/* mbedTLS' ARMv8 AES crypto-extension module requires GCC 6+.  Ubuntu
+ * 16.04 arm64 ships GCC 5.4, so keep the portable AES path there. */
+#if defined(__GNUC__) && !defined(__clang__) && (__GNUC__ < 6)
+#undef MBEDTLS_AESCE_C
+#endif
+
 /* Key exchange */
 #ifndef MBEDTLS_KEY_EXCHANGE_ECDHE_ECDSA_ENABLED
 #define MBEDTLS_KEY_EXCHANGE_ECDHE_ECDSA_ENABLED
