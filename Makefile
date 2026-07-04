@@ -29,7 +29,7 @@
 .PHONY: nodejs nodejs-pack nodejs-examples
 .PHONY: install
 .PHONY: version sdk-dist sdk-dist-clean docker-dist-pristine docker-sdk-dist docker-sdk-dist-examples
-.PHONY: docker-build docker-all docker-linux docker-windows docker-shell docker-go-gui
+.PHONY: docker-build docker-build-core-xenial docker-all docker-linux docker-windows docker-shell docker-go-gui
 .PHONY: docker-linux-arm docker-linux-arm64 docker-linux-all docker-qemu-smoke
 .PHONY: docker-csharp docker-csharp-examples docker-csharp-examples-publish
 .PHONY: docker-java docker-java-pack docker-java-jdk7-check docker-nodejs docker-nodejs-pack
@@ -49,6 +49,7 @@ VERSION_MK := tools/version/sdk-version.mk
 # Docker runs bind-mount the repo; always map the caller's uid/gid so
 # generated artefacts stay owned by the host user (never root).
 DOCKER_IMAGE := itscam-sdk-builder
+DOCKER_CORE_IMAGE := itscam-sdk-core-xenial
 DOCKER_UID := $(shell id -u)
 DOCKER_GID := $(shell id -g)
 DOCKER_RUN := docker run --rm \
@@ -63,6 +64,11 @@ DOCKER_RUN := docker run --rm \
 	-e GOMODCACHE=/tmp/go/pkg/mod \
 	-e GOCACHE=/tmp/go/build-cache
 DOCKER_RUN_IT := $(DOCKER_RUN) -it
+
+XENIAL_CORE_MAKE := $(MAKE) -C $(SRC_DIR)/core
+XENIAL_LINUX_TARGETS := build/linux/libitscam_sdk.so build/linux/libitscam_sdk.a check-glibc-linux
+XENIAL_LINUX_ARM_TARGETS := build/linux-arm/libitscam_sdk.so build/linux-arm/libitscam_sdk.a check-glibc-linux-arm
+XENIAL_LINUX_ARM64_TARGETS := build/linux-arm64/libitscam_sdk.so build/linux-arm64/libitscam_sdk.a check-glibc-linux-arm64
 
 # Default target - build library and C++ examples
 default: lib examples
@@ -501,9 +507,9 @@ docker-java: docker-build
 	@echo "=== Building Java wrapper inside Docker ==="
 	$(DOCKER_RUN) $(DOCKER_IMAGE) make java
 
-docker-java-pack: docker-build
+docker-java-pack: docker-linux-all docker-build
 	@echo "=== Packing Java wrapper inside Docker ==="
-	$(DOCKER_RUN) $(DOCKER_IMAGE) make java-pack
+	$(DOCKER_RUN) $(DOCKER_IMAGE) make java-pack ITSCAM_VERSION_LOCKED=1
 
 docker-java-examples: docker-build
 	@echo "=== Building Java wrapper + examples inside Docker ==="
@@ -568,9 +574,9 @@ docker-nodejs: docker-build
 	@echo "=== Building Node.js wrapper inside Docker ==="
 	$(DOCKER_RUN) $(DOCKER_IMAGE) make nodejs
 
-docker-nodejs-pack: docker-build
+docker-nodejs-pack: docker-linux-all docker-build
 	@echo "=== Packing Node.js wrapper inside Docker ==="
-	$(DOCKER_RUN) $(DOCKER_IMAGE) make nodejs-pack
+	$(DOCKER_RUN) $(DOCKER_IMAGE) make nodejs-pack ITSCAM_VERSION_LOCKED=1
 
 # ============================================================================
 #  Live-camera regression (all non-GUI examples)
@@ -815,29 +821,44 @@ docker-build:
 	@echo "=== Building Docker image ==="
 	docker build -t $(DOCKER_IMAGE) .
 
-docker-all: docker-build
+docker-build-core-xenial:
+	@echo "=== Building Docker image for Linux core artefacts (Ubuntu 16.04 / glibc 2.23) ==="
+	docker build --target core-xenial -t $(DOCKER_CORE_IMAGE) .
+
+docker-all: docker-linux-all docker-build
 	@echo "=== Building all inside Docker ==="
-	$(DOCKER_RUN) $(DOCKER_IMAGE) make all
+	$(DOCKER_RUN) $(DOCKER_IMAGE) make windows examples wrappers ITSCAM_VERSION_LOCKED=1
 
-docker-linux: docker-build
-	@echo "=== Building Linux library inside Docker ==="
-	$(DOCKER_RUN) $(DOCKER_IMAGE) make lib
+docker-linux: docker-build docker-build-core-xenial
+	@echo "=== Building Linux x64 library inside Docker (Ubuntu 16.04 / glibc 2.23) ==="
+	$(DOCKER_RUN) $(DOCKER_IMAGE) make version
+	$(DOCKER_RUN) $(DOCKER_CORE_IMAGE) $(XENIAL_CORE_MAKE) clean
+	$(DOCKER_RUN) $(DOCKER_CORE_IMAGE) $(XENIAL_CORE_MAKE) $(XENIAL_LINUX_TARGETS)
 
-docker-linux-arm: docker-build
-	@echo "=== Cross-compiling Linux ARMv7 library inside Docker ==="
-	$(DOCKER_RUN) $(DOCKER_IMAGE) make lib-arm
+docker-linux-arm: docker-build docker-build-core-xenial
+	@echo "=== Cross-compiling Linux ARMv7 library inside Docker (Ubuntu 16.04 / glibc 2.23) ==="
+	$(DOCKER_RUN) $(DOCKER_IMAGE) make version
+	$(DOCKER_RUN) $(DOCKER_CORE_IMAGE) $(XENIAL_CORE_MAKE) clean
+	$(DOCKER_RUN) $(DOCKER_CORE_IMAGE) $(XENIAL_CORE_MAKE) $(XENIAL_LINUX_ARM_TARGETS)
 
-docker-linux-arm64: docker-build
-	@echo "=== Cross-compiling Linux ARMv8 library inside Docker ==="
-	$(DOCKER_RUN) $(DOCKER_IMAGE) make lib-arm64
+docker-linux-arm64: docker-build docker-build-core-xenial
+	@echo "=== Cross-compiling Linux ARMv8 library inside Docker (Ubuntu 16.04 / glibc 2.23) ==="
+	$(DOCKER_RUN) $(DOCKER_IMAGE) make version
+	$(DOCKER_RUN) $(DOCKER_CORE_IMAGE) $(XENIAL_CORE_MAKE) clean
+	$(DOCKER_RUN) $(DOCKER_CORE_IMAGE) $(XENIAL_CORE_MAKE) $(XENIAL_LINUX_ARM64_TARGETS)
 
-docker-linux-all: docker-build
-	@echo "=== Building all Linux libs (x64 + ARMv7 + ARMv8) inside Docker ==="
-	$(DOCKER_RUN) $(DOCKER_IMAGE) make lib-linux-all
+docker-linux-all: docker-build docker-build-core-xenial
+	@echo "=== Building all Linux libs (x64 + ARMv7 + ARMv8) inside Docker (Ubuntu 16.04 / glibc 2.23) ==="
+	$(DOCKER_RUN) $(DOCKER_IMAGE) make version
+	$(DOCKER_RUN) $(DOCKER_CORE_IMAGE) $(XENIAL_CORE_MAKE) clean
+	$(DOCKER_RUN) $(DOCKER_CORE_IMAGE) $(XENIAL_CORE_MAKE) \
+		$(XENIAL_LINUX_TARGETS) \
+		$(XENIAL_LINUX_ARM_TARGETS) \
+		$(XENIAL_LINUX_ARM64_TARGETS)
 
-docker-qemu-smoke: docker-build
+docker-qemu-smoke: docker-linux-all docker-build
 	@echo "=== Running qemu smoke tests inside Docker ==="
-	$(DOCKER_RUN) $(DOCKER_IMAGE) bash -c 'make examples-arm examples-arm64 go-examples-arm go-examples-arm64 && make qemu-smoke'
+	$(DOCKER_RUN) $(DOCKER_IMAGE) bash -c 'make ITSCAM_VERSION_LOCKED=1 examples-arm examples-arm64 go-examples-arm go-examples-arm64 && make qemu-smoke'
 
 docker-windows: docker-build
 	@echo "=== Cross-compiling for Windows inside Docker ==="
@@ -920,9 +941,14 @@ sdk-dist-clean:
 	@echo "=== Removing SDK distribution artefacts ==="
 	@rm -rf dist/
 
-docker-sdk-dist: docker-build
+docker-sdk-dist: docker-build docker-build-core-xenial
 	@echo "=== Packaging SDK distribution inside Docker ==="
-	$(DOCKER_RUN) $(DOCKER_IMAGE) make docker-dist-pristine sdk-dist
+	$(DOCKER_RUN) $(DOCKER_IMAGE) make docker-dist-pristine version
+	$(DOCKER_RUN) $(DOCKER_CORE_IMAGE) $(XENIAL_CORE_MAKE) \
+		$(XENIAL_LINUX_TARGETS) \
+		$(XENIAL_LINUX_ARM_TARGETS) \
+		$(XENIAL_LINUX_ARM64_TARGETS)
+	$(DOCKER_RUN) $(DOCKER_IMAGE) make sdk-dist ITSCAM_VERSION_LOCKED=1
 
 # ============================================================================
 #  Installation
@@ -1021,8 +1047,10 @@ help:
 	@echo ""
 	@echo "Docker targets:"
 	@echo "  docker-build    Build the Docker image"
+	@echo "  docker-build-core-xenial  Build the Ubuntu 16.04 core image"
 	@echo "  docker-all      Build everything inside Docker"
-	@echo "  docker-linux    Build Linux library inside Docker"
+	@echo "  docker-linux    Build Linux x64 library in Ubuntu 16.04 Docker"
+	@echo "  docker-linux-{arm,arm64,all}  Build Linux ARM libs in Ubuntu 16.04 Docker"
 	@echo "  docker-windows  Cross-compile for Windows inside Docker"
 	@echo "  docker-csharp                   Build C# wrapper inside Docker"
 	@echo "  docker-csharp-examples          Build C# wrapper + examples inside Docker"

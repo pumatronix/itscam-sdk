@@ -110,7 +110,7 @@ make sdk-dist             # consumer tar.gz (cpp/c/csharp/python/go) for every p
 make docker-sdk-dist      # same, inside Docker
 ```
 
-The Docker builder image ships the Arm GNU-A **8.3-2019.03** cross-toolchains (armhf + aarch64, glibc floor 2.28) plus `qemu-user-static`. The linux-x64 floor is GLIBC 2.27 (Ubuntu 18.04 base). `tools/check-glibc.sh` enforces both -- bumping a floor requires updating the Dockerfile (base image) or the toolchain version together with the per-target `GLIBC_FLOOR_*` variables in `src/core/Makefile`.
+The Docker setup has two Linux roles: the default Ubuntu 18.04 builder carries wrapper/tooling dependencies, while the `core-xenial` stage builds Linux core artefacts against Ubuntu 16.04 / GLIBC 2.23 for linux-x64, linux-arm, and linux-arm64. `tools/check-glibc.sh` enforces the per-target `GLIBC_FLOOR_*` variables in `src/core/Makefile`. The main builder still ships the Arm GNU-A **8.3-2019.03** cross-toolchains plus `qemu-user-static` for auxiliary cross builds and smoke tests.
 
 After any C / C++ change run `make -C src/core linux` (fast incremental build) and `make examples` to confirm the linker is happy. After any wrapper change rebuild that wrapper's example.
 

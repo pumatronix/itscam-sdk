@@ -13,15 +13,60 @@
 #
 # Copyright (c) 2026 Pumatronix
 
-FROM ubuntu:18.04
+ARG CORE_XENIAL_PLATFORM=linux/amd64
+FROM --platform=${CORE_XENIAL_PLATFORM} ubuntu:16.04 AS core-xenial
+
+LABEL maintainer="Pumatronix"
+LABEL description="Build environment for ITSCAM SDK Linux core library (glibc 2.23)"
+
+# This stage is intentionally small.  It exists only to compile Linux
+# libitscam_sdk.so artefacts against Ubuntu 16.04 / glibc 2.23 while the
+# main builder stage below keeps the newer toolchains needed by wrappers,
+# docs, Windows cross-compilation, Wails, Node.js, and .NET.
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN set -eux; \
+    printf '%s\n' \
+        'Acquire::Retries "5";' \
+        'Acquire::http::Timeout "30";' \
+        'Acquire::https::Timeout "30";' \
+        'Acquire::http::No-Cache "true";' \
+        'Acquire::http::Pipeline-Depth "0";' \
+        > /etc/apt/apt.conf.d/80-itscam-retries; \
+    apt-get clean; \
+    rm -rf /var/lib/apt/lists/*; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends \
+        build-essential \
+        make \
+        python3 \
+        git \
+        binutils \
+        ca-certificates \
+        gcc-arm-linux-gnueabihf \
+        g++-arm-linux-gnueabihf \
+        gcc-aarch64-linux-gnu \
+        g++-aarch64-linux-gnu; \
+    rm -rf /var/lib/apt/lists/*
+
+ENV ARMHF_TOOLCHAIN_PATH=/usr/bin
+ENV ARM64_TOOLCHAIN_PATH=/usr/bin
+
+COPY tools/docker/entrypoint.sh /usr/local/bin/itscam-docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/itscam-docker-entrypoint.sh
+
+WORKDIR /sdk
+ENTRYPOINT ["/usr/local/bin/itscam-docker-entrypoint.sh"]
+CMD ["make", "-C", "src/core", "linux-all"]
+
+FROM ubuntu:18.04 AS builder
 
 LABEL maintainer="Pumatronix"
 LABEL description="Build environment for ITSCAM SDK"
 
-# Anchoring the base on ubuntu:18.04 caps libitscam_sdk.so.* glibc usage
-# at GLIBC_2.27 so binaries built here run on every reasonably modern
-# Linux distribution (Ubuntu 18.04+, Debian 10+, RHEL 8+, the ITSCAM
-# camera images, etc.).  The check is enforced by tools/check-glibc.sh.
+# The main builder intentionally stays on Ubuntu 18.04 for wrapper and
+# tooling support.  Linux libitscam_sdk.so release artefacts are built in
+# the core-xenial stage above so they keep a GLIBC_2.23 floor.
 
 ARG GO_VERSION=1.25.6
 ARG GO_SHA256=f022b6aad78e362bcba9b0b94d09ad58c5a70c6ba3b7582905fababf5fe0181a
@@ -37,12 +82,11 @@ ARG ZULU_JDK7_VERSION=7.56.0.11
 ARG ZULU_JDK7_JAVA_VERSION=7.0.352
 ARG ZULU_JDK7_SHA256=8a7387c1ed151474301b6553c6046f865dc6c1e1890bcf106acc2780c55727c8
 
-# Arm GNU-A 8.3-2019.03 cross-toolchains.  Pinning to this release gives
-# the lowest glibc floor among maintained Arm-signed binaries:
-#   - GLIBC_2.28 on both armhf and aarch64 targets
-#   - kernel headers 4.19
-#   - GCC 8.3.0 (full C++17 support)
-# Matches the ITSCAM450 firmware toolchain exactly; runs on ITSCAM600 too.
+# Arm GNU-A 8.3-2019.03 cross-toolchains for auxiliary wrapper/example
+# builds and qemu smoke tests in the main builder stage.  Release Linux
+# core artefacts use the core-xenial stage above to keep GLIBC_2.23.
+# This toolchain still matches the ITSCAM450 firmware toolchain exactly
+# and runs on ITSCAM600 too.
 ARG ARM_TOOLCHAIN_VERSION=8.3-2019.03
 ARG ARMHF_TOOLCHAIN_SHA256=d4f6480ecaa99e977e3833cc8a8e1263f9eecd1ce2d022bb548a24c4f32670f5
 ARG ARM64_TOOLCHAIN_SHA256=8ce3e7688a47d8cd2d8e8323f147104ae1c8139520eca50ccf8a7fa933002731
@@ -218,9 +262,9 @@ ENV M2_HOME=/opt/maven
 #
 # Tarballs land under /opt/cross/{armhf,arm64} so they match the
 # ARMHF_TOOLCHAIN_PATH / ARM64_TOOLCHAIN_PATH defaults in
-# src/core/Makefile (`/opt/cross/<arch>/bin`).  Both toolchains share
-# the same release so the glibc / kernel-header floor is identical
-# (GLIBC_2.28, kernel 4.19) across armhf and aarch64.
+# src/core/Makefile (`/opt/cross/<arch>/bin`).  These are kept for
+# non-release cross builds and qemu smoke tests; release Linux core
+# artefacts are produced by the Ubuntu 16.04 core-xenial stage.
 #
 # Note on the download URL: the canonical link
 #   https://developer.arm.com/-/media/Files/downloads/gnu-a/<ver>/binrel/<file>
