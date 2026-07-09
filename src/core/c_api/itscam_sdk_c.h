@@ -356,9 +356,13 @@ ITSCAM_C_API ITSCAM_ErrorCode ITSCAM_Client_listProfiles(
 /* ============================================================================
  *  Equipment Configuration
  *
- *  NOTE — wrapper parity: ITSCAM_Client_setConfig is currently exposed only
- *  by the Python wrapper (bindings.py / itscam_client.py).  C# and Go
- *  wrappers deferred.
+ *  NOTE — wrapper parity: ITSCAM_Client_setConfig is intentionally not yet
+ *  exposed by the C# or Go wrappers.  It is available in the C API and in the
+ *  Python wrapper (bindings.py / itscam_client.py) as a preview.  C# and Go
+ *  bindings will be added in a dedicated follow-up change once the call
+ *  signature is validated against production firmware.  Until then, callers
+ *  using C# or Go should use the REST ItscamRestClient setters for
+ *  device-configuration changes.
  * ============================================================================ */
 
 /**

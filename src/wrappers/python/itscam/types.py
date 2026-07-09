@@ -144,7 +144,7 @@ class FrameInfo:
     timestamp: Timestamp = field(default_factory=Timestamp)
     timestamp_str: str = ""
     plates: List[str] = field(default_factory=list)
-    metadata: Optional[dict] = None
+    metadata: dict = field(default_factory=dict)
 
 
 @dataclass

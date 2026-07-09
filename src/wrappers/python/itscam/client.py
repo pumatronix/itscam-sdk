@@ -435,7 +435,7 @@ class ItscamClient:
         if not hasattr(self._lib, "ITSCAM_Client_setConfig"):
             raise NotImplementedError(
                 "set_config() requires a newer .so. "
-                  "Rebuild the core library (e.g., `make lib`, `make lib-arm`, or `make lib-arm64`) and redeploy it."
+                "Rebuild the core library (e.g., `make lib`, `make lib-arm`, or `make lib-arm64`) and redeploy it."
             )
 
         json_data = _json.dumps(data)
@@ -605,7 +605,7 @@ class ItscamClient:
     def _convert_metadata(self, metadata_ptr) -> dict:
         """Convert native metadata map to Python dict."""
         if not metadata_ptr or not hasattr(self._lib, "ITSCAM_MetadataMap_size"):
-             return {}
+            return {}
         metadata = {}
         count = self._lib.ITSCAM_MetadataMap_size(metadata_ptr)
         for i in range(count):
