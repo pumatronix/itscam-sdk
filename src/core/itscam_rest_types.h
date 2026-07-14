@@ -38,7 +38,18 @@
 
 #pragma once
 
+#include <memory>
+#if defined(__has_include) && __has_include(<optional>)
 #include <optional>
+#else
+#include <experimental/optional>
+namespace std {
+    using experimental::make_optional;
+    using experimental::nullopt;
+    using experimental::nullopt_t;
+    using experimental::optional;
+}
+#endif
 #include <nlohmann/json.hpp>
 
 #ifndef NLOHMANN_OPT_HELPER
@@ -61,7 +72,7 @@ namespace nlohmann {
         }
 
         static std::optional<T> from_json(json const & j) {
-            if (j.is_null()) return std::make_optional<T>(); else return std::make_optional<T>(j.get<T>());
+            if (j.is_null()) return std::optional<T>(); else return std::make_optional<T>(j.get<T>());
         }
     };
 }
@@ -106,7 +117,7 @@ namespace rest_types {
         if (it != j.end() && !it->is_null()) {
             return j.at(property).get<std::optional<T>>();
         }
-        return std::nullopt;
+        return std::optional<T>();
     }
 
     template <typename T>

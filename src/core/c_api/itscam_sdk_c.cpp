@@ -7,7 +7,7 @@
  */
 
 #include "itscam_sdk_c.h"
-#include "../itscam_sdk_version.h"
+#include "itscam_sdk_version.h"
 #include "../itscam_client.h"
 #include "../itscam_sdk_utils.h"
 #include "../itscam_jpeg_utils.h"
