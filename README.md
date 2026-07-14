@@ -95,13 +95,6 @@ make lib            # libitscam_sdk.{so,a} para Linux
 make examples       # build dos quatro C++ example binaries
 ```
 
-Se notar rebuild completo frequente no fluxo CMake (por atualização do header de versão), use temporariamente:
-
-```bash
-make clean
-make lib
-```
-
 Rodar um example contra a câmera:
 
 ```bash

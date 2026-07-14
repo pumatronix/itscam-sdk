@@ -96,7 +96,8 @@ def reuse_locked_version() -> bool:
         target_header = Path(_out_header_dir) / "itscam_sdk_version.h"
 
         lib_ver = data["libVersion"]
-        major, minor, patch = lib_ver.split(".")[:3]
+        _ver = parse_semver(lib_ver.split("+", 1)[0].split("-", 1)[0])
+        major, minor, patch = _ver["major"], _ver["minor"], _ver["patch"]
         target_header.parent.mkdir(parents=True, exist_ok=True)
         try:
             target_header.unlink()

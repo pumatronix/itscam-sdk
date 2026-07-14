@@ -9,7 +9,7 @@
 #
 # Copyright (c) 2026 Pumatronix
 
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.8)
 project(itscam_sdk VERSION 1.0.0 LANGUAGES C CXX)
 
 set(CMAKE_C_STANDARD 11)
@@ -85,24 +85,29 @@ if(NOT EXISTS "${_VERSION_HEADER}")
     endif()
 endif()
 
-# 2 — build-time: custom target always re-runs (no output file ⇒ always stale)
-#     equivalent to the Makefile's FORCE prerequisite pattern
+# 2 — build-time: regenerate version header when inputs change (avoid full rebuild every build)
 find_program(PYTHON3_EXECUTABLE NAMES python3)
+set(_VERSION_DEPS "${_VERSION_SCRIPT}")
+foreach(_p IN ITEMS
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../VERSION.json"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../.git/HEAD"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../.git/index")
+    if(EXISTS "${_p}")
+        list(APPEND _VERSION_DEPS "${_p}")
+    endif()
+endforeach()
 if(EXISTS "${_VERSION_SCRIPT}" AND BASH_EXECUTABLE AND PYTHON3_EXECUTABLE AND NOT WIN32)
-    add_custom_target(itscam_sdk_version
-        ALL
-        COMMAND "${CMAKE_COMMAND}" -E env
-                "OUT_HEADER_DIR=${CMAKE_CURRENT_BINARY_DIR}"
-                "ITSCAM_VERSION_HEADER_ONLY=1"
-                "${BASH_EXECUTABLE}" "${_VERSION_SCRIPT}"
+    add_custom_command(
+        OUTPUT "${_VERSION_HEADER}"
+        COMMAND "${CMAKE_COMMAND}" -E env "OUT_HEADER_DIR=${CMAKE_CURRENT_BINARY_DIR}" "ITSCAM_VERSION_HEADER_ONLY=1" "${BASH_EXECUTABLE}" "${_VERSION_SCRIPT}"
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../.."
-        BYPRODUCTS "${_VERSION_HEADER}"
+        DEPENDS ${_VERSION_DEPS}
         COMMENT "Generating itscam_sdk_version.h"
+        VERBATIM
     )
+    add_custom_target(itscam_sdk_version DEPENDS "${_VERSION_HEADER}")
 else()
-    add_custom_target(itscam_sdk_version ALL
-        COMMENT "[itscam-sdk] Skip build-time version regeneration"
-    )
+    add_custom_target(itscam_sdk_version COMMENT "[itscam-sdk] Skip build-time version regeneration")
 endif()
 
 # Source files
