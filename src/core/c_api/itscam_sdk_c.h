@@ -103,6 +103,11 @@ typedef struct ITSCAM_FrameInfo {
     uint32_t width;          /* Original image width */
     uint32_t height;         /* Original image height */
     ITSCAM_Timestamp timestamp;
+    char timestampStr[256]; // Fixed-size buffer
+    void* metadata;          /* Opaque pointer to the ITSCAM_CaptureResult that produced this info.
+                               * Use ITSCAM_MetadataMap_size/key/value() to iterate tags.
+                               * Valid only until the next call to ITSCAM_CaptureResultArray_get()
+                               * on the same thread — do not cache across that call. */
 } ITSCAM_FrameInfo;
 
 /* ============================================================================
@@ -349,6 +354,35 @@ ITSCAM_C_API ITSCAM_ErrorCode ITSCAM_Client_listProfiles(
     ITSCAM_ProfileArray** outProfiles);
 
 /* ============================================================================
+ *  Equipment Configuration
+ *
+ *  NOTE — wrapper parity: ITSCAM_Client_setConfig is currently exposed only
+ *  by the Python wrapper (bindings.py / itscam_client.py).  C# and Go
+ *  wrappers deferred.
+ * ============================================================================ */
+
+/**
+ * @brief Set a configuration value on the device.
+ *
+ * Equivalent to CougarClient.setEquipCfgs() — uses the SET_EQUIP_CFGS opcode
+ * internally.  Typical use-case is controlling GPIO pins:
+ *
+ *   ITSCAM_Client_setConfig(client, "equip.io.0", "{\"type\":\"general\",\"isInput\":false}", 5000);
+ *   ITSCAM_Client_setConfig(client, "equip.io.0.out", "true", 5000);
+ *
+ * @param client    Client handle.
+ * @param path      Configuration path (e.g. "equip.io.0.out").
+ * @param jsonData  JSON-encoded value to set (string, bool, number or object).
+ * @param timeoutMs Request timeout in milliseconds.
+ * @return ITSCAM_OK on success, error code on failure.
+ */
+ITSCAM_C_API ITSCAM_ErrorCode ITSCAM_Client_setConfig(
+    ITSCAM_Client* client,
+    const char* path,
+    const char* jsonData,
+    uint32_t timeoutMs);
+
+/* ============================================================================
  *  System
  * ============================================================================ */
 
@@ -480,6 +514,23 @@ ITSCAM_C_API size_t ITSCAM_CaptureResult_getPlateCount(
 ITSCAM_C_API const char* ITSCAM_CaptureResult_getPlate(
     const ITSCAM_CaptureResult* result,
     size_t index);
+
+/* ============================================================================
+ *  MetadataMap Accessors (for ITSCAM_FrameInfo.metadata)
+ *
+ *  NOTE — wrapper parity: these accessors are currently bound only in the
+ *  Python wrapper.  C# accesses the same data through the managed
+ *  CommentTags dictionary on CaptureResult; Go support is deferred.
+ * ============================================================================ */
+
+/** @brief Get the number of entries in a metadata map. */
+ITSCAM_C_API size_t ITSCAM_MetadataMap_size(const void* metadata);
+
+/** @brief Get the key at position index (0-based). Returns NULL if out of bounds. */
+ITSCAM_C_API const char* ITSCAM_MetadataMap_key(const void* metadata, size_t index);
+
+/** @brief Get the value at position index (0-based). Returns NULL if out of bounds. */
+ITSCAM_C_API const char* ITSCAM_MetadataMap_value(const void* metadata, size_t index);
 
 /* ============================================================================
  *  ByteArray Accessors

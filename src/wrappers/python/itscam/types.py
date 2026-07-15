@@ -134,18 +134,17 @@ class Timestamp:
 class FrameInfo:
     """Metadata about a captured frame."""
     request_id: int = 0
-    scenario: int = -1
+    frame_count: int = 0
     multi_exp_index: int = 0
     multi_exp_length: int = 1
-    timestamp_us: int = 0
+    shutter: int = 0
+    gain: float = 0.0
     width: int = 0
     height: int = 0
+    timestamp: Timestamp = field(default_factory=Timestamp)
+    timestamp_str: str = ""
     plates: List[str] = field(default_factory=list)
-    
-    @property
-    def timestamp(self) -> float:
-        """Get timestamp in seconds."""
-        return self.timestamp_us / 1_000_000.0
+    metadata: Optional[dict] = None
 
 
 @dataclass
@@ -153,16 +152,25 @@ class CaptureResult:
     """Result of a capture operation."""
     info: FrameInfo = field(default_factory=FrameInfo)
     jpeg: bytes = b""
-    
+
     @property
     def plates(self) -> List[str]:
         """Shortcut to access recognized plates."""
         return self.info.plates
 
+    def save(self, path: str) -> None:
+        """Save JPEG data to file."""
+        with open(path, "wb") as f:
+            f.write(self.jpeg)
+       
+    @property
+    def rid(self) -> int:
+        """Shortcut to access request ID."""
+        return self.info.request_id
+
     @property
     def comment(self) -> str:
         """Extract the JPEG COM marker comment string.
-
         Returns the raw semicolon-delimited metadata string embedded by the
         camera, or ``""`` if the JPEG has no COM marker.  The result is
         cached after the first call.
@@ -175,7 +183,6 @@ class CaptureResult:
     @property
     def comment_tags(self) -> Dict[str, str]:
         """Parse the JPEG COM marker into a ``{key: value}`` dictionary.
-
         The camera writes tags such as ``Placa``, ``CoordPlaca``,
         ``ClassifierList``, and ``BMCList``.  The result is cached.
         """
@@ -183,12 +190,6 @@ class CaptureResult:
             from .jpeg_utils import parse_jpeg_comment_tags
             self._comment_tags = parse_jpeg_comment_tags(self.comment)
         return self._comment_tags
-
-    def save(self, path: str) -> None:
-        """Save JPEG data to file."""
-        with open(path, "wb") as f:
-            f.write(self.jpeg)
-
 
 @dataclass
 class ProfileInfo:

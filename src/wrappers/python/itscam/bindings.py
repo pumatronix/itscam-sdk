@@ -8,10 +8,11 @@ This module should not be used directly; use the high-level wrappers instead.
 import ctypes
 from ctypes import (
     c_int, c_uint16, c_uint32, c_uint64, c_int32,
-    c_size_t, c_char_p, c_void_p, c_ubyte,
+    c_size_t, c_char_p, c_void_p, c_ubyte, c_float, c_char,
     Structure, POINTER, CFUNCTYPE, byref, cast
 )
 import os
+import platform
 import sys
 from pathlib import Path
 from typing import Optional
@@ -23,6 +24,7 @@ from typing import Optional
 
 def _find_library() -> str:
     """Find the ITSCAM SDK library."""
+    env_lib_dir = os.environ.get("ITSCAM_SDK_LIBRARY_DIR")
     # Library names by platform
     if sys.platform == "win32":
         lib_names = ["itscam_sdk.dll", "libitscam_sdk.dll"]
@@ -39,10 +41,29 @@ def _find_library() -> str:
         Path(__file__).parent.parent,
         # Build directories
         Path(__file__).parent.parent / "build",
+        Path(__file__).parent.parent.parent.parent / "core" / "build" / "linux",
+    ]
+
+    _machine = platform.machine().lower()
+    if _machine in ("aarch64", "arm64"):
+        search_paths += [
+            Path(__file__).parent.parent / "build" / "linux-arm64",
+            Path(__file__).parent.parent.parent.parent / "core" / "build" / "linux-arm64",
+        ]
+    elif _machine.startswith("arm"):
+        search_paths += [
+            Path(__file__).parent.parent / "build" / "linux-arm",
+            Path(__file__).parent.parent.parent.parent / "core" / "build" / "linux-arm",
+        ]
+
+    search_paths += [
         # System paths
         Path("/usr/local/lib"),
         Path("/usr/lib"),
     ]
+
+    if env_lib_dir:
+        search_paths.insert(0, Path(env_lib_dir))
     
     # Add LD_LIBRARY_PATH directories
     if "LD_LIBRARY_PATH" in os.environ:
@@ -115,13 +136,17 @@ class ITSCAM_Timestamp(Structure):
 class ITSCAM_FrameInfo(Structure):
     """C struct for frame info."""
     _fields_ = [
-        ("requestId", c_uint32),
-        ("scenario", c_int32),
-        ("multiExpIndex", c_int32),
-        ("multiExpLength", c_int32),
-        ("timestampUs", c_uint64),
-        ("width", c_uint32),
-        ("height", c_uint32),
+        ("requestId",       c_uint64),
+        ("frameCount",      c_uint64),
+        ("multiExpIndex",   c_int32),
+        ("multiExpLength",  c_int32),
+        ("shutter",         c_int32),
+        ("gain",            c_float),
+        ("width",           c_uint32),
+        ("height",          c_uint32),
+        ("timestamp",       ITSCAM_Timestamp),
+        ("timestampStr",    c_char * 256),
+        ("metadata",        c_void_p), 
     ]
 
 
@@ -329,7 +354,16 @@ def _setup_prototypes(lib: ctypes.CDLL) -> None:
     # System
     lib.ITSCAM_Client_reboot.argtypes = [ITSCAM_Client, c_uint32]
     lib.ITSCAM_Client_reboot.restype = c_int
-    
+
+    # Equipment configuration (replaces CougarClient.setEquipCfgs)
+    # Python-only in this change; C# / Go wrappers to follow
+
+    try:
+        lib.ITSCAM_Client_setConfig.argtypes = [ITSCAM_Client, c_char_p, c_char_p, c_uint32]
+        lib.ITSCAM_Client_setConfig.restype = c_int
+    except AttributeError:
+        pass  # Old .so — set_config() will raise NotImplementedError at call time
+
     # Callbacks
     lib.ITSCAM_Client_onTriggerImage.argtypes = [
         ITSCAM_Client, ITSCAM_CaptureCallback, c_void_p
@@ -381,7 +415,22 @@ def _setup_prototypes(lib: ctypes.CDLL) -> None:
     
     lib.ITSCAM_CaptureResult_getPlate.argtypes = [ITSCAM_CaptureResult, c_size_t]
     lib.ITSCAM_CaptureResult_getPlate.restype = c_char_p
-    
+
+    # MetadataMap accessors (for ITSCAM_FrameInfo.metadata / data.tags)
+    # Python-only; C# uses CommentTags on CaptureResult, Go deferred.
+    try:
+        lib.ITSCAM_MetadataMap_size.argtypes = [c_void_p]
+        lib.ITSCAM_MetadataMap_size.restype = c_size_t
+
+        lib.ITSCAM_MetadataMap_key.argtypes = [c_void_p, c_size_t]
+        lib.ITSCAM_MetadataMap_key.restype = c_char_p
+
+        lib.ITSCAM_MetadataMap_value.argtypes = [c_void_p, c_size_t]
+        lib.ITSCAM_MetadataMap_value.restype = c_char_p
+
+    except AttributeError:
+         pass  
+
     # ByteArray accessors
     lib.ITSCAM_ByteArray_size.argtypes = [ITSCAM_ByteArray]
     lib.ITSCAM_ByteArray_size.restype = c_size_t

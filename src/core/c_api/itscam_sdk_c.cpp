@@ -15,6 +15,7 @@
 
 #include <cstdarg>
 #include <cstring>
+#include <map>
 #include <memory>
 #include <string>
 #include <vector>
@@ -322,9 +323,9 @@ ITSCAM_ErrorCode ITSCAM_Client_getLastFrame(
     }
 }
 
-//=========================================================================
-// Profile Management
-//=========================================================================
+// ============================================================================
+//  Profile Management
+// ============================================================================
 
 ITSCAM_ErrorCode ITSCAM_Client_getActiveProfileId(
     ITSCAM_Client* client,
@@ -404,9 +405,44 @@ ITSCAM_ErrorCode ITSCAM_Client_listProfiles(
     }
 }
 
-//=========================================================================
-// System
-//=========================================================================
+// ============================================================================
+//  Equipment Configuration
+// ============================================================================
+
+ITSCAM_ErrorCode ITSCAM_Client_setConfig(
+    ITSCAM_Client* client,
+    const char* path,
+    const char* jsonData,
+    uint32_t timeoutMs)
+{
+    if (!client || !client->impl) {
+        setLastError("Null client handle");
+        return ITSCAM_ERROR_NULL_HANDLE;
+    }
+    if (!path || !jsonData) {
+        setLastError("Null path or jsonData");
+        return ITSCAM_ERROR_INVALID_PARAMETER;
+    }
+
+    nlohmann::json data;
+    try {
+        data = nlohmann::json::parse(jsonData);
+    } catch (const std::exception& e) {
+        setLastError("Invalid JSON: %s", e.what());
+        return ITSCAM_ERROR_INVALID_PARAMETER;
+    }
+
+    auto result = client->impl->setConfig(path, data, timeoutMs);
+    if (!result) {
+        setLastError("%s", result.error().message.c_str());
+        return translateError(result.error());
+    }
+    return ITSCAM_OK;
+}
+
+// ============================================================================
+//  System
+// ============================================================================
 
 ITSCAM_ErrorCode ITSCAM_Client_reboot(
     ITSCAM_Client* client,
@@ -587,8 +623,47 @@ ITSCAM_FrameInfo ITSCAM_CaptureResult_getInfo(const ITSCAM_CaptureResult* result
         info.timestamp.second = result->data.info.timestamp.sec;
         info.timestamp.millisecond = result->data.info.timestamp.msec;
         info.timestamp.timezone_offset = 0;  // itscam::Timestamp doesn't have timezone
+        snprintf(info.timestampStr, sizeof(info.timestampStr),
+                "%04d-%02d-%02d %02d:%02d:%02d.%03d",
+                result->data.info.timestamp.year,
+                result->data.info.timestamp.month,
+                result->data.info.timestamp.day,
+                result->data.info.timestamp.hour,
+                result->data.info.timestamp.min,
+                result->data.info.timestamp.sec,
+                result->data.info.timestamp.msec);
+
+        // metadata points to result itself; valid only until the next ITSCAM_CaptureResultArray_get() call on this thread.
+        info.metadata = const_cast<void*>(static_cast<const void*>(result));
     }
     return info;
+}
+
+// ============================================================================
+//  MetadataMap Accessors
+// ============================================================================
+
+size_t ITSCAM_MetadataMap_size(const void* metadata) {
+    if (!metadata) return 0;
+    return static_cast<const ITSCAM_CaptureResult*>(metadata)->data.tags.size();
+}
+
+const char* ITSCAM_MetadataMap_key(const void* metadata, size_t index) {
+    if (!metadata) return nullptr;
+    const auto& m = static_cast<const ITSCAM_CaptureResult*>(metadata)->data.tags;
+    if (index >= m.size()) return nullptr;
+    auto it = m.begin();
+    std::advance(it, static_cast<ptrdiff_t>(index));
+    return it->first.c_str();
+}
+
+const char* ITSCAM_MetadataMap_value(const void* metadata, size_t index) {
+    if (!metadata) return nullptr;
+    const auto& m = static_cast<const ITSCAM_CaptureResult*>(metadata)->data.tags;
+    if (index >= m.size()) return nullptr;
+    auto it = m.begin();
+    std::advance(it, static_cast<ptrdiff_t>(index));
+    return it->second.c_str();
 }
 
 const uint8_t* ITSCAM_CaptureResult_getJpeg(
