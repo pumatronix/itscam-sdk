@@ -23,14 +23,16 @@
 // itscam::c_internal::setLastError().
 static thread_local char s_lastError[512] = {0};
 
-namespace itscam::c_internal {
+namespace itscam {
+namespace c_internal {
 void setLastError(const char* fmt, ...) {
     va_list args;
     va_start(args, fmt);
     vsnprintf(s_lastError, sizeof(s_lastError), fmt, args);
     va_end(args);
 }
-}  // namespace itscam::c_internal
+}  // namespace c_internal
+}  // namespace itscam
 
 // Local alias so the existing call sites in this file remain readable.
 using itscam::c_internal::setLastError;
@@ -442,7 +444,8 @@ void ITSCAM_Client_onTriggerImage(
             if (client->triggerImageCb) {
                 ITSCAM_CaptureResult wrapped;
                 wrapped.data = cr;
-                client->triggerImageCb(&wrapped, client->triggerImageUserData);
+                client->triggerImageCb(static_cast<const ITSCAM_CaptureResult*>(&wrapped),
+                                       client->triggerImageUserData);
             }
         });
     } else {
@@ -465,7 +468,8 @@ void ITSCAM_Client_onSnapshotImage(
             if (client->snapshotImageCb) {
                 ITSCAM_CaptureResult wrapped;
                 wrapped.data = cr;
-                client->snapshotImageCb(&wrapped, client->snapshotImageUserData);
+                client->snapshotImageCb(static_cast<const ITSCAM_CaptureResult*>(&wrapped),
+                                        client->snapshotImageUserData);
             }
         });
     } else {

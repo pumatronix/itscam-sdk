@@ -164,29 +164,20 @@ function info(message) {
 
 function fixCppIncludes(text) {
   const replacement =
-    `#include <memory>
-` +
-    `#if defined(__has_include) && __has_include(<optional>)
-` +
-    `#include <optional>
-` +
-    `#else
-` +
-    `#include <experimental/optional>
-` +
-    `namespace std {
-` +
-    `    using experimental::make_optional;
-` +
-    `    using experimental::nullopt;
-` +
-    `    using experimental::nullopt_t;
-` +
-    `    using experimental::optional;
-` +
-    `}
-` +
-    `#endif`;
+  `#include <memory>\n` +
+  `#if __cplusplus >= 201703L && defined(__has_include) && __has_include(<optional>)\n` +
+  `#include <optional>\n` +
+  `#elif defined(__has_include) && __has_include(<experimental/optional>)\n` +
+  `#include <experimental/optional>\n` +
+  `namespace std {\n` +
+  `    using experimental::make_optional;\n` +
+  `    using experimental::nullopt;\n` +
+  `    using experimental::nullopt_t;\n` +
+  `    using experimental::optional;\n` +
+  `}\n` +
+  `#else\n` +
+  `#error "itscam_rest_types.h requires <optional> (C++17) or <experimental/optional> (C++14 fallback)"\n` +
+  `#endif`;
   return text.replace(/^#include <optional>$/m, replacement);
 }
 

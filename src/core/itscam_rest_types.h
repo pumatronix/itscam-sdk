@@ -39,9 +39,9 @@
 #pragma once
 
 #include <memory>
-#if defined(__has_include) && __has_include(<optional>)
+#if __cplusplus >= 201703L && defined(__has_include) && __has_include(<optional>)
 #include <optional>
-#else
+#elif defined(__has_include) && __has_include(<experimental/optional>)
 #include <experimental/optional>
 namespace std {
     using experimental::make_optional;
@@ -49,6 +49,8 @@ namespace std {
     using experimental::nullopt_t;
     using experimental::optional;
 }
+#else
+#error "itscam_rest_types.h requires <optional> (C++17) or <experimental/optional> (C++14 fallback)"
 #endif
 #include <nlohmann/json.hpp>
 
