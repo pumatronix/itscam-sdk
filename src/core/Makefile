@@ -178,7 +178,9 @@ OBJS_WIN_X86 := $(OBJS_WIN_X86)     $(OBJS_MBEDTLS_WIN_X86)
 # OUT_HEADER_DIR is forwarded so the script writes to the build directory.
 $(VERSION_HEADER): $(VERSION_SCRIPT) $(wildcard $(REPO_ROOT)/VERSION.json) $(wildcard $(REPO_ROOT)/.git/HEAD) $(wildcard $(REPO_ROOT)/.git/index)
 	@mkdir -p "$(dir $@)"
-	@OUT_HEADER_DIR="$(if $(OUT_HEADER_DIR),$(OUT_HEADER_DIR),)" $(VERSION_SCRIPT)
+	@OUT_HEADER_DIR="$(if $(OUT_HEADER_DIR),$(OUT_HEADER_DIR),)" \
+	$(if $(OUT_HEADER_DIR),ITSCAM_VERSION_HEADER_ONLY=1,) \
+	$(VERSION_SCRIPT)
 
 # The SDK objects depend on the concrete version header file so parallel builds
 # cannot start compiling before the header exists.
