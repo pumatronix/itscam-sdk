@@ -33,10 +33,12 @@ else()
     message(FATAL_ERROR "Unsupported platform")
 endif()
 
-# Set up output directories
-set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
-set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+# Set up output directories (only when building standalone, not as add_subdirectory)
+if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
+    set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+    set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+endif()
 
 # ---------------------------------------------------------------------------
 #  Version header (itscam_sdk_version.h)
@@ -173,6 +175,13 @@ if(BUILD_SHARED_LIBS)
     if(PLATFORM_WINDOWS)
         set_target_properties(itscam_sdk PROPERTIES
             WINDOWS_EXPORT_ALL_SYMBOLS OFF
+        )
+    elseif(PLATFORM_LINUX)
+        # camera-daemon builds with global -fvisibility=hidden via jlib flags.
+        # Override with CMake's visibility preset to export all C++ API symbols.
+        set_target_properties(itscam_sdk PROPERTIES
+            CXX_VISIBILITY_PRESET default
+            VISIBILITY_INLINES_HIDDEN OFF
         )
     endif()
 endif()
