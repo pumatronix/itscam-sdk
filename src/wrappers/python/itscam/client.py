@@ -6,6 +6,7 @@ High-level Pythonic wrapper for the ITSCAM camera client.
 
 from ctypes import byref, c_uint32, c_size_t, POINTER, c_ubyte, cast, c_char_p
 from typing import Optional, List, Callable, Any
+import sys
 import weakref
 
 from . import bindings as _b
@@ -433,9 +434,12 @@ class ItscamClient:
             raise RuntimeError("Client has been closed")
 
         if not hasattr(self._lib, "ITSCAM_Client_setConfig"):
+            loaded_lib = getattr(self._lib, "_name", "<unknown>")
             raise NotImplementedError(
-                "set_config() requires a newer .so. "
-                "Rebuild the core library (e.g., `make lib`, `make lib-arm`, or `make lib-arm64`) and redeploy it."
+                "set_config() requires a newer .so exposing ITSCAM_Client_setConfig. "
+                f"Loaded library: {loaded_lib}. Python runtime: {sys.version.split()[0]}. "
+                "This usually means Python files were updated but /usr/lib/libitscam_sdk.so* is still old. "
+                "Rebuild/redeploy the core library (e.g., make lib, make lib-arm, or make lib-arm64)."
             )
 
         json_data = _json.dumps(data)

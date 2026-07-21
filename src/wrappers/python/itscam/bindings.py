@@ -6,6 +6,7 @@ This module should not be used directly; use the high-level wrappers instead.
 """
 
 import ctypes
+import ctypes.util
 from ctypes import (
     c_int, c_uint16, c_uint32, c_uint64, c_int32,
     c_size_t, c_char_p, c_void_p, c_ubyte, c_float, c_char,
@@ -24,13 +25,15 @@ from typing import Optional
 
 def _find_library() -> str:
     """Find the ITSCAM SDK library."""
-    env_lib_dir = os.environ.get("ITSCAM_SDK_LIBRARY_DIR")
+    env_lib_dir = os.environ.get("LD_LIBRARY_PATH")
     # Library names by platform
     if sys.platform == "win32":
         lib_names = ["itscam_sdk.dll", "libitscam_sdk.dll"]
     elif sys.platform == "darwin":
         lib_names = ["libitscam_sdk.dylib"]
     else:
+        # Do not assume a fixed soname major. Runtime images may ship .so.0,
+        # .so.1, .so.2, etc. depending on SDK version.
         lib_names = ["libitscam_sdk.so", "libitscam_sdk.so.1"]
     
     # Search paths
@@ -60,6 +63,7 @@ def _find_library() -> str:
         # System paths
         Path("/usr/local/lib"),
         Path("/usr/lib"),
+        Path("/lib"),
     ]
 
     if env_lib_dir:
@@ -76,9 +80,21 @@ def _find_library() -> str:
             lib_path = search_path / lib_name
             if lib_path.exists():
                 return str(lib_path)
+
+        # Linux: accept versioned sonames (e.g. libitscam_sdk.so.0)
+        if sys.platform not in ("win32", "darwin"):
+            for lib_path in sorted(search_path.glob("libitscam_sdk.so.*")):
+                if lib_path.is_file():
+                    return str(lib_path)
     
     # Try loading by name (system search)
-    for lib_name in lib_names:
+    system_lib_names = list(lib_names)
+    if sys.platform not in ("win32", "darwin"):
+        detected = ctypes.util.find_library("itscam_sdk")
+        if detected:
+            system_lib_names.insert(0, detected)
+
+    for lib_name in system_lib_names:
         try:
             if sys.platform == "win32":
                 ctypes.WinDLL(lib_name)
@@ -89,7 +105,7 @@ def _find_library() -> str:
             continue
     
     raise OSError(
-        f"Could not find ITSCAM SDK library. Searched: {lib_names}\n"
+        f"Could not find ITSCAM SDK library. Searched: {system_lib_names} and libitscam_sdk.so.*\n"
         f"Search paths: {[str(p) for p in search_paths]}"
     )
 
