@@ -14,7 +14,7 @@ The native library (`libitscam_sdk.so` on Linux, `itscam_sdk.dll` on Windows) mu
 
 - The package directory
 - System library paths (`/usr/lib`, `/usr/local/lib`)
-- `LD_LIBRARY_PATH` or `LD_LIBRARY_PATH` environment variable
+- `LD_LIBRARY_PATH` (Linux) / `PATH` (Windows) environment variable
 
 ### Option B — Running directly from the source checkout (development)
 
@@ -30,8 +30,8 @@ Then, every time you run an example on your development machine, set two variabl
 so that Python picks up **this checkout** instead of any globally installed package:
 
 ```bash
-export PYTHONPATH=/path/to/itscam-sdk/src/wrappers/python
-export LD_LIBRARY_PATH=/path/to/itscam-sdk/src/core/build/linux
+export PYTHONPATH=/path/to/itscam-sdk/src/wrappers/python:$PYTHONPATH
+export LD_LIBRARY_PATH=/path/to/itscam-sdk/src/core/build/linux:$LD_LIBRARY_PATH
 ```
 
 Replace `/path/to/itscam-sdk` with the actual path on your machine.  
@@ -42,8 +42,8 @@ x86-64 host — that is an AArch64 library and `ctypes` cannot load it.
 
 ```bash
 SDK=/path/to/itscam-sdk
-export PYTHONPATH=$SDK/src/wrappers/python
-export LD_LIBRARY_PATH=$SDK/src/core/build/linux
+export PYTHONPATH=$SDK/src/wrappers/python:$PYTHONPATH
+export LD_LIBRARY_PATH=$SDK/src/core/build/linux:$LD_LIBRARY_PATH
 cd $SDK/src/wrappers/python
 python3 examples/subscribe-trigger-cougar.py
 ```

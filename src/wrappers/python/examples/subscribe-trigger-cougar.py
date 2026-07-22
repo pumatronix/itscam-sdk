@@ -11,30 +11,42 @@ import traceback, sys
 logging.basicConfig(level=logging.INFO)
 
 trigger_count = 0
+trigger_lock = threading.Lock()
 
-def on_trigger(result: CaptureResult):
-    global trigger_count
-    trigger_count += 1
-    filename = f"trigger_{trigger_count}.jpeg"
+def _process_trigger(result: CaptureResult, trigger_no: int) -> None:
+    filename = f"trigger_{trigger_no}.jpeg"
     result.save(filename)
     plates = result.plates
-    print(f"[trigger #{trigger_count}] saved {filename} | plates: {plates}")
+    print(f"[trigger #{trigger_no}] saved {filename} | plates: {plates}")
 
     # Print metadata (tags) if available
     metadata = result.info.metadata or {}
     if metadata:
         print(f"  metadata keys: {list(metadata.keys())}")
-        vehicle_list_raw = metadata.get('VehicleList')
+        vehicle_list_raw = metadata.get("VehicleList")
         if vehicle_list_raw:
             try:
                 vehicles = json.loads(vehicle_list_raw)
                 for v in vehicles:
-                    plate = v.get('plate', {})
-                    text = plate.get('text', '')
-                    probs = plate.get('charProb', [])
+                    plate = v.get("plate", {})
+                    text = plate.get("text", "")
+                    probs = plate.get("charProb", [])
                     print(f"  vehicle plate={text} probs={[str(p) for p in probs]}")
-            except json.JSONDecodeError:
-                print(f"  VehicleList: (invalid JSON)")
+            except json.JSONDecodeError as e:
+                print(f"Error (invalid JSON): {e} | raw data: {vehicle_list_raw}")
+            except Exception as e:
+                print(f"Error: {str(e)} | raw data: {vehicle_list_raw}")
+
+def on_trigger(result: CaptureResult) -> None:
+    global trigger_count
+    with trigger_lock:
+        trigger_count += 1
+        trigger_no = trigger_count
+    threading.Thread(
+        target=_process_trigger,
+        args=(result, trigger_no),
+        daemon=True,
+    ).start()
 
 def main():
     try:

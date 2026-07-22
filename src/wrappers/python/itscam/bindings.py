@@ -66,13 +66,11 @@ def _find_library() -> str:
         Path("/lib"),
     ]
 
+    # Insert all LD_LIBRARY_PATH entries at the front so they take priority.
     if env_lib_dir:
-        search_paths.insert(0, Path(env_lib_dir))
-    
-    # Add LD_LIBRARY_PATH directories
-    if "LD_LIBRARY_PATH" in os.environ:
-        for p in os.environ["LD_LIBRARY_PATH"].split(os.pathsep):
-            search_paths.append(Path(p))
+        ld_dirs = [Path(p) for p in env_lib_dir.split(os.pathsep) if p]
+        for ld_path in reversed(ld_dirs):
+            search_paths.insert(0, ld_path)
     
     # Search for the library
     for search_path in search_paths:
