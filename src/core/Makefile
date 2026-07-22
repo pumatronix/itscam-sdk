@@ -14,6 +14,7 @@
 .PHONY: all linux linux-arm linux-arm64 linux-all windows windows-x64 windows-x86 clean install help version
 .PHONY: check-cross-armhf check-cross-arm64
 .PHONY: check-glibc check-glibc-linux check-glibc-linux-arm check-glibc-linux-arm64
+.PHONY: check-mingw-x64 check-mingw-x86
 
 # Default target
 all: linux
@@ -23,8 +24,9 @@ VERSION_SCRIPT := $(REPO_ROOT)/tools/version/gen-version.sh
 -include $(REPO_ROOT)/tools/version/sdk-version.mk
 SDK_LIB_VERSION ?= 0.0.0
 
-version:
-	@$(VERSION_SCRIPT)
+VERSION_HEADER := $(if $(OUT_HEADER_DIR),$(OUT_HEADER_DIR)/itscam_sdk_version.h,$(REPO_ROOT)/src/core/itscam_sdk_version.h)
+
+version: $(VERSION_HEADER)
 
 # Build directories
 BUILD_DIR        := build
@@ -119,7 +121,7 @@ LDFLAGS_LINUX   := -shared -lpthread
 LDFLAGS_WINDOWS := -shared -lws2_32 -lbcrypt -lcrypt32 -static-libgcc -static-libstdc++
 
 # Include paths
-INCLUDES := -I. -Ic_api -I$(3RDPARTY_DIR) -I$(MBEDTLS_INC)
+INCLUDES := $(if $(OUT_HEADER_DIR),-I$(OUT_HEADER_DIR)) -I. -Ic_api -I$(3RDPARTY_DIR) -I$(MBEDTLS_INC)
 
 # ============================================================================
 #  Source files
@@ -171,6 +173,18 @@ OBJS_LINUX_ARM   := $(OBJS_SDK_LINUX_ARM)   $(OBJS_MBEDTLS_LINUX_ARM)
 OBJS_LINUX_ARM64 := $(OBJS_SDK_LINUX_ARM64) $(OBJS_MBEDTLS_LINUX_ARM64)
 OBJS_WIN_X64 := $(OBJS_WIN_X64)     $(OBJS_MBEDTLS_WIN_X64)
 OBJS_WIN_X86 := $(OBJS_WIN_X86)     $(OBJS_MBEDTLS_WIN_X86)
+
+# Real file rule so make -j can resolve the dependency without a phony target.
+# OUT_HEADER_DIR is forwarded so the script writes to the build directory.
+$(VERSION_HEADER): $(VERSION_SCRIPT) $(wildcard $(REPO_ROOT)/VERSION.json) $(wildcard $(REPO_ROOT)/.git/HEAD) $(wildcard $(REPO_ROOT)/.git/index)
+	@mkdir -p "$(dir $@)"
+	@OUT_HEADER_DIR="$(if $(OUT_HEADER_DIR),$(OUT_HEADER_DIR),)" \
+	$(if $(OUT_HEADER_DIR),ITSCAM_VERSION_HEADER_ONLY=1,) \
+	$(VERSION_SCRIPT)
+
+# The SDK objects depend on the concrete version header file so parallel builds
+# cannot start compiling before the header exists.
+$(OBJS_SDK_LINUX) $(OBJS_SDK_LINUX_ARM) $(OBJS_SDK_LINUX_ARM64) $(OBJS_WIN_X64) $(OBJS_WIN_X86): $(VERSION_HEADER)
 
 # Output files
 LIB_LINUX_SO     := $(BUILD_DIR_LINUX)/libitscam_sdk.so
@@ -371,7 +385,7 @@ install: linux
 	@install -m 644 itscam_rest_client.h $(PREFIX)/include/itscam/
 	@install -m 644 itscam_cgi_client.h $(PREFIX)/include/itscam/
 	@install -m 644 itscam_sdk.h $(PREFIX)/include/itscam/
-	@install -m 644 itscam_sdk_version.h $(PREFIX)/include/itscam/
+	@install -m 644 $(VERSION_HEADER) $(PREFIX)/include/itscam/
 	@install -m 644 c_api/itscam_sdk_c.h $(PREFIX)/include/itscam/
 	@install -m 644 c_api/itscam_rest_client_c.h $(PREFIX)/include/itscam/
 	@install -m 644 c_api/itscam_cgi_client_c.h $(PREFIX)/include/itscam/

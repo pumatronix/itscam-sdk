@@ -23,8 +23,9 @@
 .PHONY: go-example go-rest-example go-cgi-example go-examples go-examples-windows
 .PHONY: go-examples-windows-x86 go-gui go-gui-windows sdk-dist-examples
 .PHONY: go-examples-arm go-examples-arm64 go-examples-linux-all
-.PHONY: csharp csharp-pack csharp-examples csharp-examples-publish csharp-examples-publish-all
+.PHONY: csharp csharp-pack csharp-pack-linux csharp-examples csharp-examples-publish csharp-examples-publish-all
 .PHONY: csharp-mjpeg-grabber-example csharp-software-trigger-example
+.PHONY: codegen codegen-check codegen-install
 .PHONY: java java-pack java-examples java-jdk7-check
 .PHONY: nodejs nodejs-pack nodejs-examples
 .PHONY: install
@@ -32,12 +33,12 @@
 .PHONY: docker-build docker-all docker-linux docker-windows docker-shell docker-go-gui
 .PHONY: docker-linux-arm docker-linux-arm64 docker-linux-all docker-qemu-smoke
 .PHONY: docker-csharp docker-csharp-examples docker-csharp-examples-publish
-.PHONY: docker-java docker-java-pack docker-java-jdk7-check docker-nodejs docker-nodejs-pack
+.PHONY: docker-java docker-java-pack docker-java-examples docker-java-jdk7-check docker-nodejs docker-nodejs-pack
 .PHONY: regression-examples docker-regression-examples
 .PHONY: docs-api docs-api-cpp docs-api-python docs-api-csharp docs-api-go
 .PHONY: docs-api-java docs-api-nodejs
 .PHONY: docs-api-clean docs-sync docs-sync-check
-.PHONY: docs-site docker-docs-api docker-docs-api-cpp docker-docs-site
+.PHONY: docs-site docker-docs-api docker-docs-api-cpp docker-docs-api-python docker-docs-api-csharp docker-docs-api-go docker-docs-site
 
 # Source-tree root.  Every subordinate path below is relative to $(SRC_DIR).
 SRC_DIR := src
@@ -62,6 +63,7 @@ DOCKER_RUN := docker run --rm \
 	-e GOPATH=/tmp/go \
 	-e GOMODCACHE=/tmp/go/pkg/mod \
 	-e GOCACHE=/tmp/go/build-cache
+
 DOCKER_RUN_IT := $(DOCKER_RUN) -it
 
 # Default target - build library and C++ examples
