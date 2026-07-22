@@ -10,7 +10,6 @@
 #   make clean          - Clean build artifacts
 #
 # Copyright (c) 2026 Pumatronix
-
 .PHONY: all linux linux-arm linux-arm64 linux-all windows windows-x64 windows-x86 clean install help version
 .PHONY: check-cross-armhf check-cross-arm64
 .PHONY: check-glibc check-glibc-linux check-glibc-linux-arm check-glibc-linux-arm64

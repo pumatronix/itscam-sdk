@@ -31,9 +31,9 @@
 #include "itscam_sdk.h"
 #include "itscam_jpeg_utils.h"
 
-//=========================================================================
-// Global state
-//=========================================================================
+// ============================================================================
+//  Global state
+// ============================================================================
 
 static std::atomic<bool> g_running{true};
 static std::atomic<uint64_t> g_savedCount{0};
@@ -59,7 +59,9 @@ static void log(const std::string& msg) {
     auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
         now.time_since_epoch()) % 1000;
 
-    std::cout << std::put_time(std::localtime(&time), "%Y-%m-%d %H:%M:%S")
+    char buf[32];
+    std::strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", std::localtime(&time));
+    std::cout << buf
               << "." << std::setfill('0') << std::setw(3) << ms.count()
               << " " << msg << std::endl;
 }
@@ -70,7 +72,9 @@ static void logErr(const std::string& msg) {
     auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
         now.time_since_epoch()) % 1000;
 
-    std::cerr << std::put_time(std::localtime(&time), "%Y-%m-%d %H:%M:%S")
+    char buf[32];
+    std::strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", std::localtime(&time));
+    std::cerr << buf
               << "." << std::setfill('0') << std::setw(3) << ms.count()
               << " [ERROR] " << msg << std::endl;
 }
@@ -110,12 +114,12 @@ static bool createDirectoryRecursive(const std::string& path) {
     }
 
     // Create this directory
-    return createDirectoryOne(path);
+    return createDirectoryOne(path); 
 }
 
-//=========================================================================
-// Filename formatting
-//=========================================================================
+// ============================================================================
+//  Filename formatting
+// ============================================================================
 
 /**
  * Format a filename using the provided template.
