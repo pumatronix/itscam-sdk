@@ -21,23 +21,23 @@
 // runs codegen into a temp directory and exits non-zero if outputs differ
 // from what is on disk.
 
-import fs from "node:fs/promises"
-import os from "node:os"
-import path from "node:path"
-import url from "node:url"
-import { spawn } from "node:child_process"
-import YAML from "yaml"
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import url from "node:url";
+import { spawn } from "node:child_process";
+import YAML from "yaml";
 import {
   quicktype,
   JSONSchemaInput,
   InputData,
   JSONSchemaStore,
-} from "quicktype-core"
+} from "quicktype-core";
 
-const __dirname = path.dirname(url.fileURLToPath(import.meta.url))
-const REPO_ROOT = path.resolve(__dirname, "..", "..")
-const TOOL_DIR = __dirname
-const DEFAULT_SPEC = path.join(TOOL_DIR, "spec", "default.yaml")
+const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
+const REPO_ROOT = path.resolve(__dirname, "..", "..");
+const TOOL_DIR = __dirname;
+const DEFAULT_SPEC = path.join(TOOL_DIR, "spec", "default.yaml");
 
 // Top-level schemas we emit typed POCOs for.  Quicktype follows $refs
 // so transitive dependencies (RoiWithEnable, RGBColorF, MinMaxFixedValue,
@@ -72,7 +72,7 @@ const PHASE1_SCHEMAS = [
   "RestApiClientConfig",
   "RestApiClientStatus",
   "Licenses",
-]
+];
 
 const NOTICE_HEAD = [
   "// SPDX-License-Identifier: Proprietary",
@@ -84,7 +84,7 @@ const NOTICE_HEAD = [
   "// Generated from an OpenAPI 3.0 snapshot of the ITSCAM camera webapp.",
   "// Edit tools/codegen/codegen.mjs and rerun, do not patch this output.",
   "",
-]
+];
 const NOTICE_HEAD_PY = [
   "# SPDX-License-Identifier: Proprietary",
   "# Copyright (c) 2026 Pumatronix",
@@ -95,7 +95,7 @@ const NOTICE_HEAD_PY = [
   "# Generated from an OpenAPI 3.0 snapshot of the ITSCAM camera webapp.",
   "# Edit tools/codegen/codegen.mjs and rerun, do not patch this output.",
   "",
-]
+];
 
 const TARGETS = [
   {
@@ -112,7 +112,8 @@ const TARGETS = [
     },
     outRel: "src/core/itscam_rest_types.h",
     notice: NOTICE_HEAD,
-    postProcess: (text) => addCppPartialJson(fixCppOptionalInit(text)),
+    postProcess: (text) =>
+      addCppPartialJson(fixCppOptionalInit(fixCppIncludes(text))),
   },
   {
     name: "C#",
@@ -131,7 +132,8 @@ const TARGETS = [
     // that target net6+.  None of our schemas have `format: date` or
     // `format: time`, so the converters are dead code.  Strip them so the
     // assembly stays compatible with netstandard2.0.
-    postProcess: (text) => stripCSharpNet6Converters(fixCSharpNullableGetString(text)),
+    postProcess: (text) =>
+      stripCSharpNet6Converters(fixCSharpNullableGetString(text)),
   },
   {
     name: "Python",
@@ -153,17 +155,43 @@ const TARGETS = [
     outRel: "src/wrappers/go/itscam/rest_types.go",
     notice: NOTICE_HEAD,
   },
-]
+];
 
 function info(message) {
-  console.log(`[codegen] ${message}`)
+  console.log(`[codegen] ${message}`);
 }
 
-/// Replace `std::optional<T>()` with `std::nullopt` to avoid GCC's
-/// -Wmaybe-uninitialized false positive on template instantiation in
-/// from_json array helpers.
+
+function fixCppIncludes(text) {
+  const replacement =
+  `#include <memory>\n` +
+  `#if __cplusplus >= 201703L && defined(__has_include) && __has_include(<optional>)\n` +
+  `#include <optional>\n` +
+  `#elif defined(__has_include) && __has_include(<experimental/optional>)\n` +
+  `#include <experimental/optional>\n` +
+  `namespace std {\n` +
+  `    using experimental::make_optional;\n` +
+  `    using experimental::nullopt;\n` +
+  `    using experimental::nullopt_t;\n` +
+  `    using experimental::optional;\n` +
+  `}\n` +
+  `#else\n` +
+  `#error "itscam_rest_types.h requires <optional> (C++17) or <experimental/optional> (C++14 fallback)"\n` +
+  `#endif`;
+  return text.replace(/^#include <optional>$/m, replacement);
+}
+
+/// In the adl_serializer<std::optional<T>>::from_json helper, quicktype emits
+/// `return std::make_optional<T>();` for the null case.  Replace it with
+/// `return std::optional<T>();` so the code compiles cleanly with both
+/// C++17 std::optional and the C++14 std::experimental::optional fallback.
 function fixCppOptionalInit(text) {
-  return text.replace(/return std::optional<T>\(\);/g, "return std::nullopt;")
+  return text
+    .replace(
+      /if \(j\.is_null\(\)\) return std::make_optional<T>\(\); else return std::make_optional<T>\(j\.get<T>\(\)\);/g,
+      "if (j.is_null()) return std::optional<T>(); else return std::make_optional<T>(j.get<T>());",
+    )
+    .replace(/\breturn std::nullopt;/g, "return std::optional<T>();");
 }
 
 /// Generate `to_partial_json()` free functions for every struct that has a
@@ -176,124 +204,136 @@ function fixCppOptionalInit(text) {
 /// daemon receives only those keys.
 function addCppPartialJson(text) {
   // 1. Parse struct declarations → { StructName: { cppMember: { optional, innerType } } }
-  const structFields = new Map()
-  const structRe = /struct\s+(\w+)\s*\{([^}]*)\}/g
-  let m
+  const structFields = new Map();
+  const structRe = /struct\s+(\w+)\s*\{([^}]*)\}/g;
+  let m;
   while ((m = structRe.exec(text)) !== null) {
-    const name = m[1]
-    const body = m[2]
-    const fields = new Map()
-    const fieldRe = /^\s*(?:std::optional<(.+?)>|(.+?))\s+(\w+)\s*;/gm
-    let fm
+    const name = m[1];
+    const body = m[2];
+    const fields = new Map();
+    const fieldRe = /^\s*(?:std::optional<(.+?)>|(.+?))\s+(\w+)\s*;/gm;
+    let fm;
     while ((fm = fieldRe.exec(body)) !== null) {
-      const optInner = fm[1] // e.g. "bool", "Advanced", "std::vector<Power>"
-      const plainType = fm[2] // e.g. "int64_t", "bool", "std::string"
-      const member = fm[3]
+      const optInner = fm[1]; // e.g. "bool", "Advanced", "std::vector<Power>"
+      const plainType = fm[2]; // e.g. "int64_t", "bool", "std::string"
+      const member = fm[3];
       fields.set(member, {
         optional: !!optInner,
         innerType: optInner || plainType,
-      })
+      });
     }
-    structFields.set(name, fields)
+    structFields.set(name, fields);
   }
 
   // 2. Collect the set of struct names that have to_json (i.e. non-enum types)
-  const structsWithToJson = new Set()
-  const toJsonSigRe = /inline void to_json\(json & j, (\w+) const & x\) \{/g
+  const structsWithToJson = new Set();
+  const toJsonSigRe = /inline void to_json\(json & j, (\w+) const & x\) \{/g;
   while ((m = toJsonSigRe.exec(text)) !== null) {
-    if (structFields.has(m[1])) structsWithToJson.add(m[1])
+    if (structFields.has(m[1])) structsWithToJson.add(m[1]);
   }
 
   // 3. Parse each struct-type to_json() body and build to_partial_json()
   //    Match: inline void to_json(json & j, TypeName const & x) { ... }
   const toJsonBlockRe =
-    /inline void to_json\(json & j, (\w+) const & x\) \{\s*\n\s*j = json::object\(\);\n([\s\S]*?)\n\s*\}/g
+    /inline void to_json\(json & j, (\w+) const & x\) \{\s*\n\s*j = json::object\(\);\n([\s\S]*?)\n\s*\}/g;
 
-  const partialFns = []
-  const partialDecls = []
+  const partialFns = [];
+  const partialDecls = [];
 
   while ((m = toJsonBlockRe.exec(text)) !== null) {
-    const typeName = m[1]
-    const assignBlock = m[2]
-    const fields = structFields.get(typeName)
-    if (!fields) continue // enum to_json — skip
+    const typeName = m[1];
+    const assignBlock = m[2];
+    const fields = structFields.get(typeName);
+    if (!fields) continue; // enum to_json — skip
 
-    const lines = []
+    const lines = [];
     // Parse assignments: j["jsonKey"] = x.cppMember;
-    const assignRe = /j\["(\w+)"\]\s*=\s*x\.(\w+);/g
-    let am
+    const assignRe = /j\["(\w+)"\]\s*=\s*x\.(\w+);/g;
+    let am;
     while ((am = assignRe.exec(assignBlock)) !== null) {
-      const jsonKey = am[1]
-      const cppMember = am[2]
-      const fi = fields.get(cppMember)
+      const jsonKey = am[1];
+      const cppMember = am[2];
+      const fi = fields.get(cppMember);
       if (!fi) {
-        lines.push(`        j["${jsonKey}"] = x.${cppMember};`)
-        continue
+        lines.push(`        j["${jsonKey}"] = x.${cppMember};`);
+        continue;
       }
       if (!fi.optional) {
         // Required field — always write.
         if (structsWithToJson.has(fi.innerType)) {
-          lines.push(`        j["${jsonKey}"] = to_partial_json(x.${cppMember});`)
+          lines.push(
+            `        j["${jsonKey}"] = to_partial_json(x.${cppMember});`,
+          );
         } else {
-          lines.push(`        j["${jsonKey}"] = x.${cppMember};`)
+          lines.push(`        j["${jsonKey}"] = x.${cppMember};`);
         }
       } else {
         // Optional field — skip when nullopt; recurse for struct types.
-        const inner = fi.innerType
+        const inner = fi.innerType;
         // Check if innerType is a known struct (possibly wrapped in vector).
-        const vecMatch = inner.match(/^std::vector<(\w+)>$/)
-        const elementType = vecMatch ? vecMatch[1] : inner
-        const isStructType = structsWithToJson.has(elementType)
+        const vecMatch = inner.match(/^std::vector<(\w+)>$/);
+        const elementType = vecMatch ? vecMatch[1] : inner;
+        const isStructType = structsWithToJson.has(elementType);
 
         if (vecMatch && isStructType) {
           // std::optional<std::vector<StructType>>
-          lines.push(`        if (x.${cppMember}) {`)
-          lines.push(`            json arr = json::array();`)
-          lines.push(`            for (auto const & e : *x.${cppMember}) arr.push_back(to_partial_json(e));`)
-          lines.push(`            j["${jsonKey}"] = std::move(arr);`)
-          lines.push(`        }`)
+          lines.push(`        if (x.${cppMember}) {`);
+          lines.push(`            json arr = json::array();`);
+          lines.push(
+            `            for (auto const & e : *x.${cppMember}) arr.push_back(to_partial_json(e));`,
+          );
+          lines.push(`            j["${jsonKey}"] = std::move(arr);`);
+          lines.push(`        }`);
         } else if (isStructType) {
           // std::optional<StructType>
-          lines.push(`        if (x.${cppMember}) j["${jsonKey}"] = to_partial_json(*x.${cppMember});`)
+          lines.push(
+            `        if (x.${cppMember}) j["${jsonKey}"] = to_partial_json(*x.${cppMember});`,
+          );
         } else {
           // std::optional<scalar|string|enum|vector<scalar>>
-          lines.push(`        if (x.${cppMember}) j["${jsonKey}"] = *x.${cppMember};`)
+          lines.push(
+            `        if (x.${cppMember}) j["${jsonKey}"] = *x.${cppMember};`,
+          );
         }
       }
     }
 
     partialFns.push(
       `    inline json to_partial_json(${typeName} const & x) {\n` +
-      `        json j = json::object();\n` +
-      lines.join("\n") + "\n" +
-      `        return j;\n` +
-      `    }`
-    )
-    partialDecls.push(`    json to_partial_json(${typeName} const & x);`)
+        `        json j = json::object();\n` +
+        lines.join("\n") +
+        "\n" +
+        `        return j;\n` +
+        `    }`,
+    );
+    partialDecls.push(`    json to_partial_json(${typeName} const & x);`);
   }
 
-  if (partialFns.length === 0) return text
+  if (partialFns.length === 0) return text;
 
   // 4. Insert forward declarations after the to_json forward declarations.
   //    Find the last `void to_json(...)` forward-decl line and append after
   //    its subsequent blank line.
   const partialDeclBlock =
     "\n    // Partial-JSON serializers (omit nullopt fields for typed partial PUT)\n" +
-    partialDecls.join("\n") + "\n"
+    partialDecls.join("\n") +
+    "\n";
 
   // Find the boundary: last forward-decl to_json line before the inline impls
-  const lastFwdRe = /( {4}void to_json\(json & j, \w+ const & x\);\n)\n( {4}inline void from_json)/
-  text = text.replace(lastFwdRe, "$1" + partialDeclBlock + "\n$2")
+  const lastFwdRe =
+    /( {4}void to_json\(json & j, \w+ const & x\);\n)\n( {4}inline void from_json)/;
+  text = text.replace(lastFwdRe, "$1" + partialDeclBlock + "\n$2");
 
   // 5. Append partial-json implementations before the closing `}\n}`
   const implBlock =
     "\n    // ---- Partial-JSON serializers (generated) ----\n\n" +
-    partialFns.join("\n\n") + "\n"
+    partialFns.join("\n\n") +
+    "\n";
 
-  const closingNs = /\n\}\n\}\n$/
-  text = text.replace(closingNs, implBlock + "\n}\n}\n")
+  const closingNs = /\n\}\n\}\n$/;
+  text = text.replace(closingNs, implBlock + "\n}\n}\n");
 
-  return text
+  return text;
 }
 
 /// Fix CS8602 (possible null dereference) in quicktype-emitted converters:
@@ -301,8 +341,8 @@ function addCppPartialJson(text) {
 function fixCSharpNullableGetString(text) {
   return text.replace(
     /var value = reader\.GetString\(\);/g,
-    "var value = reader.GetString()!;"
-  )
+    "var value = reader.GetString()!;",
+  );
 }
 
 /// Drop the `DateOnlyConverter` and `TimeOnlyConverter` classes that quicktype
@@ -315,43 +355,40 @@ function stripCSharpNet6Converters(text) {
   // indentation level 4 (the namespace's class scope), and the trailing
   // blank line.
   const stripBlock = (src, name) => {
-    const startMarker = `    public class ${name}Converter : JsonConverter<${name}>`
-    const start = src.indexOf(startMarker)
-    if (start < 0) return src
+    const startMarker = `    public class ${name}Converter : JsonConverter<${name}>`;
+    const start = src.indexOf(startMarker);
+    if (start < 0) return src;
     // Find matching closing brace.
-    let depth = 0
-    let i = src.indexOf("{", start)
-    if (i < 0) return src
+    let depth = 0;
+    let i = src.indexOf("{", start);
+    if (i < 0) return src;
     for (; i < src.length; ++i) {
-      const ch = src[i]
-      if (ch === "{") ++depth
+      const ch = src[i];
+      if (ch === "{") ++depth;
       else if (ch === "}") {
-        --depth
+        --depth;
         if (depth === 0) {
           // Skip any trailing newline + blank line.
-          let end = i + 1
-          while (end < src.length && src[end] === "\n") ++end
-          return src.slice(0, start) + src.slice(end)
+          let end = i + 1;
+          while (end < src.length && src[end] === "\n") ++end;
+          return src.slice(0, start) + src.slice(end);
         }
       }
     }
-    return src
-  }
-  let out = text
-  out = stripBlock(out, "DateOnly")
-  out = stripBlock(out, "TimeOnly")
+    return src;
+  };
+  let out = text;
+  out = stripBlock(out, "DateOnly");
+  out = stripBlock(out, "TimeOnly");
   // Also drop the `new DateOnlyConverter()` / `new TimeOnlyConverter()` lines
   // that quicktype inserts into the shared Converter.Settings list.
-  out = out.replace(
-    /\n?\s*new\s+(?:Date|Time)OnlyConverter\(\)\s*,?\n/g,
-    "\n"
-  )
-  return out
+  out = out.replace(/\n?\s*new\s+(?:Date|Time)OnlyConverter\(\)\s*,?\n/g, "\n");
+  return out;
 }
 
 function die(message) {
-  console.error(`[codegen] ERROR: ${message}`)
-  process.exit(1)
+  console.error(`[codegen] ERROR: ${message}`);
+  process.exit(1);
 }
 
 function parseArgs() {
@@ -359,134 +396,147 @@ function parseArgs() {
     spec: process.env.SPEC || DEFAULT_SPEC,
     outDir: process.env.OUT_DIR || REPO_ROOT,
     check: false,
-  }
-  const argv = process.argv.slice(2)
+  };
+  const argv = process.argv.slice(2);
   for (let i = 0; i < argv.length; ++i) {
-    const arg = argv[i]
+    const arg = argv[i];
     if ((arg === "--spec" || arg === "-s") && argv[i + 1]) {
-      args.spec = argv[++i]
+      args.spec = argv[++i];
     } else if ((arg === "--out-dir" || arg === "-o") && argv[i + 1]) {
-      args.outDir = argv[++i]
+      args.outDir = argv[++i];
     } else if (arg === "--check") {
-      args.check = true
+      args.check = true;
     } else if (arg === "--help" || arg === "-h") {
       console.log(
-        "Usage: codegen.mjs [--spec <path>] [--out-dir <path>] [--check]"
-      )
-      process.exit(0)
+        "Usage: codegen.mjs [--spec <path>] [--out-dir <path>] [--check]",
+      );
+      process.exit(0);
     } else {
-      die(`Unrecognised argument: ${arg}`)
+      die(`Unrecognised argument: ${arg}`);
     }
   }
-  return args
+  return args;
 }
 
 function runPostprocess(input, output) {
   return new Promise((resolve, reject) => {
     const child = spawn(
       process.execPath,
-      [path.join(TOOL_DIR, "postprocess.mjs"), "--input", input, "--output", output],
-      { stdio: "inherit" }
-    )
-    child.on("error", reject)
+      [
+        path.join(TOOL_DIR, "postprocess.mjs"),
+        "--input",
+        input,
+        "--output",
+        output,
+      ],
+      { stdio: "inherit" },
+    );
+    child.on("error", reject);
     child.on("close", (code) => {
-      if (code === 0) resolve()
-      else reject(new Error(`postprocess.mjs exited with code ${code}`))
-    })
-  })
+      if (code === 0) resolve();
+      else reject(new Error(`postprocess.mjs exited with code ${code}`));
+    });
+  });
 }
 
 class InMemoryStore extends JSONSchemaStore {
   constructor(schema) {
-    super()
-    this.schema = schema
+    super();
+    this.schema = schema;
   }
   async fetch(_address) {
-    return this.schema
+    return this.schema;
   }
 }
 
 async function generateFor(target, doc) {
-  const store = new InMemoryStore(doc)
-  const input = new JSONSchemaInput(store)
+  const store = new InMemoryStore(doc);
+  const input = new JSONSchemaInput(store);
   for (const name of PHASE1_SCHEMAS) {
     await input.addSource({
       name,
       uris: [`itscam.json#/components/schemas/${name}`],
-    })
+    });
   }
-  const inputData = new InputData()
-  inputData.addInput(input)
+  const inputData = new InputData();
+  inputData.addInput(input);
   const result = await quicktype({
     inputData,
     lang: target.lang,
     rendererOptions: target.rendererOptions,
-  })
-  let body = result.lines.join("\n")
+  });
+  let body = result.lines.join("\n");
   if (typeof target.postProcess === "function") {
-    body = target.postProcess(body)
+    body = target.postProcess(body);
   }
-  return target.notice.join("\n") + body + (body.endsWith("\n") ? "" : "\n")
+  return target.notice.join("\n") + body + (body.endsWith("\n") ? "" : "\n");
 }
 
 async function checkOrWrite(target, generated, outDir, check) {
-  const dest = path.resolve(outDir, target.outRel)
-  await fs.mkdir(path.dirname(dest), { recursive: true })
+  const dest = path.resolve(outDir, target.outRel);
+  await fs.mkdir(path.dirname(dest), { recursive: true });
   if (check) {
-    let onDisk = ""
+    let onDisk = "";
     try {
-      onDisk = await fs.readFile(dest, "utf8")
+      onDisk = await fs.readFile(dest, "utf8");
     } catch (e) {
-      info(`MISSING (check failed): ${target.outRel}`)
-      return false
+      info(`MISSING (check failed): ${target.outRel}`);
+      return false;
     }
     if (onDisk !== generated) {
-      info(`DRIFT (check failed): ${target.outRel}`)
-      return false
+      info(`DRIFT (check failed): ${target.outRel}`);
+      return false;
     }
-    info(`OK ${target.outRel}`)
-    return true
+    info(`OK ${target.outRel}`);
+    return true;
   }
-  await fs.writeFile(dest, generated)
-  info(`Wrote ${target.outRel}`)
-  return true
+  await fs.writeFile(dest, generated);
+  info(`Wrote ${target.outRel}`);
+  return true;
 }
 
 async function main() {
-  const args = parseArgs()
-  info(`Using spec: ${args.spec}`)
-  info(`Output dir: ${args.outDir}${args.check ? " (--check)" : ""}`)
+  const args = parseArgs();
+  info(`Using spec: ${args.spec}`);
+  info(`Output dir: ${args.outDir}${args.check ? " (--check)" : ""}`);
 
-  const buildDir = path.join(TOOL_DIR, "build")
-  await fs.mkdir(buildDir, { recursive: true })
-  const processed = path.join(buildDir, "itscam.postprocessed.yaml")
-  await runPostprocess(args.spec, processed)
+  const buildDir = path.join(TOOL_DIR, "build");
+  await fs.mkdir(buildDir, { recursive: true });
+  const processed = path.join(buildDir, "itscam.postprocessed.yaml");
+  await runPostprocess(args.spec, processed);
 
-  const doc = YAML.parse(await fs.readFile(processed, "utf8"))
+  const doc = YAML.parse(await fs.readFile(processed, "utf8"));
 
-  let ok = true
+  let ok = true;
   for (const target of TARGETS) {
-    info(`Generating ${target.name} (${PHASE1_SCHEMAS.length} top-level type(s))...`)
-    const generated = await generateFor(target, doc)
-    const result = await checkOrWrite(target, generated, args.outDir, args.check)
-    if (!result) ok = false
+    info(
+      `Generating ${target.name} (${PHASE1_SCHEMAS.length} top-level type(s))...`,
+    );
+    const generated = await generateFor(target, doc);
+    const result = await checkOrWrite(
+      target,
+      generated,
+      args.outDir,
+      args.check,
+    );
+    if (!result) ok = false;
   }
 
   if (args.check) {
     if (ok) {
-      info("All generated outputs match committed snapshot.")
-      process.exit(0)
+      info("All generated outputs match committed snapshot.");
+      process.exit(0);
     } else {
-      info("Generated outputs DIFFER from the committed snapshot.")
-      info("Run `make codegen` and commit the updated files.")
-      process.exit(1)
+      info("Generated outputs DIFFER from the committed snapshot.");
+      info("Run `make codegen` and commit the updated files.");
+      process.exit(1);
     }
   } else {
-    info("Done.")
+    info("Done.");
   }
 }
 
 main().catch((e) => {
-  console.error(e)
-  process.exit(1)
-})
+  console.error(e);
+  process.exit(1);
+});
