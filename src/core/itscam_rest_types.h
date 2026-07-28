@@ -61,7 +61,7 @@ namespace nlohmann {
         }
 
         static nonstd::optional<T> from_json(json const & j) {
-            if (j.is_null()) return nonstd::make_optional<T>(); else return nonstd::make_optional<T>(j.get<T>());
+            if (j.is_null()) return nonstd::nullopt; else return nonstd::make_optional<T>(j.get<T>());
         }
     };
 }

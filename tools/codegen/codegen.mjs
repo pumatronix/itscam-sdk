@@ -159,11 +159,13 @@ function info(message) {
   console.log(`[codegen] ${message}`)
 }
 
-/// Replace `std::optional<T>()` with `std::nullopt` to avoid GCC's
-/// -Wmaybe-uninitialized false positive on template instantiation in
-/// from_json array helpers.
+/// Replace empty optional construction with `std::nullopt` so JSON null maps
+/// to a disengaged optional, and avoid GCC's -Wmaybe-uninitialized false
+/// positive on template instantiation in from_json array helpers.
 function fixCppOptionalInit(text) {
-  return text.replace(/return std::optional<T>\(\);/g, "return std::nullopt;")
+  return text
+    .replace(/return std::optional<T>\(\);/g, "return std::nullopt;")
+    .replace(/return std::make_optional<T>\(\);/g, "return std::nullopt;")
 }
 
 /// quicktype emits C++17 std::optional, but the SDK still supports old
