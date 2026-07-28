@@ -5,9 +5,10 @@ name: Build and release SDK
 # pushed, the tarball is also attached to a GitHub Release for permanent,
 # downloadable distribution.
 #
-# The build runs **inside the project's own Dockerfile** (image
-# `itscam-sdk-builder`, Ubuntu 20.04 + MinGW 9 + .NET 8 + Go 1.25 +
-# Node 20). This is the same toolchain maintainers use locally via
+# The build runs **inside the project's own Dockerfile**: `core-xenial`
+# produces Linux core artefacts against Ubuntu 16.04 / GLIBC 2.23, while
+# `itscam-sdk-builder` carries MinGW, .NET 8, Go 1.25, Node 20, and wrapper
+# tooling. This is the same split maintainers use locally via
 # `make docker-sdk-dist`, which keeps CI artefacts reproducible and
 # avoids breakage when GitHub bumps `ubuntu-latest` (e.g. Ubuntu 24.04
 # ships MinGW 13, whose libstdc++ collides with our win32-threads STL
@@ -59,25 +60,58 @@ jobs:
           cache-from: type=gha,scope=itscam-sdk-builder
           cache-to: type=gha,mode=max,scope=itscam-sdk-builder
 
-      - name: Build SDK distribution archive (inside builder image)
+      - name: Build core-xenial image (cached in GHA)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          target: core-xenial
+          load: true
+          tags: itscam-sdk-core-xenial:ci
+          cache-from: type=gha,scope=itscam-sdk-core-xenial
+          cache-to: type=gha,mode=max,scope=itscam-sdk-core-xenial
+
+      - name: Build SDK distribution archive
         # Mirrors the $(DOCKER_RUN) recipe used by `make docker-sdk-dist`.
-        # We invoke `docker run` directly instead of `make docker-sdk-dist`
-        # so we can reuse the buildx-loaded image without triggering an
-        # uncached `docker build` from the Makefile's `docker-build` dep.
+        # We invoke `docker run` directly so we can reuse the buildx-loaded
+        # images without triggering uncached `docker build` dependencies from
+        # the Makefile's Docker targets.
         run: |
-          docker run --rm \
-            -v "$PWD:/sdk" \
-            -w /sdk \
-            -u "$(id -u):$(id -g)" \
-            -e HOME=/tmp \
-            -e XDG_CACHE_HOME=/tmp/.cache \
-            -e NPM_CONFIG_CACHE=/tmp/.npm \
-            -e DOTNET_CLI_HOME=/tmp/dotnet \
-            -e GOPATH=/tmp/go \
-            -e GOMODCACHE=/tmp/go/pkg/mod \
-            -e GOCACHE=/tmp/go/build-cache \
+          set -euxo pipefail
+          common_run_args=(
+            --rm
+            -v "$PWD:/sdk"
+            -w /sdk
+            -u "$(id -u):$(id -g)"
+            -e HOME=/tmp
+            -e XDG_CACHE_HOME=/tmp/.cache
+            -e NPM_CONFIG_CACHE=/tmp/.npm
+            -e DOTNET_CLI_HOME=/tmp/dotnet
+            -e GOPATH=/tmp/go
+            -e GOMODCACHE=/tmp/go/pkg/mod
+            -e GOCACHE=/tmp/go/build-cache
+          )
+
+          docker run "${common_run_args[@]}" \
             itscam-sdk-builder:ci \
-            make docker-dist-pristine sdk-dist
+            make docker-dist-pristine version
+
+          docker run "${common_run_args[@]}" \
+            itscam-sdk-core-xenial:ci \
+            make -C src/core \
+              build/linux/libitscam_sdk.so \
+              build/linux/libitscam_sdk.a \
+              check-glibc-linux \
+              build/linux-arm/libitscam_sdk.so \
+              build/linux-arm/libitscam_sdk.a \
+              check-glibc-linux-arm \
+              build/linux-arm64/libitscam_sdk.so \
+              build/linux-arm64/libitscam_sdk.a \
+              check-glibc-linux-arm64
+
+          docker run "${common_run_args[@]}" \
+            itscam-sdk-builder:ci \
+            make sdk-dist ITSCAM_VERSION_LOCKED=1
 
       - name: Extract version metadata
         id: version

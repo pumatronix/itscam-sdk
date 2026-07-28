@@ -38,7 +38,7 @@
 
 #pragma once
 
-#include <optional>
+#include <nonstd/optional.hpp>
 #include <nlohmann/json.hpp>
 
 #ifndef NLOHMANN_OPT_HELPER
@@ -55,13 +55,13 @@ namespace nlohmann {
         }
     };
     template <typename T>
-    struct adl_serializer<std::optional<T>> {
-        static void to_json(json & j, std::optional<T> const & opt) {
+    struct adl_serializer<nonstd::optional<T>> {
+        static void to_json(json & j, nonstd::optional<T> const & opt) {
             if (!opt) j = nullptr; else j = *opt;
         }
 
-        static std::optional<T> from_json(json const & j) {
-            if (j.is_null()) return std::make_optional<T>(); else return std::make_optional<T>(j.get<T>());
+        static nonstd::optional<T> from_json(json const & j) {
+            if (j.is_null()) return nonstd::nullopt; else return nonstd::make_optional<T>(j.get<T>());
         }
     };
 }
@@ -101,666 +101,666 @@ namespace rest_types {
         return get_heap_optional<T>(j, property.data());
     }
     template <typename T>
-    inline std::optional<T> get_stack_optional(json const & j, char const * property) {
+    inline nonstd::optional<T> get_stack_optional(json const & j, char const * property) {
         auto it = j.find(property);
         if (it != j.end() && !it->is_null()) {
-            return j.at(property).get<std::optional<T>>();
+            return j.at(property).get<nonstd::optional<T>>();
         }
-        return std::nullopt;
+        return nonstd::nullopt;
     }
 
     template <typename T>
-    inline std::optional<T> get_stack_optional(json const & j, std::string property) {
+    inline nonstd::optional<T> get_stack_optional(json const & j, std::string property) {
         return get_stack_optional<T>(j, property.data());
     }
     #endif
 
     struct Exposition {
-        std::optional<int64_t> preferred_shutter;
-        std::optional<double> update_factor;
-        std::optional<int64_t> update_rate;
+        nonstd::optional<int64_t> preferred_shutter;
+        nonstd::optional<double> update_factor;
+        nonstd::optional<int64_t> update_rate;
     };
 
     struct AdvancedIris {
-        std::optional<int64_t> update_rate;
+        nonstd::optional<int64_t> update_rate;
     };
 
     struct AdvancedWhitebalance {
-        std::optional<int64_t> update_rate;
+        nonstd::optional<int64_t> update_rate;
     };
 
     struct Advanced {
-        std::optional<Exposition> exposition;
-        std::optional<AdvancedIris> iris;
-        std::optional<AdvancedWhitebalance> whitebalance;
+        nonstd::optional<Exposition> exposition;
+        nonstd::optional<AdvancedIris> iris;
+        nonstd::optional<AdvancedWhitebalance> whitebalance;
     };
 
     /**
      * Single RGB value in float format
      */
     struct WhitebalanceClass {
-        std::optional<double> blue;
-        std::optional<double> green;
-        std::optional<double> red;
+        nonstd::optional<double> blue;
+        nonstd::optional<double> green;
+        nonstd::optional<double> red;
     };
 
     /**
      * Camera color configuration fields
      */
     struct Color {
-        std::optional<int64_t> blacklevel;
-        std::optional<int64_t> brightness;
-        std::optional<int64_t> contrast;
-        std::optional<WhitebalanceClass> gain;
-        std::optional<int64_t> gamma;
-        std::optional<int64_t> saturation;
+        nonstd::optional<int64_t> blacklevel;
+        nonstd::optional<int64_t> brightness;
+        nonstd::optional<int64_t> contrast;
+        nonstd::optional<WhitebalanceClass> gain;
+        nonstd::optional<int64_t> gamma;
+        nonstd::optional<int64_t> saturation;
     };
 
     /**
      * Shutter attributes
      */
     struct ShutterClass {
-        std::optional<bool> automatic;
-        std::optional<int64_t> fixed_value;
-        std::optional<int64_t> max_value;
-        std::optional<int64_t> min_value;
+        nonstd::optional<bool> automatic;
+        nonstd::optional<int64_t> fixed_value;
+        nonstd::optional<int64_t> max_value;
+        nonstd::optional<int64_t> min_value;
     };
 
     struct ExposureIris {
-        std::optional<bool> automatic;
-        std::optional<int64_t> fixed_value;
+        nonstd::optional<bool> automatic;
+        nonstd::optional<int64_t> fixed_value;
     };
 
     enum class Mode : int { DISABLED, FAST, NORMAL, SLOW };
 
     struct Roi1Class {
-        std::optional<bool> enabled;
-        std::optional<int64_t> x0;
-        std::optional<int64_t> x1;
-        std::optional<int64_t> x2;
-        std::optional<int64_t> x3;
-        std::optional<int64_t> y0;
-        std::optional<int64_t> y1;
-        std::optional<int64_t> y2;
-        std::optional<int64_t> y3;
+        nonstd::optional<bool> enabled;
+        nonstd::optional<int64_t> x0;
+        nonstd::optional<int64_t> x1;
+        nonstd::optional<int64_t> x2;
+        nonstd::optional<int64_t> x3;
+        nonstd::optional<int64_t> y0;
+        nonstd::optional<int64_t> y1;
+        nonstd::optional<int64_t> y2;
+        nonstd::optional<int64_t> y3;
     };
 
     struct Level {
-        std::optional<int64_t> hold_time;
-        std::optional<Mode> mode;
-        std::optional<Roi1Class> roi;
-        std::optional<double> target_value;
-        std::optional<int64_t> update_rate;
+        nonstd::optional<int64_t> hold_time;
+        nonstd::optional<Mode> mode;
+        nonstd::optional<Roi1Class> roi;
+        nonstd::optional<double> target_value;
+        nonstd::optional<int64_t> update_rate;
     };
 
     /**
      * Camera exposure configuration fields
      */
     struct Exposure {
-        std::optional<ShutterClass> gain;
-        std::optional<ExposureIris> iris;
-        std::optional<Level> level;
-        std::optional<ShutterClass> shutter;
+        nonstd::optional<ShutterClass> gain;
+        nonstd::optional<ExposureIris> iris;
+        nonstd::optional<Level> level;
+        nonstd::optional<ShutterClass> shutter;
     };
 
     struct Hdr {
-        std::optional<bool> enable;
+        nonstd::optional<bool> enable;
     };
 
     /**
      * Camera lens configuration fields
      */
     struct ProfileConfigLens {
-        std::optional<bool> exchanger;
-        std::optional<int64_t> focus;
-        std::optional<bool> zf_mirror_profile0;
-        std::optional<int64_t> zoom;
+        nonstd::optional<bool> exchanger;
+        nonstd::optional<int64_t> focus;
+        nonstd::optional<bool> zf_mirror_profile0;
+        nonstd::optional<int64_t> zoom;
     };
 
     struct MovFilter {
-        std::optional<bool> enabled;
-        std::optional<bool> only_check;
-        std::optional<Roi1Class> roi;
-        std::optional<double> threshold;
+        nonstd::optional<bool> enabled;
+        nonstd::optional<bool> only_check;
+        nonstd::optional<Roi1Class> roi;
+        nonstd::optional<double> threshold;
     };
 
     struct Power {
-        std::optional<int64_t> out;
-        std::optional<int64_t> percent;
+        nonstd::optional<int64_t> out;
+        nonstd::optional<int64_t> percent;
     };
 
     /**
      * Camera flash configuration
      */
     struct Flash {
-        std::optional<std::vector<Power>> power;
+        nonstd::optional<std::vector<Power>> power;
     };
 
     struct SettingGain {
-        std::optional<bool> percentage_of_current;
-        std::optional<double> value;
+        nonstd::optional<bool> percentage_of_current;
+        nonstd::optional<double> value;
     };
 
     struct Shutter {
-        std::optional<bool> percentage_of_current;
-        std::optional<double> value;
+        nonstd::optional<bool> percentage_of_current;
+        nonstd::optional<double> value;
     };
 
     /**
      * Multiple exposures configuration
      */
     struct MultipleExposuresConfig {
-        std::optional<Flash> flash;
-        std::optional<SettingGain> gain;
-        std::optional<Shutter> shutter;
+        nonstd::optional<Flash> flash;
+        nonstd::optional<SettingGain> gain;
+        nonstd::optional<Shutter> shutter;
     };
 
     struct MultipleExposures {
-        std::optional<bool> enabled;
-        std::optional<std::vector<MultipleExposuresConfig>> settings;
+        nonstd::optional<bool> enabled;
+        nonstd::optional<std::vector<MultipleExposuresConfig>> settings;
     };
 
     struct Overlay {
-        std::optional<bool> enable;
-        std::optional<std::string> text;
+        nonstd::optional<bool> enable;
+        nonstd::optional<std::string> text;
     };
 
     struct Lower {
-        std::optional<std::string> end_time;
-        std::optional<int64_t> hold_time;
-        std::optional<double> level;
-        std::optional<int64_t> profile;
-        std::optional<std::string> start_time;
+        nonstd::optional<std::string> end_time;
+        nonstd::optional<int64_t> hold_time;
+        nonstd::optional<double> level;
+        nonstd::optional<int64_t> profile;
+        nonstd::optional<std::string> start_time;
     };
 
     /**
      * Camera profile transition configuration
      */
     struct Transitions {
-        std::optional<Lower> lower;
-        std::optional<Lower> upper;
+        nonstd::optional<Lower> lower;
+        nonstd::optional<Lower> upper;
     };
 
     struct Trigger {
-        std::optional<bool> enabled;
-        std::optional<std::string> event;
-        std::optional<int64_t> minimum_interval;
-        std::optional<int64_t> port;
-        std::optional<Roi1Class> roi;
-        std::optional<double> threshold;
+        nonstd::optional<bool> enabled;
+        nonstd::optional<std::string> event;
+        nonstd::optional<int64_t> minimum_interval;
+        nonstd::optional<int64_t> port;
+        nonstd::optional<Roi1Class> roi;
+        nonstd::optional<double> threshold;
     };
 
     /**
      * Camera white balance configuration fields
      */
     struct ProfileConfigWhitebalance {
-        std::optional<bool> automatic;
-        std::optional<WhitebalanceClass> weights;
+        nonstd::optional<bool> automatic;
+        nonstd::optional<WhitebalanceClass> weights;
     };
 
     /**
      * Camera profile configuration
      */
     struct ProfileConfig {
-        std::optional<bool> active;
-        std::optional<Advanced> advanced;
-        std::optional<Color> color;
-        std::optional<std::string> description;
-        std::optional<Exposure> exposure;
-        std::optional<Hdr> hdr;
+        nonstd::optional<bool> active;
+        nonstd::optional<Advanced> advanced;
+        nonstd::optional<Color> color;
+        nonstd::optional<std::string> description;
+        nonstd::optional<Exposure> exposure;
+        nonstd::optional<Hdr> hdr;
         int64_t id;
-        std::optional<ProfileConfigLens> lens;
-        std::optional<MovFilter> mov_filter;
-        std::optional<MultipleExposures> multiple_exposures;
-        std::optional<std::string> name;
-        std::optional<Overlay> overlay;
-        std::optional<Transitions> transitions;
-        std::optional<Trigger> trigger;
-        std::optional<ProfileConfigWhitebalance> whitebalance;
+        nonstd::optional<ProfileConfigLens> lens;
+        nonstd::optional<MovFilter> mov_filter;
+        nonstd::optional<MultipleExposures> multiple_exposures;
+        nonstd::optional<std::string> name;
+        nonstd::optional<Overlay> overlay;
+        nonstd::optional<Transitions> transitions;
+        nonstd::optional<Trigger> trigger;
+        nonstd::optional<ProfileConfigWhitebalance> whitebalance;
     };
 
     struct OcrConfigOcr {
-        std::optional<int64_t> avg_char_height;
-        std::optional<double> avg_plate_angle;
-        std::optional<double> avg_plate_slant;
-        std::optional<double> classifier_expansion;
-        std::optional<int64_t> country_code;
-        std::optional<bool> enabled;
-        std::optional<bool> licensed;
-        std::optional<int64_t> max_char_height;
-        std::optional<int64_t> max_low_prob_chars;
-        std::optional<int64_t> max_plates;
-        std::optional<int64_t> min_char_height;
-        std::optional<double> min_prob_per_char;
-        std::optional<int64_t> processing_mode;
-        std::optional<int64_t> processing_queue;
-        std::optional<int64_t> processing_threads;
-        std::optional<int64_t> processing_timeout;
-        std::optional<Roi1Class> roi;
-        std::optional<bool> use_classifier_result;
-        std::optional<int64_t> vehicle_type;
+        nonstd::optional<int64_t> avg_char_height;
+        nonstd::optional<double> avg_plate_angle;
+        nonstd::optional<double> avg_plate_slant;
+        nonstd::optional<double> classifier_expansion;
+        nonstd::optional<int64_t> country_code;
+        nonstd::optional<bool> enabled;
+        nonstd::optional<bool> licensed;
+        nonstd::optional<int64_t> max_char_height;
+        nonstd::optional<int64_t> max_low_prob_chars;
+        nonstd::optional<int64_t> max_plates;
+        nonstd::optional<int64_t> min_char_height;
+        nonstd::optional<double> min_prob_per_char;
+        nonstd::optional<int64_t> processing_mode;
+        nonstd::optional<int64_t> processing_queue;
+        nonstd::optional<int64_t> processing_threads;
+        nonstd::optional<int64_t> processing_timeout;
+        nonstd::optional<Roi1Class> roi;
+        nonstd::optional<bool> use_classifier_result;
+        nonstd::optional<int64_t> vehicle_type;
     };
 
     /**
      * Ocr service configuration
      */
     struct OcrConfig {
-        std::optional<OcrConfigOcr> ocr;
+        nonstd::optional<OcrConfigOcr> ocr;
     };
 
     struct Voting {
-        std::optional<bool> enabled;
-        std::optional<bool> forward_without_plate_if_tracker;
-        std::optional<bool> keep_best_only;
-        std::optional<int64_t> max_diff_chars;
-        std::optional<Roi1Class> roi1;
-        std::optional<Roi1Class> roi2;
-        std::optional<int64_t> same_plate_debounce;
-        std::optional<bool> use_classifier;
+        nonstd::optional<bool> enabled;
+        nonstd::optional<bool> forward_without_plate_if_tracker;
+        nonstd::optional<bool> keep_best_only;
+        nonstd::optional<int64_t> max_diff_chars;
+        nonstd::optional<Roi1Class> roi1;
+        nonstd::optional<Roi1Class> roi2;
+        nonstd::optional<int64_t> same_plate_debounce;
+        nonstd::optional<bool> use_classifier;
     };
 
     /**
      * Plate Analytics service configuration
      */
     struct AnalyticsConfig {
-        std::optional<Voting> voting;
+        nonstd::optional<Voting> voting;
     };
 
     /**
      * Classifier based speed calibration region;
      */
     struct SpeedCalibrationRegion1 {
-        std::optional<double> p0_top1_sz;
-        std::optional<int64_t> x0;
-        std::optional<int64_t> x1;
-        std::optional<int64_t> x2;
-        std::optional<int64_t> y0;
-        std::optional<int64_t> y1;
-        std::optional<int64_t> y2;
+        nonstd::optional<double> p0_top1_sz;
+        nonstd::optional<int64_t> x0;
+        nonstd::optional<int64_t> x1;
+        nonstd::optional<int64_t> x2;
+        nonstd::optional<int64_t> y0;
+        nonstd::optional<int64_t> y1;
+        nonstd::optional<int64_t> y2;
     };
 
     /**
      * Classifier based trigger region; * dir: top-bottom, bottom-top, disabled
      */
     struct TriggerRegion0 {
-        std::optional<std::string> dir;
-        std::optional<int64_t> x0;
-        std::optional<int64_t> x1;
-        std::optional<int64_t> y0;
-        std::optional<int64_t> y1;
+        nonstd::optional<std::string> dir;
+        nonstd::optional<int64_t> x0;
+        nonstd::optional<int64_t> x1;
+        nonstd::optional<int64_t> y0;
+        nonstd::optional<int64_t> y1;
     };
 
     struct ClassifierConfigClassifier {
-        std::optional<bool> enable_characteristics;
-        std::optional<bool> enabled;
-        std::optional<bool> enable_speed;
-        std::optional<bool> first_only;
-        std::optional<bool> licensed;
-        std::optional<double> min_probability;
-        std::optional<int64_t> model_type;
-        std::optional<int64_t> processing_queue;
-        std::optional<int64_t> processing_threads;
-        std::optional<int64_t> scene_type;
-        std::optional<SpeedCalibrationRegion1> speed_calibration_region1;
-        std::optional<SpeedCalibrationRegion1> speed_calibration_region2;
-        std::optional<bool> trigger_enabled;
-        std::optional<TriggerRegion0> trigger_region0;
-        std::optional<TriggerRegion0> trigger_region1;
-        std::optional<TriggerRegion0> trigger_region2;
-        std::optional<TriggerRegion0> trigger_region3;
+        nonstd::optional<bool> enable_characteristics;
+        nonstd::optional<bool> enabled;
+        nonstd::optional<bool> enable_speed;
+        nonstd::optional<bool> first_only;
+        nonstd::optional<bool> licensed;
+        nonstd::optional<double> min_probability;
+        nonstd::optional<int64_t> model_type;
+        nonstd::optional<int64_t> processing_queue;
+        nonstd::optional<int64_t> processing_threads;
+        nonstd::optional<int64_t> scene_type;
+        nonstd::optional<SpeedCalibrationRegion1> speed_calibration_region1;
+        nonstd::optional<SpeedCalibrationRegion1> speed_calibration_region2;
+        nonstd::optional<bool> trigger_enabled;
+        nonstd::optional<TriggerRegion0> trigger_region0;
+        nonstd::optional<TriggerRegion0> trigger_region1;
+        nonstd::optional<TriggerRegion0> trigger_region2;
+        nonstd::optional<TriggerRegion0> trigger_region3;
     };
 
     /**
      * Vehicle Classifier service configuration
      */
     struct ClassifierConfig {
-        std::optional<ClassifierConfigClassifier> classifier;
+        nonstd::optional<ClassifierConfigClassifier> classifier;
     };
 
     struct AutoFocusRoi {
-        std::optional<int64_t> center_x;
-        std::optional<int64_t> center_y;
-        std::optional<int64_t> height;
-        std::optional<int64_t> width;
+        nonstd::optional<int64_t> center_x;
+        nonstd::optional<int64_t> center_y;
+        nonstd::optional<int64_t> height;
+        nonstd::optional<int64_t> width;
     };
 
     /**
      * AutoFocus configs
      */
     struct AutoFocus {
-        std::optional<int64_t> coarse_step;
-        std::optional<double> contrast_threshold;
-        std::optional<AutoFocusRoi> roi;
-        std::optional<bool> run;
-        std::optional<int64_t> update_rate;
+        nonstd::optional<int64_t> coarse_step;
+        nonstd::optional<double> contrast_threshold;
+        nonstd::optional<AutoFocusRoi> roi;
+        nonstd::optional<bool> run;
+        nonstd::optional<int64_t> update_rate;
     };
 
     /**
      * Single h26x stream configuration
      */
     struct H264Main {
-        std::optional<bool> available;
-        std::optional<int64_t> bitrate;
-        std::optional<std::string> control_rate;
-        std::optional<bool> enabled;
-        std::optional<int64_t> gop;
-        std::optional<std::string> profile;
-        std::optional<bool> running;
-        std::optional<std::string> source;
+        nonstd::optional<bool> available;
+        nonstd::optional<int64_t> bitrate;
+        nonstd::optional<std::string> control_rate;
+        nonstd::optional<bool> enabled;
+        nonstd::optional<int64_t> gop;
+        nonstd::optional<std::string> profile;
+        nonstd::optional<bool> running;
+        nonstd::optional<std::string> source;
     };
 
     struct H264 {
-        std::optional<bool> available;
-        std::optional<std::string> encoder_type;
-        std::optional<H264Main> main;
+        nonstd::optional<bool> available;
+        nonstd::optional<std::string> encoder_type;
+        nonstd::optional<H264Main> main;
     };
 
     /**
      * Single MJPEG stream configuration
      */
     struct MjpegMain {
-        std::optional<bool> available;
-        std::optional<bool> enabled;
-        std::optional<double> framerate;
-        std::optional<int64_t> quality;
+        nonstd::optional<bool> available;
+        nonstd::optional<bool> enabled;
+        nonstd::optional<double> framerate;
+        nonstd::optional<int64_t> quality;
     };
 
     struct Mjpeg {
-        std::optional<bool> available;
-        std::optional<MjpegMain> main;
+        nonstd::optional<bool> available;
+        nonstd::optional<MjpegMain> main;
     };
 
     /**
      * Stream(s) configuration of device
      */
     struct StreamConfig {
-        std::optional<H264> h264;
-        std::optional<Mjpeg> mjpeg;
+        nonstd::optional<H264> h264;
+        nonstd::optional<Mjpeg> mjpeg;
     };
 
     struct Scenario1Crop {
-        std::optional<int64_t> x0;
-        std::optional<int64_t> x1;
-        std::optional<int64_t> y0;
-        std::optional<int64_t> y1;
+        nonstd::optional<int64_t> x0;
+        nonstd::optional<int64_t> x1;
+        nonstd::optional<int64_t> y0;
+        nonstd::optional<int64_t> y1;
     };
 
     struct Scenario2Crop {
-        std::optional<int64_t> x0;
-        std::optional<int64_t> x1;
-        std::optional<int64_t> y0;
-        std::optional<int64_t> y1;
+        nonstd::optional<int64_t> x0;
+        nonstd::optional<int64_t> x1;
+        nonstd::optional<int64_t> y0;
+        nonstd::optional<int64_t> y1;
     };
 
     struct SnapshotCrop {
-        std::optional<bool> enable;
-        std::optional<std::string> mode;
-        std::optional<int64_t> x0;
-        std::optional<int64_t> x1;
-        std::optional<int64_t> y0;
-        std::optional<int64_t> y1;
+        nonstd::optional<bool> enable;
+        nonstd::optional<std::string> mode;
+        nonstd::optional<int64_t> x0;
+        nonstd::optional<int64_t> x1;
+        nonstd::optional<int64_t> y0;
+        nonstd::optional<int64_t> y1;
     };
 
     /**
      * Miscellaneous configs
      */
     struct Misc {
-        std::optional<bool> camera_orientation;
-        std::optional<std::string> iris_hint;
-        std::optional<int64_t> jpeg_quality;
-        std::optional<int64_t> legacy_tsync_gpio;
-        std::optional<Scenario1Crop> scenario1_crop;
-        std::optional<std::string> scenario1_overlay;
-        std::optional<int64_t> scenario1_overlay_text_size;
-        std::optional<Scenario2Crop> scenario2_crop;
-        std::optional<std::string> scenario2_overlay;
-        std::optional<int64_t> scenario2_overlay_text_size;
-        std::optional<std::string> scenario_overlay_color;
-        std::optional<SnapshotCrop> snapshot_crop;
+        nonstd::optional<bool> camera_orientation;
+        nonstd::optional<std::string> iris_hint;
+        nonstd::optional<int64_t> jpeg_quality;
+        nonstd::optional<int64_t> legacy_tsync_gpio;
+        nonstd::optional<Scenario1Crop> scenario1_crop;
+        nonstd::optional<std::string> scenario1_overlay;
+        nonstd::optional<int64_t> scenario1_overlay_text_size;
+        nonstd::optional<Scenario2Crop> scenario2_crop;
+        nonstd::optional<std::string> scenario2_overlay;
+        nonstd::optional<int64_t> scenario2_overlay_text_size;
+        nonstd::optional<std::string> scenario_overlay_color;
+        nonstd::optional<SnapshotCrop> snapshot_crop;
     };
 
     struct Ae {
-        std::optional<std::string> ctrl_mode;
-        std::optional<int64_t> last_run;
-        std::optional<double> level;
+        nonstd::optional<std::string> ctrl_mode;
+        nonstd::optional<int64_t> last_run;
+        nonstd::optional<double> level;
     };
 
     struct Fps {
-        std::optional<double> mjpeg;
+        nonstd::optional<double> mjpeg;
     };
 
     struct Gps {
-        std::optional<double> altitude;
-        std::optional<bool> available;
-        std::optional<double> bearing;
-        std::optional<double> dop;
-        std::optional<std::string> fix;
-        std::optional<double> latitude;
-        std::optional<double> longitude;
-        std::optional<int64_t> num_satellites;
-        std::optional<int64_t> seconds_since_last_fix;
-        std::optional<double> speed;
-        std::optional<int64_t> time;
+        nonstd::optional<double> altitude;
+        nonstd::optional<bool> available;
+        nonstd::optional<double> bearing;
+        nonstd::optional<double> dop;
+        nonstd::optional<std::string> fix;
+        nonstd::optional<double> latitude;
+        nonstd::optional<double> longitude;
+        nonstd::optional<int64_t> num_satellites;
+        nonstd::optional<int64_t> seconds_since_last_fix;
+        nonstd::optional<double> speed;
+        nonstd::optional<int64_t> time;
     };
 
     struct Isp {
-        std::optional<int64_t> free_buffers;
-        std::optional<int64_t> gain;
-        std::optional<int64_t> iris;
-        std::optional<std::string> iris_model;
-        std::optional<int64_t> shutter;
+        nonstd::optional<int64_t> free_buffers;
+        nonstd::optional<int64_t> gain;
+        nonstd::optional<int64_t> iris;
+        nonstd::optional<std::string> iris_model;
+        nonstd::optional<int64_t> shutter;
     };
 
     struct MiscVolatileLens {
-        std::optional<int64_t> focus;
-        std::optional<int64_t> zoom;
+        nonstd::optional<int64_t> focus;
+        nonstd::optional<int64_t> zoom;
     };
 
     struct Profile {
-        std::optional<int64_t> id;
-        std::optional<std::string> name;
+        nonstd::optional<int64_t> id;
+        nonstd::optional<std::string> name;
     };
 
     /**
      * Current Miscellaneous Read-Only configs
      */
     struct MiscVolatile {
-        std::optional<Ae> ae;
-        std::optional<Fps> fps;
-        std::optional<Gps> gps;
-        std::optional<Isp> isp;
-        std::optional<MiscVolatileLens> lens;
-        std::optional<Profile> profile;
-        std::optional<WhitebalanceClass> whitebalance;
+        nonstd::optional<Ae> ae;
+        nonstd::optional<Fps> fps;
+        nonstd::optional<Gps> gps;
+        nonstd::optional<Isp> isp;
+        nonstd::optional<MiscVolatileLens> lens;
+        nonstd::optional<Profile> profile;
+        nonstd::optional<WhitebalanceClass> whitebalance;
     };
 
     struct Itscampro {
-        std::optional<std::string> address;
-        std::optional<bool> debug;
-        std::optional<bool> enable;
-        std::optional<int64_t> port;
+        nonstd::optional<std::string> address;
+        nonstd::optional<bool> debug;
+        nonstd::optional<bool> enable;
+        nonstd::optional<int64_t> port;
     };
 
     /**
      * ITSCAMPRO service configuration
      */
     struct ItscamproConfig {
-        std::optional<Itscampro> itscampro;
+        nonstd::optional<Itscampro> itscampro;
     };
 
     /**
      * ITSCAMPRO service status
      */
     struct ItscamproStatus {
-        std::optional<std::string> status;
+        nonstd::optional<std::string> status;
     };
 
     struct Sign {
-        std::optional<std::string> append_mode;
-        std::optional<bool> enabled;
-        std::optional<bool> loaded;
-        std::optional<bool> update;
+        nonstd::optional<std::string> append_mode;
+        nonstd::optional<bool> enabled;
+        nonstd::optional<bool> loaded;
+        nonstd::optional<bool> update;
     };
 
     /**
      * ImageSign service configuration
      */
     struct ImageSignConfig {
-        std::optional<Sign> sign;
+        nonstd::optional<Sign> sign;
     };
 
     struct Local {
-        std::optional<int64_t> buffer_size_kb;
-        std::optional<int64_t> ttl;
+        nonstd::optional<int64_t> buffer_size_kb;
+        nonstd::optional<int64_t> ttl;
     };
 
     struct Transfer {
-        std::optional<int64_t> poll_interval;
-        std::optional<int64_t> timeout;
+        nonstd::optional<int64_t> poll_interval;
+        nonstd::optional<int64_t> timeout;
     };
 
     struct Ftp {
-        std::optional<std::string> address;
-        std::optional<bool> anonymous;
-        std::optional<bool> enable;
-        std::optional<std::string> filename;
-        std::optional<Local> local;
-        std::optional<std::string> password;
-        std::optional<int64_t> port;
-        std::optional<std::string> protocol;
-        std::optional<int64_t> quality;
-        std::optional<Transfer> transfer;
-        std::optional<std::string> username;
+        nonstd::optional<std::string> address;
+        nonstd::optional<bool> anonymous;
+        nonstd::optional<bool> enable;
+        nonstd::optional<std::string> filename;
+        nonstd::optional<Local> local;
+        nonstd::optional<std::string> password;
+        nonstd::optional<int64_t> port;
+        nonstd::optional<std::string> protocol;
+        nonstd::optional<int64_t> quality;
+        nonstd::optional<Transfer> transfer;
+        nonstd::optional<std::string> username;
     };
 
     /**
      * FTP service configuration
      */
     struct FtpConfig {
-        std::optional<Ftp> ftp;
+        nonstd::optional<Ftp> ftp;
     };
 
     /**
      * Lince service configuration
      */
     struct LinceConfig {
-        std::optional<std::string> auth_code;
-        std::optional<std::string> client_endpoint;
-        std::optional<std::string> client_id;
-        std::optional<bool> enabled;
-        std::optional<std::string> environment;
-        std::optional<bool> send_recs_none;
-        std::optional<int64_t> timeout_response;
+        nonstd::optional<std::string> auth_code;
+        nonstd::optional<std::string> client_endpoint;
+        nonstd::optional<std::string> client_id;
+        nonstd::optional<bool> enabled;
+        nonstd::optional<std::string> environment;
+        nonstd::optional<bool> send_recs_none;
+        nonstd::optional<int64_t> timeout_response;
     };
 
     /**
      * Lince service status
      */
     struct LinceStatus {
-        std::optional<std::string> lince_status;
+        nonstd::optional<std::string> lince_status;
     };
 
     struct VehicleIndicator {
-        std::optional<bool> vehicle_counter_active_high;
-        std::optional<bool> vehicle_counter_enabled;
-        std::optional<int64_t> vehicle_counter_gpio;
-        std::optional<int64_t> vehicle_counter_pulse_width_ms;
-        std::optional<int64_t> vehicle_counter_type;
-        std::optional<int64_t> vehicle_counter_udp_port;
-        std::optional<int64_t> vehicle_counter_udp_sample_time_ms;
-        std::optional<std::string> vehicle_counter_udp_server;
+        nonstd::optional<bool> vehicle_counter_active_high;
+        nonstd::optional<bool> vehicle_counter_enabled;
+        nonstd::optional<int64_t> vehicle_counter_gpio;
+        nonstd::optional<int64_t> vehicle_counter_pulse_width_ms;
+        nonstd::optional<int64_t> vehicle_counter_type;
+        nonstd::optional<int64_t> vehicle_counter_udp_port;
+        nonstd::optional<int64_t> vehicle_counter_udp_sample_time_ms;
+        nonstd::optional<std::string> vehicle_counter_udp_server;
     };
 
     /**
      * VehicleIndicator service configuration
      */
     struct VehicleIndicatorConfig {
-        std::optional<VehicleIndicator> vehicle_indicator;
+        nonstd::optional<VehicleIndicator> vehicle_indicator;
     };
 
     struct ConfigCgi {
-        std::optional<bool> block_api;
+        nonstd::optional<bool> block_api;
     };
 
     struct Auth {
-        std::optional<std::string> password;
-        std::optional<bool> require;
+        nonstd::optional<std::string> password;
+        nonstd::optional<bool> require;
     };
 
     struct Cougar {
-        std::optional<Auth> auth;
+        nonstd::optional<Auth> auth;
     };
 
     struct Itscamprotocol {
-        std::optional<bool> legacy_mode;
+        nonstd::optional<bool> legacy_mode;
     };
 
     /**
      * Protocols configurations
      */
     struct ProtocolsConfig {
-        std::optional<ConfigCgi> config_cgi;
-        std::optional<Cougar> cougar;
-        std::optional<Itscamprotocol> itscamprotocol;
+        nonstd::optional<ConfigCgi> config_cgi;
+        nonstd::optional<Cougar> cougar;
+        nonstd::optional<Itscamprotocol> itscamprotocol;
     };
 
     /**
      * Profile Transitioner configs
      */
     struct ProfileTransitioner {
-        std::optional<bool> automatic;
-        std::optional<std::string> level_smoothing;
-        std::optional<std::string> reset_profiles;
-        std::optional<int64_t> smoothing_time;
+        nonstd::optional<bool> automatic;
+        nonstd::optional<std::string> level_smoothing;
+        nonstd::optional<std::string> reset_profiles;
+        nonstd::optional<int64_t> smoothing_time;
     };
 
     /**
      * Lane region
      */
     struct Region0 {
-        std::optional<std::string> name;
-        std::optional<int64_t> x0;
-        std::optional<int64_t> x1;
-        std::optional<int64_t> x2;
-        std::optional<int64_t> x3;
-        std::optional<int64_t> y0;
-        std::optional<int64_t> y1;
-        std::optional<int64_t> y2;
-        std::optional<int64_t> y3;
+        nonstd::optional<std::string> name;
+        nonstd::optional<int64_t> x0;
+        nonstd::optional<int64_t> x1;
+        nonstd::optional<int64_t> x2;
+        nonstd::optional<int64_t> x3;
+        nonstd::optional<int64_t> y0;
+        nonstd::optional<int64_t> y1;
+        nonstd::optional<int64_t> y2;
+        nonstd::optional<int64_t> y3;
     };
 
     /**
      * Lanes configuration
      */
     struct LanesConfig {
-        std::optional<bool> enabled;
-        std::optional<Region0> region0;
-        std::optional<Region0> region1;
-        std::optional<Region0> region2;
+        nonstd::optional<bool> enabled;
+        nonstd::optional<Region0> region0;
+        nonstd::optional<Region0> region1;
+        nonstd::optional<Region0> region2;
     };
 
     /**
      * Configuration for a specific IO
      */
     struct IoConfig {
-        std::optional<bool> can_flash;
-        std::optional<bool> can_trigger;
-        std::optional<int64_t> early_us;
-        std::optional<std::string> group;
-        std::optional<std::string> identifier;
-        std::optional<bool> is_input;
-        std::optional<bool> is_on;
+        nonstd::optional<bool> can_flash;
+        nonstd::optional<bool> can_trigger;
+        nonstd::optional<int64_t> early_us;
+        nonstd::optional<std::string> group;
+        nonstd::optional<std::string> identifier;
+        nonstd::optional<bool> is_input;
+        nonstd::optional<bool> is_on;
         int64_t port;
-        std::optional<std::string> protection;
-        std::optional<std::string> type;
+        nonstd::optional<std::string> protection;
+        nonstd::optional<std::string> type;
     };
 
     /**
      * Simplified information for a specific IO
      */
     struct IoBasic {
-        std::optional<bool> is_input;
-        std::optional<bool> is_on;
+        nonstd::optional<bool> is_input;
+        nonstd::optional<bool> is_on;
         int64_t port;
     };
 
@@ -805,7 +805,7 @@ namespace rest_types {
 
     struct Tls {
         bool insecure;
-        std::optional<std::string> mtls_key;
+        nonstd::optional<std::string> mtls_key;
     };
 
     enum class Scheme : int { HTTP, HTTPS };
@@ -846,42 +846,42 @@ namespace rest_types {
     };
 
     struct AnalyticsClassifier {
-        std::optional<std::string> customer;
-        std::optional<int64_t> max_connections;
-        std::optional<int64_t> max_threads;
-        std::optional<std::string> serial;
-        std::optional<std::string> sha1;
-        std::optional<int64_t> state;
-        std::optional<int64_t> ttl;
-        std::optional<std::string> version;
+        nonstd::optional<std::string> customer;
+        nonstd::optional<int64_t> max_connections;
+        nonstd::optional<int64_t> max_threads;
+        nonstd::optional<std::string> serial;
+        nonstd::optional<std::string> sha1;
+        nonstd::optional<int64_t> state;
+        nonstd::optional<int64_t> ttl;
+        nonstd::optional<std::string> version;
     };
 
     struct AnalyticsOcr {
-        std::optional<std::string> customer;
-        std::optional<int64_t> max_connections;
-        std::optional<int64_t> max_threads;
-        std::optional<std::string> serial;
-        std::optional<std::string> sha1;
-        std::optional<int64_t> state;
-        std::optional<int64_t> ttl;
-        std::optional<std::string> version;
+        nonstd::optional<std::string> customer;
+        nonstd::optional<int64_t> max_connections;
+        nonstd::optional<int64_t> max_threads;
+        nonstd::optional<std::string> serial;
+        nonstd::optional<std::string> sha1;
+        nonstd::optional<int64_t> state;
+        nonstd::optional<int64_t> ttl;
+        nonstd::optional<std::string> version;
     };
 
     struct Analytics {
-        std::optional<AnalyticsClassifier> classifier;
-        std::optional<AnalyticsOcr> ocr;
+        nonstd::optional<AnalyticsClassifier> classifier;
+        nonstd::optional<AnalyticsOcr> ocr;
     };
 
     struct DeviceId {
-        std::optional<std::string> serial;
+        nonstd::optional<std::string> serial;
     };
 
     /**
      * License service information
      */
     struct Licenses {
-        std::optional<Analytics> analytics;
-        std::optional<DeviceId> device_id;
+        nonstd::optional<Analytics> analytics;
+        nonstd::optional<DeviceId> device_id;
     };
 }
 }

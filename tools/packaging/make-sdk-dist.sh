@@ -94,7 +94,7 @@ PY
 
 stage_cpp_headers() {
     local dest="$1"
-    mkdir -p "$dest/c_api" "$dest/3rdparty/nlohmann"
+    mkdir -p "$dest/c_api" "$dest/3rdparty/nlohmann" "$dest/3rdparty/nonstd"
 
     local headers=(
         itscam_sdk.h
@@ -118,6 +118,9 @@ stage_cpp_headers() {
        "$dest/c_api/"
 
     cp "$CORE/3rdparty/nlohmann/json.hpp" "$dest/3rdparty/nlohmann/"
+    cp "$CORE/3rdparty/nonstd/optional.hpp" \
+       "$CORE/3rdparty/nonstd/LICENSE.txt" \
+       "$dest/3rdparty/nonstd/"
 }
 
 stage_linux_libs() {
@@ -207,13 +210,11 @@ stage_python_wheel_linux() {
     [ "${#wheels[@]}" -gt 0 ] || die "linux python wheel build produced no .whl in $dest"
 }
 
-# Build a Linux wheel for a non-native arch (ARMv7 or aarch64) by
-# tagging it with the matching manylinux2014 platform tag.  Both target
-# arches were the lowest practical baseline before manylinux_2_28 ;
-# pairing them with the Arm GNU 8.3-2019.03 (glibc 2.28) toolchain means
-# the wheel can declare manylinux2014 cleanly.  We don't run auditwheel
-# because the C extension is not loaded by Python -- ctypes loads the
-# .so directly at import time.
+# Build a Linux wheel for a non-native arch (ARMv7 or aarch64).  The
+# native library staged into the package is produced by the Ubuntu 16.04
+# core build path and checked against the repository glibc floor.  We
+# don't run auditwheel because the C extension is not loaded by Python --
+# ctypes loads the .so directly at import time.
 stage_python_wheel_linux_arch() {
     local dest="$1/python"
     local src_dir="$2"     # e.g. $LINUX_ARM_LIB_DIR

@@ -46,6 +46,7 @@ itscam-sdk/
     │   └── 3rdparty/
     │       ├── httplib.h
     │       ├── nlohmann/json.hpp
+    │       ├── nonstd/optional.hpp
     │       └── mbedtls/                 # vendored mbedTLS 3.6 LTS
     ├── examples/                        # standalone C++ programs
     │   ├── itscam_sdk_example.cpp

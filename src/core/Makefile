@@ -101,15 +101,12 @@ MBEDTLS_CFLAGS_LINUX   := $(MBEDTLS_CFLAGS_COMMON) -fPIC
 MBEDTLS_CFLAGS_WINDOWS := $(MBEDTLS_CFLAGS_COMMON)
 
 # Maximum allowed GLIBC version per Linux platform.  Enforced by
-# tools/check-glibc.sh; the Docker builder image is locked to the
-# minimum distro that satisfies these floors:
-#   linux-x64   -> Ubuntu 18.04 / glibc 2.27
-#   linux-arm   -> Arm GNU 8.3-2019.03 / glibc 2.28
-#   linux-arm64 -> Arm GNU 8.3-2019.03 / glibc 2.28
-# Bumping these requires updating the Dockerfile base / toolchain too.
-GLIBC_FLOOR_LINUX       ?= 2.27
-GLIBC_FLOOR_LINUX_ARM   ?= 2.28
-GLIBC_FLOOR_LINUX_ARM64 ?= 2.28
+# tools/check-glibc.sh.  Release Linux artefacts are built by the
+# Dockerfile's core-xenial stage so x64, armhf, and arm64 all keep the
+# Ubuntu 16.04 / glibc 2.23 compatibility floor.
+GLIBC_FLOOR_LINUX       ?= 2.23
+GLIBC_FLOOR_LINUX_ARM   ?= 2.23
+GLIBC_FLOOR_LINUX_ARM64 ?= 2.23
 CHECK_GLIBC := $(REPO_ROOT)/tools/check-glibc.sh
 
 # Linker flags

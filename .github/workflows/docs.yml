@@ -1,11 +1,12 @@
 name: Deploy documentation
 
 # Builds the VitePress documentation site (with Doxygen / pdoc / DocFX /
-# gomarkdoc API references) inside the project's own builder image
-# (itscam-sdk-builder, Ubuntu 20.04 + Doxygen + .NET 8/DocFX + Go 1.25 +
-# gomarkdoc + Python/pdoc + Node 20). Same image and GHA cache scope as
-# `sdk-release.yml`, so a warm Docker cache from either workflow benefits
-# the other.
+# gomarkdoc API references) inside the project's own Docker images. The
+# `core-xenial` image provides the Linux native library used by pdoc while
+# preserving the GLIBC 2.23 floor; `itscam-sdk-builder` provides Doxygen,
+# .NET 8/DocFX, Go 1.25/gomarkdoc, Python/pdoc, and Node 20. The images
+# share cache scopes with `sdk-release.yml`, so a warm Docker cache from
+# either workflow benefits the other.
 #
 # The sync-r2-corpus job stays on the runner because it only needs Node
 # + the aws CLI (provided by aws-actions/configure-aws-credentials) and
@@ -84,10 +85,49 @@ jobs:
           cache-from: type=gha,scope=itscam-sdk-builder
           cache-to: type=gha,mode=max,scope=itscam-sdk-builder
 
+      - name: Build core-xenial image (cached in GHA)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          target: core-xenial
+          load: true
+          tags: itscam-sdk-core-xenial:ci
+          cache-from: type=gha,scope=itscam-sdk-core-xenial
+          cache-to: type=gha,mode=max,scope=itscam-sdk-core-xenial
+
+      - name: Build Linux core library inside core-xenial image
+        run: |
+          set -euxo pipefail
+          common_run_args=(
+            --rm
+            -v "$PWD:/sdk"
+            -w /sdk
+            -u "$(id -u):$(id -g)"
+            -e HOME=/tmp
+            -e XDG_CACHE_HOME=/tmp/.cache
+            -e NPM_CONFIG_CACHE=/tmp/.npm
+            -e DOTNET_CLI_HOME=/tmp/dotnet
+            -e GOPATH=/tmp/go
+            -e GOMODCACHE=/tmp/go/pkg/mod
+            -e GOCACHE=/tmp/go/build-cache
+          )
+
+          docker run "${common_run_args[@]}" \
+            itscam-sdk-builder:ci \
+            make version
+
+          docker run "${common_run_args[@]}" \
+            itscam-sdk-core-xenial:ci \
+            make -C src/core \
+              build/linux/libitscam_sdk.so \
+              build/linux/libitscam_sdk.a \
+              check-glibc-linux
+
       - name: Build docs site inside builder image
-        # Combines docs-sync-check + docs-api + VitePress build into one
-        # `docker run` so the bind-mount setup is declared once and the
-        # whole pipeline fails fast on any error. Mirrors the
+        # Combines docs-sync-check + docs-api + VitePress build after the
+        # core-xenial step has produced the Linux library pdoc imports.
+        # Mirrors the
         # $(DOCKER_RUN) recipe in the Makefile (mounts $PWD as /sdk,
         # runs as the runner's UID/GID, sandboxes HOME/caches under
         # /tmp). VITEPRESS_BASE / VITE_AI_SEARCH_API_URL are forwarded
@@ -112,7 +152,6 @@ jobs:
             itscam-sdk-builder:ci \
             bash -euxc '
               git config --global --add safe.directory /sdk
-              make lib
               make docs-sync-check
               make docs-api
               cd docs-site
