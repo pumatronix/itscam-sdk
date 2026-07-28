@@ -191,6 +191,7 @@ ITSCAM_ByteArray = c_void_p
 ITSCAM_ProfileArray = c_void_p
 
 ITSCAM_RestClient = c_void_p
+ITSCAM_SoftwareUpdateOperation = c_void_p
 ITSCAM_CgiClient = c_void_p
 ITSCAM_String = c_void_p
 ITSCAM_CgiImage = c_void_p
@@ -254,6 +255,12 @@ ITSCAM_ConnectionStateCallback = CFUNCTYPE(None, c_int, c_char_p, c_void_p)
 
 # typedef void (*ITSCAM_LogCallback)(int, const char*, void*)
 ITSCAM_LogCallback = CFUNCTYPE(None, c_int, c_char_p, c_void_p)
+
+# typedef int (*ITSCAM_UploadProgressCallback)(uint64_t, uint64_t, void*)
+ITSCAM_UploadProgressCallback = CFUNCTYPE(c_int, c_uint64, c_uint64, c_void_p)
+
+# typedef void (*ITSCAM_SoftwareUpdateStatusCallback)(const char*, void*)
+ITSCAM_SoftwareUpdateStatusCallback = CFUNCTYPE(None, c_char_p, c_void_p)
 
 
 # ============================================================================
@@ -475,6 +482,52 @@ def _setup_prototypes(lib: ctypes.CDLL) -> None:
     lib.ITSCAM_RestClient_setAuthToken.restype = None
     lib.ITSCAM_RestClient_clearAuthToken.argtypes = [ITSCAM_RestClient]
     lib.ITSCAM_RestClient_clearAuthToken.restype = None
+
+    lib.ITSCAM_RestClient_uploadSoftwareArchive.argtypes = [
+        ITSCAM_RestClient, c_char_p, c_uint32,
+        ITSCAM_UploadProgressCallback, c_void_p, POINTER(ITSCAM_String)]
+    lib.ITSCAM_RestClient_uploadSoftwareArchive.restype = c_int
+
+    lib.ITSCAM_RestClient_restartSoftwareUpdate.argtypes = [
+        ITSCAM_RestClient, c_uint32, POINTER(ITSCAM_String)]
+    lib.ITSCAM_RestClient_restartSoftwareUpdate.restype = c_int
+
+    lib.ITSCAM_RestClient_startSoftwareUpdate.argtypes = [
+        ITSCAM_RestClient, c_char_p, c_uint32, c_uint32, c_uint32,
+        c_int, ITSCAM_SoftwareUpdateStatusCallback, c_void_p,
+        POINTER(ITSCAM_SoftwareUpdateOperation)]
+    lib.ITSCAM_RestClient_startSoftwareUpdate.restype = c_int
+
+    lib.ITSCAM_RestClient_updateSoftware.argtypes = [
+        ITSCAM_RestClient, c_char_p, c_uint32, c_uint32, c_uint32,
+        c_int, ITSCAM_SoftwareUpdateStatusCallback, c_void_p,
+        POINTER(ITSCAM_String)]
+    lib.ITSCAM_RestClient_updateSoftware.restype = c_int
+
+    lib.ITSCAM_SoftwareUpdateOperation_destroy.argtypes = [
+        ITSCAM_SoftwareUpdateOperation]
+    lib.ITSCAM_SoftwareUpdateOperation_destroy.restype = None
+
+    lib.ITSCAM_SoftwareUpdateOperation_status.argtypes = [
+        ITSCAM_SoftwareUpdateOperation, POINTER(ITSCAM_String)]
+    lib.ITSCAM_SoftwareUpdateOperation_status.restype = c_int
+
+    lib.ITSCAM_SoftwareUpdateOperation_setCallback.argtypes = [
+        ITSCAM_SoftwareUpdateOperation, ITSCAM_SoftwareUpdateStatusCallback,
+        c_void_p]
+    lib.ITSCAM_SoftwareUpdateOperation_setCallback.restype = None
+
+    lib.ITSCAM_SoftwareUpdateOperation_wait.argtypes = [
+        ITSCAM_SoftwareUpdateOperation, c_uint32, POINTER(ITSCAM_String)]
+    lib.ITSCAM_SoftwareUpdateOperation_wait.restype = c_int
+
+    lib.ITSCAM_SoftwareUpdateOperation_isComplete.argtypes = [
+        ITSCAM_SoftwareUpdateOperation]
+    lib.ITSCAM_SoftwareUpdateOperation_isComplete.restype = c_int
+
+    lib.ITSCAM_SoftwareUpdateOperation_cancel.argtypes = [
+        ITSCAM_SoftwareUpdateOperation]
+    lib.ITSCAM_SoftwareUpdateOperation_cancel.restype = None
 
     for verb in ("httpGet", "httpDelete"):
         fn = getattr(lib, "ITSCAM_RestClient_" + verb)

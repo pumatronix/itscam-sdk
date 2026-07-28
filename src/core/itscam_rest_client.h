@@ -452,6 +452,100 @@ public:
     Result<rest_types::Licenses> getLicenses(uint32_t timeoutMs = 10000);
 
     //=========================================================================
+    // Software update
+    // Endpoints: /api/swupdate/upload, /api/swupdate/restart
+    //=========================================================================
+
+    using UploadProgressCallback =
+        std::function<bool(size_t current, size_t total)>;
+
+    enum class SoftwareUpdatePhase {
+        Idle,
+        Connecting,
+        Uploading,
+        Installing,
+        Restarting,
+        Succeeded,
+        Failed,
+        Cancelled
+    };
+
+    struct SoftwareUpdateStatus {
+        SoftwareUpdatePhase phase = SoftwareUpdatePhase::Idle;
+        bool complete = false;
+        uint64_t uploadCurrent = 0;
+        uint64_t uploadTotal = 0;
+        std::string installStatus;
+        std::string stepName;
+        int stepPercent = -1;
+        std::string message;
+        std::string messageLevel;
+        std::string rawMessage;
+        Error error;
+
+        nlohmann::json toJson() const;
+    };
+
+    struct SoftwareUpdateOptions {
+        std::string swuPath;
+        uint32_t uploadTimeoutMs = 300000;
+        uint32_t statusTimeoutMs = 900000;
+        uint32_t restartTimeoutMs = 10000;
+        bool requestRestart = false;
+    };
+
+    using SoftwareUpdateStatusCallback =
+        std::function<void(const SoftwareUpdateStatus& status)>;
+
+    class SoftwareUpdateOperation {
+    public:
+        SoftwareUpdateOperation();
+        ~SoftwareUpdateOperation();
+
+        SoftwareUpdateOperation(SoftwareUpdateOperation&&) noexcept;
+        SoftwareUpdateOperation& operator=(SoftwareUpdateOperation&&) noexcept;
+        SoftwareUpdateOperation(const SoftwareUpdateOperation&) = delete;
+        SoftwareUpdateOperation& operator=(const SoftwareUpdateOperation&) = delete;
+
+        SoftwareUpdateStatus status() const;
+        void setCallback(SoftwareUpdateStatusCallback callback);
+        Result<SoftwareUpdateStatus> wait(uint32_t timeoutMs = 0);
+        bool isComplete() const;
+        void cancel();
+
+    private:
+        friend class ItscamRestClient;
+        struct Impl;
+        explicit SoftwareUpdateOperation(std::shared_ptr<Impl> impl);
+        std::shared_ptr<Impl> mImpl;
+    };
+
+    /// Upload a SWU archive through the authenticated webapp backend route.
+    /// The archive is streamed from disk as multipart/form-data field "file".
+    Result<nlohmann::json> uploadSoftwareArchive(
+        const std::string& swuPath,
+        uint32_t timeoutMs = 300000,
+        UploadProgressCallback progress = nullptr);
+
+    /// Request the webapp backend to restart the equipment after a successful
+    /// SWUpdate installation.
+    Result<nlohmann::json> restartSoftwareUpdate(
+        uint32_t timeoutMs = 10000);
+
+    /// Start a full software-update operation. The operation connects to the
+    /// status websocket, uploads the SWU archive through the authenticated
+    /// route, then waits for SUCCESS or FAILURE from SWUpdate.
+    Result<SoftwareUpdateOperation> startSoftwareUpdate(
+        const SoftwareUpdateOptions& options,
+        SoftwareUpdateStatusCallback callback = nullptr);
+
+    /// Blocking full software-update operation. Returns the terminal status
+    /// when the update succeeds, fails, times out or is cancelled.
+    Result<SoftwareUpdateStatus> updateSoftware(
+        const SoftwareUpdateOptions& options,
+        SoftwareUpdateStatusCallback callback = nullptr);
+
+    //=========================================================================
     // Generic HTTP methods  (escape hatch for endpoints not covered above)
     //=========================================================================
 

@@ -31,9 +31,23 @@ extern "C" {
  * ============================================================================ */
 
 typedef struct ITSCAM_RestClient ITSCAM_RestClient;
+typedef struct ITSCAM_SoftwareUpdateOperation ITSCAM_SoftwareUpdateOperation;
 
 /// UTF-8 NUL-terminated string buffer owned by the SDK.
 typedef struct ITSCAM_String ITSCAM_String;
+
+/// Upload progress callback for large REST request bodies. Return 0 to abort
+/// the transfer; return nonzero to continue.
+typedef int (*ITSCAM_UploadProgressCallback)(
+    uint64_t current,
+    uint64_t total,
+    void* userData);
+
+/// Software-update operation status callback. statusJson is valid only for
+/// the duration of the callback; wrappers should copy it if they keep it.
+typedef void (*ITSCAM_SoftwareUpdateStatusCallback)(
+    const char* statusJson,
+    void* userData);
 
 /* ============================================================================
  *  Lifecycle
@@ -98,6 +112,77 @@ ITSCAM_C_API void ITSCAM_RestClient_setAuthToken(
 
 ITSCAM_C_API void ITSCAM_RestClient_clearAuthToken(
     ITSCAM_RestClient* client);
+
+/* ============================================================================
+ *  Software update
+ * ============================================================================ */
+
+/// POST /api/swupdate/upload with multipart/form-data field "file". The SWU
+/// archive is streamed from disk by the native SDK.
+ITSCAM_C_API ITSCAM_ErrorCode ITSCAM_RestClient_uploadSoftwareArchive(
+    ITSCAM_RestClient* client,
+    const char* swuPath,
+    uint32_t timeoutMs,
+    ITSCAM_UploadProgressCallback progressCallback,
+    void* userData,
+    ITSCAM_String** outResponse);
+
+/// POST /api/swupdate/restart after a successful update installation.
+ITSCAM_C_API ITSCAM_ErrorCode ITSCAM_RestClient_restartSoftwareUpdate(
+    ITSCAM_RestClient* client,
+    uint32_t timeoutMs,
+    ITSCAM_String** outResponse);
+
+/// Start a full software-update operation. The SDK connects to the status
+/// websocket, uploads the SWU archive, and tracks SWUpdate status until a
+/// terminal state is reached. Destroy the returned operation with
+/// ITSCAM_SoftwareUpdateOperation_destroy().
+ITSCAM_C_API ITSCAM_ErrorCode ITSCAM_RestClient_startSoftwareUpdate(
+    ITSCAM_RestClient* client,
+    const char* swuPath,
+    uint32_t uploadTimeoutMs,
+    uint32_t statusTimeoutMs,
+    uint32_t restartTimeoutMs,
+    int requestRestart,
+    ITSCAM_SoftwareUpdateStatusCallback statusCallback,
+    void* userData,
+    ITSCAM_SoftwareUpdateOperation** outOperation);
+
+/// Blocking full software-update operation. outStatus receives the terminal
+/// status JSON; statusCallback may be NULL.
+ITSCAM_C_API ITSCAM_ErrorCode ITSCAM_RestClient_updateSoftware(
+    ITSCAM_RestClient* client,
+    const char* swuPath,
+    uint32_t uploadTimeoutMs,
+    uint32_t statusTimeoutMs,
+    uint32_t restartTimeoutMs,
+    int requestRestart,
+    ITSCAM_SoftwareUpdateStatusCallback statusCallback,
+    void* userData,
+    ITSCAM_String** outStatus);
+
+ITSCAM_C_API void ITSCAM_SoftwareUpdateOperation_destroy(
+    ITSCAM_SoftwareUpdateOperation* operation);
+
+ITSCAM_C_API ITSCAM_ErrorCode ITSCAM_SoftwareUpdateOperation_status(
+    ITSCAM_SoftwareUpdateOperation* operation,
+    ITSCAM_String** outStatus);
+
+ITSCAM_C_API void ITSCAM_SoftwareUpdateOperation_setCallback(
+    ITSCAM_SoftwareUpdateOperation* operation,
+    ITSCAM_SoftwareUpdateStatusCallback statusCallback,
+    void* userData);
+
+ITSCAM_C_API ITSCAM_ErrorCode ITSCAM_SoftwareUpdateOperation_wait(
+    ITSCAM_SoftwareUpdateOperation* operation,
+    uint32_t timeoutMs,
+    ITSCAM_String** outStatus);
+
+ITSCAM_C_API int ITSCAM_SoftwareUpdateOperation_isComplete(
+    ITSCAM_SoftwareUpdateOperation* operation);
+
+ITSCAM_C_API void ITSCAM_SoftwareUpdateOperation_cancel(
+    ITSCAM_SoftwareUpdateOperation* operation);
 
 /* ============================================================================
  *  Generic HTTP verbs (the typed helpers below are convenience wrappers)

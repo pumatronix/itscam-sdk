@@ -132,6 +132,7 @@ SOURCES_NETWORK := \
     itscam_rest_client.cpp \
     itscam_cgi_client.cpp \
     impl/itscam_http_transport.cpp \
+	impl/itscam_websocket_transport.cpp \
     impl/itscam_multipart.cpp
 
 SOURCE_LINUX_PLATFORM := \

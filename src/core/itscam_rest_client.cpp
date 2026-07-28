@@ -12,8 +12,10 @@
 
 #include "itscam_rest_client.h"
 #include "impl/itscam_http_transport.h"
+#include "impl/itscam_websocket_transport.h"
 
 #include <exception>
+#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
@@ -25,6 +27,34 @@ using Transport = detail::HttpTransport;
 namespace rt    = rest_types;
 
 namespace {
+
+const char* phaseToString(ItscamRestClient::SoftwareUpdatePhase phase) {
+    using Phase = ItscamRestClient::SoftwareUpdatePhase;
+    switch (phase) {
+        case Phase::Idle: return "idle";
+        case Phase::Connecting: return "connecting";
+        case Phase::Uploading: return "uploading";
+        case Phase::Installing: return "installing";
+        case Phase::Restarting: return "restarting";
+        case Phase::Succeeded: return "succeeded";
+        case Phase::Failed: return "failed";
+        case Phase::Cancelled: return "cancelled";
+    }
+    return "unknown";
+}
+
+const char* errorCodeToString(Error::Code code) {
+    switch (code) {
+        case Error::ConnectionFailed: return "ConnectionFailed";
+        case Error::Timeout: return "Timeout";
+        case Error::NotAuthenticated: return "NotAuthenticated";
+        case Error::InvalidParameter: return "InvalidParameter";
+        case Error::ServerError: return "ServerError";
+        case Error::Disconnected: return "Disconnected";
+        case Error::Unknown: return "Unknown";
+    }
+    return "Unknown";
+}
 
 /// Convert a `Result<json>` into a `Result<T>` by piping the JSON payload
 /// through nlohmann's adl-based `from_json` machinery.  Schema mismatches
@@ -53,6 +83,15 @@ struct ItscamRestClient::Impl {
     Transport   transport;
     std::string apiPrefix = "/api";
 
+    struct OperationContext {
+        std::string host;
+        uint16_t    port = 0;
+        std::string scheme;
+        std::string bearerToken;
+        std::string apiPrefix;
+        detail::TlsConfig tls;
+    };
+
     /// Parse the body of an HttpResponse as JSON, falling back to a string
     /// JSON value when the body is not valid JSON.  Empty bodies become
     /// nullptr.
@@ -67,9 +106,9 @@ struct ItscamRestClient::Impl {
 
     /// Map an HttpResponse onto a Result<json>.  Successful 2xx responses
     /// are returned as parsed JSON; everything else becomes an Error.
-    Result<json> mapResponse(const Result<detail::HttpResponse>& res,
-                             const std::string& method,
-                             const std::string& path) {
+    static Result<json> mapResponse(const Result<detail::HttpResponse>& res,
+                                    const std::string& method,
+                                    const std::string& path) {
         if (!res) {
             return res.error();
         }
@@ -122,11 +161,343 @@ struct ItscamRestClient::Impl {
         return mapResponse(transport.request(req, timeoutMs), "POST", path);
     }
 
+    Result<json> doPostMultipartFile(const std::string& path,
+                                     const std::string& fieldName,
+                                     const std::string& filePath,
+                                     const std::string& contentType,
+                                     uint32_t timeoutMs,
+                                     detail::UploadProgress progress) {
+        return mapResponse(transport.postMultipartFile(path, fieldName,
+                                                       filePath, contentType,
+                                                       timeoutMs,
+                                                       std::move(progress)),
+                           "POST", path);
+    }
+
+    OperationContext makeOperationContext() const {
+        OperationContext ctx;
+        ctx.host = transport.host();
+        ctx.port = transport.port();
+        ctx.scheme = transport.scheme();
+        ctx.bearerToken = transport.bearerToken();
+        ctx.apiPrefix = apiPrefix;
+        ctx.tls = transport.tlsConfig();
+        return ctx;
+    }
+
+    static void configureTransport(Transport& transport,
+                                   const OperationContext& ctx) {
+        transport.setBaseUrl(ctx.host, ctx.port, ctx.scheme);
+        if (!ctx.bearerToken.empty()) {
+            transport.setBearerToken(ctx.bearerToken);
+        }
+        transport.setVerifyServerCertificate(ctx.tls.verifyServerCert);
+        if (!ctx.tls.caCertFile.empty()) {
+            transport.setCaCertFile(ctx.tls.caCertFile);
+        }
+        if (!ctx.tls.caCertData.empty()) {
+            transport.setCaCertData(ctx.tls.caCertData);
+        }
+        if (!ctx.tls.clientCertPem.empty() && !ctx.tls.clientKeyPem.empty()) {
+            transport.setClientCertificate(ctx.tls.clientCertPem,
+                                           ctx.tls.clientKeyPem);
+        }
+    }
+
     Result<json> doDelete(const std::string& path, uint32_t timeoutMs) {
         detail::HttpRequest req;
         req.method = "DELETE";
         req.path   = path;
         return mapResponse(transport.request(req, timeoutMs), "DELETE", path);
+    }
+};
+
+//=========================================================================
+// Software update operation internals
+//=========================================================================
+
+struct ItscamRestClient::SoftwareUpdateOperation::Impl
+    : public std::enable_shared_from_this<Impl> {
+
+    using Phase = ItscamRestClient::SoftwareUpdatePhase;
+    using Status = ItscamRestClient::SoftwareUpdateStatus;
+    using Options = ItscamRestClient::SoftwareUpdateOptions;
+    using Callback = ItscamRestClient::SoftwareUpdateStatusCallback;
+
+    ItscamRestClient::Impl::OperationContext context;
+    Options options;
+    Callback callback;
+
+    mutable os::Mutex mtx;
+    os::ConditionVariable cv;
+    Status current;
+    bool cancelRequested = false;
+    bool finished = false;
+    bool installTerminal = false;
+    bool installSucceeded = false;
+    Error readerError;
+
+    std::shared_ptr<detail::WebSocketClient> websocket;
+    os::Thread worker;
+    os::Thread reader;
+
+    Impl(ItscamRestClient::Impl::OperationContext ctx, Options opts,
+         Callback cb)
+        : context(std::move(ctx)), options(std::move(opts)),
+          callback(std::move(cb)) {}
+
+    void start() {
+        auto self = shared_from_this();
+        worker = os::Thread([self]() { self->run(); });
+    }
+
+    Status snapshot() const {
+        os::LockGuard<os::Mutex> lk(mtx);
+        return current;
+    }
+
+    bool isDone() const {
+        os::LockGuard<os::Mutex> lk(mtx);
+        return current.complete;
+    }
+
+    void setCallback(Callback cb) {
+        Status copy;
+        {
+            os::LockGuard<os::Mutex> lk(mtx);
+            callback = std::move(cb);
+            copy = current;
+        }
+        emit(copy);
+    }
+
+    void emit(const Status& status) {
+        Callback cb;
+        {
+            os::LockGuard<os::Mutex> lk(mtx);
+            cb = callback;
+        }
+        if (cb) cb(status);
+    }
+
+    void updateStatus(const std::function<void(Status&)>& mutate,
+                      bool notify = true) {
+        Status copy;
+        {
+            os::LockGuard<os::Mutex> lk(mtx);
+            mutate(current);
+            copy = current;
+        }
+        cv.notifyAll();
+        if (notify) emit(copy);
+    }
+
+    void finish(Phase phase, const Error& err = Error{}) {
+        updateStatus([&](Status& status) {
+            status.phase = phase;
+            status.complete = true;
+            status.error = err;
+            finished = true;
+        });
+        if (websocket) websocket->cancel();
+    }
+
+    void cancel() {
+        {
+            os::LockGuard<os::Mutex> lk(mtx);
+            if (current.complete) return;
+            cancelRequested = true;
+        }
+        finish(Phase::Cancelled, Error{Error::Disconnected,
+                                       "software update cancelled"});
+    }
+
+    Result<Status> wait(uint32_t timeoutMs) {
+        os::UniqueLock<os::Mutex> lk(mtx);
+        if (timeoutMs == 0) {
+            cv.wait(lk, [&]() { return current.complete; });
+        } else if (!cv.waitFor(lk, timeoutMs, [&]() { return current.complete; })) {
+            return Error{Error::Timeout, "software update wait timed out"};
+        }
+        return current;
+    }
+
+    bool shouldCancel() const {
+        os::LockGuard<os::Mutex> lk(mtx);
+        return cancelRequested || finished;
+    }
+
+    Result<json> postMultipart(Transport& transport,
+                               const std::string& path,
+                               uint32_t timeoutMs) {
+        return ItscamRestClient::Impl::mapResponse(
+            transport.postMultipartFile(path, "file", options.swuPath,
+                                        "application/octet-stream",
+                                        timeoutMs,
+                                        [this](size_t currentBytes,
+                                               size_t totalBytes) {
+                updateStatus([&](Status& status) {
+                    status.phase = Phase::Uploading;
+                    status.uploadCurrent = static_cast<uint64_t>(currentBytes);
+                    status.uploadTotal = static_cast<uint64_t>(totalBytes);
+                });
+                return !shouldCancel();
+            }),
+            "POST", path);
+    }
+
+    Result<json> postRestart(Transport& transport,
+                             const std::string& path,
+                             uint32_t timeoutMs) {
+        detail::HttpRequest req;
+        req.method = "POST";
+        req.path = path;
+        req.body = "{}";
+        req.contentType = "application/json";
+        return ItscamRestClient::Impl::mapResponse(
+            transport.request(req, timeoutMs), "POST", path);
+    }
+
+    void handleStatusMessage(const json& message, const std::string& raw) {
+        if (!message.is_object()) return;
+        const std::string type = message.value("type", "");
+        if (type == "status") {
+            const std::string value = message.value("status", "");
+            updateStatus([&](Status& status) {
+                status.installStatus = value;
+                status.rawMessage = raw;
+                if (value == "START") {
+                    status.phase = Phase::Installing;
+                } else if (value == "SUCCESS") {
+                    installTerminal = true;
+                    installSucceeded = true;
+                } else if (value == "FAILURE") {
+                    installTerminal = true;
+                    installSucceeded = false;
+                    status.phase = Phase::Failed;
+                    status.complete = true;
+                    status.error = Error{Error::ServerError,
+                                         "software update failed"};
+                    finished = true;
+                }
+            });
+        } else if (type == "message") {
+            updateStatus([&](Status& status) {
+                status.message = message.value("text", "");
+                status.messageLevel = message.value("level", "");
+                status.rawMessage = raw;
+            });
+        } else if (type == "step") {
+            updateStatus([&](Status& status) {
+                status.phase = Phase::Installing;
+                status.stepName = message.value("name", "");
+                status.rawMessage = raw;
+                if (message.contains("percent")) {
+                    if (message["percent"].is_number_integer()) {
+                        status.stepPercent = message["percent"].get<int>();
+                    } else if (message["percent"].is_string()) {
+                        status.stepPercent = std::atoi(message["percent"].get<std::string>().c_str());
+                    }
+                }
+            });
+        }
+    }
+
+    void readLoop() {
+        while (!shouldCancel()) {
+            auto msg = websocket->readText(1000);
+            if (!msg) {
+                if (msg.error().code == Error::Timeout) continue;
+                os::LockGuard<os::Mutex> lk(mtx);
+                if (!finished && !installTerminal && !cancelRequested) {
+                    readerError = msg.error();
+                    cv.notifyAll();
+                }
+                return;
+            }
+            try {
+                handleStatusMessage(json::parse(msg.value()), msg.value());
+            } catch (const std::exception&) {
+                updateStatus([&](Status& status) {
+                    status.rawMessage = msg.value();
+                });
+            }
+        }
+    }
+
+    bool waitForInstallTerminal(uint32_t timeoutMs) {
+        const uint64_t deadline = os::monotonicMs() + timeoutMs;
+        os::UniqueLock<os::Mutex> lk(mtx);
+        while (!installTerminal && !finished && !cancelRequested &&
+               readerError.message.empty()) {
+            uint64_t now = os::monotonicMs();
+            if (now >= deadline) return false;
+            cv.waitFor(lk, static_cast<uint32_t>(deadline - now));
+        }
+        return installTerminal;
+    }
+
+    void run() {
+        updateStatus([](Status& status) {
+            status.phase = Phase::Connecting;
+        });
+
+        websocket.reset(new detail::WebSocketClient());
+        detail::WebSocketOptions wsOptions;
+        wsOptions.host = context.host;
+        wsOptions.port = context.port;
+        wsOptions.scheme = context.scheme;
+        wsOptions.path = context.apiPrefix + "/swupdate";
+        wsOptions.bearerToken = context.bearerToken;
+
+        auto connected = websocket->connect(wsOptions);
+        if (!connected) {
+            finish(Phase::Failed, connected.error());
+            return;
+        }
+
+        auto self = shared_from_this();
+        reader = os::Thread([self]() { self->readLoop(); });
+
+        Transport transport;
+        ItscamRestClient::Impl::configureTransport(transport, context);
+        const std::string uploadPath = context.apiPrefix + "/swupdate/upload";
+        auto uploaded = postMultipart(transport, uploadPath, options.uploadTimeoutMs);
+        if (!uploaded) {
+            if (shouldCancel()) return;
+            finish(Phase::Failed, uploaded.error());
+            return;
+        }
+
+        if (!waitForInstallTerminal(options.statusTimeoutMs)) {
+            if (shouldCancel()) return;
+            Error err = readerError.message.empty()
+                ? Error{Error::Timeout, "software update status timed out"}
+                : readerError;
+            finish(Phase::Failed, err);
+            return;
+        }
+
+        if (!installSucceeded) {
+            finish(Phase::Failed, Error{Error::ServerError,
+                                        "software update failed"});
+            return;
+        }
+
+        if (options.requestRestart) {
+            updateStatus([](Status& status) {
+                status.phase = Phase::Restarting;
+            });
+            const std::string restartPath = context.apiPrefix + "/swupdate/restart";
+            auto restarted = postRestart(transport, restartPath,
+                                         options.restartTimeoutMs);
+            if (!restarted) {
+                finish(Phase::Failed, restarted.error());
+                return;
+            }
+        }
+
+        finish(Phase::Succeeded);
     }
 };
 
@@ -140,6 +511,72 @@ ItscamRestClient::~ItscamRestClient() = default;
 ItscamRestClient::ItscamRestClient(ItscamRestClient&&) noexcept = default;
 ItscamRestClient& ItscamRestClient::operator=(ItscamRestClient&&) noexcept
     = default;
+
+//=========================================================================
+// Software update status helpers
+//=========================================================================
+
+nlohmann::json ItscamRestClient::SoftwareUpdateStatus::toJson() const {
+    json out = {
+        {"phase", phaseToString(phase)},
+        {"complete", complete},
+        {"uploadCurrent", uploadCurrent},
+        {"uploadTotal", uploadTotal},
+        {"installStatus", installStatus},
+        {"stepName", stepName},
+        {"stepPercent", stepPercent},
+        {"message", message},
+        {"messageLevel", messageLevel},
+        {"rawMessage", rawMessage}
+    };
+    if (!error.message.empty()) {
+        out["error"] = {
+            {"code", errorCodeToString(error.code)},
+            {"message", error.message}
+        };
+    }
+    return out;
+}
+
+ItscamRestClient::SoftwareUpdateOperation::SoftwareUpdateOperation() = default;
+ItscamRestClient::SoftwareUpdateOperation::~SoftwareUpdateOperation() = default;
+ItscamRestClient::SoftwareUpdateOperation::SoftwareUpdateOperation(
+    SoftwareUpdateOperation&&) noexcept = default;
+ItscamRestClient::SoftwareUpdateOperation&
+ItscamRestClient::SoftwareUpdateOperation::operator=(
+    SoftwareUpdateOperation&&) noexcept = default;
+
+ItscamRestClient::SoftwareUpdateOperation::SoftwareUpdateOperation(
+    std::shared_ptr<Impl> impl)
+    : mImpl(std::move(impl)) {}
+
+ItscamRestClient::SoftwareUpdateStatus
+ItscamRestClient::SoftwareUpdateOperation::status() const {
+    if (!mImpl) return SoftwareUpdateStatus{};
+    return mImpl->snapshot();
+}
+
+void ItscamRestClient::SoftwareUpdateOperation::setCallback(
+    SoftwareUpdateStatusCallback callback) {
+    if (!mImpl) return;
+    mImpl->setCallback(std::move(callback));
+}
+
+Result<ItscamRestClient::SoftwareUpdateStatus>
+ItscamRestClient::SoftwareUpdateOperation::wait(uint32_t timeoutMs) {
+    if (!mImpl) {
+        return Error{Error::InvalidParameter, "invalid software update operation"};
+    }
+    return mImpl->wait(timeoutMs);
+}
+
+bool ItscamRestClient::SoftwareUpdateOperation::isComplete() const {
+    return mImpl && mImpl->isDone();
+}
+
+void ItscamRestClient::SoftwareUpdateOperation::cancel() {
+    if (mImpl) mImpl->cancel();
+}
 
 //=========================================================================
 // Connection
@@ -619,6 +1056,53 @@ Result<rt::RestApiClientStatus> ItscamRestClient::getRestApiClientStatus(
 Result<rt::Licenses> ItscamRestClient::getLicenses(uint32_t timeoutMs) {
     return mapTyped<rt::Licenses>(
         mImpl->doGet(mImpl->apiPrefix + "/system/licenses", timeoutMs));
+}
+
+//=========================================================================
+// Software update
+//=========================================================================
+
+Result<json> ItscamRestClient::uploadSoftwareArchive(
+    const std::string& swuPath,
+    uint32_t timeoutMs,
+    UploadProgressCallback progress) {
+    return mImpl->doPostMultipartFile(mImpl->apiPrefix + "/swupdate/upload",
+                                      "file",
+                                      swuPath,
+                                      "application/octet-stream",
+                                      timeoutMs,
+                                      std::move(progress));
+}
+
+Result<json> ItscamRestClient::restartSoftwareUpdate(uint32_t timeoutMs) {
+    return mImpl->doPost(mImpl->apiPrefix + "/swupdate/restart",
+                         json::object(), timeoutMs);
+}
+
+Result<ItscamRestClient::SoftwareUpdateOperation>
+ItscamRestClient::startSoftwareUpdate(
+    const SoftwareUpdateOptions& options,
+    SoftwareUpdateStatusCallback callback) {
+    if (options.swuPath.empty()) {
+        return Error{Error::InvalidParameter, "SWU archive path is required"};
+    }
+    if (!mImpl->transport.configured()) {
+        return Error{Error::InvalidParameter, "REST client base URL is not configured"};
+    }
+
+    auto impl = std::make_shared<SoftwareUpdateOperation::Impl>(
+        mImpl->makeOperationContext(), options, std::move(callback));
+    impl->start();
+    return SoftwareUpdateOperation(std::move(impl));
+}
+
+Result<ItscamRestClient::SoftwareUpdateStatus>
+ItscamRestClient::updateSoftware(
+    const SoftwareUpdateOptions& options,
+    SoftwareUpdateStatusCallback callback) {
+    auto operation = startSoftwareUpdate(options, std::move(callback));
+    if (!operation) return operation.error();
+    return operation.value().wait();
 }
 
 //=========================================================================
