@@ -306,6 +306,50 @@ public interface ItscamLibrary extends Library {
     void ITSCAM_RestClient_setAuthToken(Pointer client, String token);
     void ITSCAM_RestClient_clearAuthToken(Pointer client);
 
+    interface UploadProgressCallback extends Callback {
+        int invoke(long current, long total, Pointer userData);
+    }
+
+    interface SoftwareUpdateStatusCallback extends Callback {
+        void invoke(String statusJson, Pointer userData);
+    }
+
+    int ITSCAM_RestClient_uploadSoftwareArchive(Pointer client,
+                                                String swuPath,
+                                                int timeoutMs,
+                                                UploadProgressCallback callback,
+                                                Pointer userData,
+                                                PointerByReference outResponse);
+    int ITSCAM_RestClient_restartSoftwareUpdate(Pointer client,
+                                                int timeoutMs,
+                                                PointerByReference outResponse);
+
+        int ITSCAM_RestClient_startSoftwareUpdate(
+            Pointer client, String swuPath,
+            int uploadTimeoutMs, int statusTimeoutMs, int restartTimeoutMs,
+            int requestRestart,
+            SoftwareUpdateStatusCallback callback, Pointer userData,
+            PointerByReference outOperation);
+
+        int ITSCAM_RestClient_updateSoftware(
+            Pointer client, String swuPath,
+            int uploadTimeoutMs, int statusTimeoutMs, int restartTimeoutMs,
+            int requestRestart,
+            SoftwareUpdateStatusCallback callback, Pointer userData,
+            PointerByReference outStatus);
+
+        void ITSCAM_SoftwareUpdateOperation_destroy(Pointer operation);
+        int  ITSCAM_SoftwareUpdateOperation_status(Pointer operation,
+                            PointerByReference outStatus);
+        void ITSCAM_SoftwareUpdateOperation_setCallback(
+            Pointer operation, SoftwareUpdateStatusCallback callback,
+            Pointer userData);
+        int  ITSCAM_SoftwareUpdateOperation_wait(Pointer operation,
+                             int timeoutMs,
+                             PointerByReference outStatus);
+        int  ITSCAM_SoftwareUpdateOperation_isComplete(Pointer operation);
+        void ITSCAM_SoftwareUpdateOperation_cancel(Pointer operation);
+
     int ITSCAM_RestClient_httpGet(Pointer client, String path,
                                   int timeoutMs,
                                   PointerByReference outResponse);
