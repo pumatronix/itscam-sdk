@@ -261,11 +261,11 @@ Result<rt::ProfileConfig> ItscamRestClient::updateProfileByName(
                              timeoutMs);
 }
 
-Result<rt::ProfileConfig> ItscamRestClient::updateProfiles(
+Result<std::vector<rt::ProfileConfig>> ItscamRestClient::updateProfiles(
     const std::vector<rt::ProfileConfig>& profiles, uint32_t timeoutMs) {
     json arr = json::array();
     for (auto const& p : profiles) arr.push_back(rt::to_partial_json(p));
-    return mapTyped<rt::ProfileConfig>(
+    return mapTyped<std::vector<rt::ProfileConfig>>(
         mImpl->doPut(mImpl->apiPrefix + "/image/profiles",
                      arr, timeoutMs));
 }

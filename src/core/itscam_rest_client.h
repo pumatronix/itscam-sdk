@@ -157,7 +157,7 @@ public:
     ///
     /// Each profile in the array is partially serialized (unset optional
     /// fields are omitted).
-    Result<rest_types::ProfileConfig> updateProfiles(
+    Result<std::vector<rest_types::ProfileConfig>> updateProfiles(
         const std::vector<rest_types::ProfileConfig>& profiles,
         uint32_t timeoutMs = 10000);
 

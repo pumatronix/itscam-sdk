@@ -143,6 +143,7 @@ the message.
 | `CaptureExample` | [examples/.../CaptureExample.java](examples/src/main/java/com/pumatronix/itscam/examples/CaptureExample.java) | Binary client connect + authenticate + snapshot. |
 | `RestExample` | [examples/.../RestExample.java](examples/src/main/java/com/pumatronix/itscam/examples/RestExample.java) | REST login + read configuration over HTTP/HTTPS. |
 | `CgiSnapshotExample` | [examples/.../CgiSnapshotExample.java](examples/src/main/java/com/pumatronix/itscam/examples/CgiSnapshotExample.java) | `lastframe.cgi`, `snapshot.cgi`, MJPEG streaming. |
+| `ConfigVirtualLoopPreset` | [examples/.../ConfigVirtualLoopPreset.java](examples/src/main/java/com/pumatronix/itscam/examples/ConfigVirtualLoopPreset.java) | Typed REST virtual loop preset for profile, transitioner, image, MJPEG, and recognition config. |
 
 Run them with:
 

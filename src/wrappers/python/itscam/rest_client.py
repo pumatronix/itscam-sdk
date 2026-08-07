@@ -280,14 +280,14 @@ class ItscamRestClient:
         return self.update_profile_by_id(found.id, profile, timeout_ms)
 
     def update_profiles(self, profiles: List[_rt.ProfileConfig],
-                        timeout_ms: int = 10000) -> _rt.ProfileConfig:
+                        timeout_ms: int = 10000) -> List[_rt.ProfileConfig]:
         """PUT a JSON array of profiles (bulk endpoint).
 
         Each profile is partially serialized (``None`` fields omitted).
         """
         body = [p.to_dict() for p in profiles]
         raw = self.put("/api/image/profiles", body, timeout_ms)
-        return _rt.ProfileConfig.from_dict(raw)
+        return self._list_from_dict(_rt.ProfileConfig, raw)
 
     def delete_profile(self, profile_id: int,
                        timeout_ms: int = 10000) -> JsonValue:
