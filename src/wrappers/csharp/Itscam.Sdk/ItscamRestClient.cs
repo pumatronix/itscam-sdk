@@ -413,7 +413,7 @@ namespace Pumatronix.Itscam
         /// Each profile is partially serialized (null properties omitted).
         /// </para>
         /// </summary>
-        public async Task<ProfileConfig> UpdateProfilesAsync(
+        public async Task<List<ProfileConfig>> UpdateProfilesAsync(
             IEnumerable<ProfileConfig> profiles, uint timeoutMs = 10000)
         {
             if (profiles == null)
@@ -421,7 +421,7 @@ namespace Pumatronix.Itscam
             string json = await PutAsync("/api/image/profiles",
                                          Serialize(profiles), timeoutMs)
                 .ConfigureAwait(false);
-            return Deserialize<ProfileConfig>(json, "PUT /image/profiles");
+            return Deserialize<List<ProfileConfig>>(json, "PUT /image/profiles");
         }
 
         // ---- Equipment volatile info --------------------------------------

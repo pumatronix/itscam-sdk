@@ -354,12 +354,12 @@ func (r *RestClient) UpdateProfileById(id int, p ProfileConfig, timeoutMs uint32
 // UpdateProfiles -> PUT /api/image/profiles (bulk update).
 //
 // Each profile is partially serialized (nil fields omitted).
-func (r *RestClient) UpdateProfiles(ps []ProfileConfig, timeoutMs uint32) (ProfileConfig, error) {
+func (r *RestClient) UpdateProfiles(ps []ProfileConfig, timeoutMs uint32) ([]ProfileConfig, error) {
 	body, err := r.putJSON("/api/image/profiles", ps, timeoutMs)
 	if err != nil {
-		return ProfileConfig{}, err
+		return nil, err
 	}
-	var out ProfileConfig
+	var out []ProfileConfig
 	return out, decodeInto(body, &out)
 }
 

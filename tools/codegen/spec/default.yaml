@@ -3093,7 +3093,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProfileConfig'
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProfileConfig'
         default:
           description: unexpected error
           content:
