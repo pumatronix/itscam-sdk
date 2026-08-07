@@ -316,8 +316,8 @@ public final class ItscamRestClient implements AutoCloseable {
         return updateProfileById(id.intValue(), profile, timeoutMs);
     }
 
-    public ProfileConfig updateProfiles(List<ProfileConfig> profiles, int timeoutMs) {
-        return new ProfileConfig(httpPut(apiPath("/image/profiles"),
+    public List<ProfileConfig> updateProfiles(List<ProfileConfig> profiles, int timeoutMs) {
+        return ProfileConfig.listFromJson(httpPut(apiPath("/image/profiles"),
                 RestObject.listToJson(profiles), timeoutMs));
     }
 
