@@ -205,7 +205,7 @@ def safe_write(path: Path, text: str) -> None:
     """Remove then write -- avoids PermissionError when a previous Docker
     build left the file owned by root."""
     try:
-        path.unlink(missing_ok=True)
+        path.unlink()
     except OSError:
         pass
     path.write_text(text, encoding="utf-8")

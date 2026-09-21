@@ -156,7 +156,9 @@ declare module '@pumatronix/itscam-sdk' {
 
         subscribe(events: EventSubscription, timeoutMs?: number): void;
         subscribeCaptures(config?: CaptureSubscriptionConfig,
-                          timeoutMs?: number): void;
+                           timeoutMs?: number): void;
+        subscribeCapturesAsync(config?: CaptureSubscriptionConfig,
+                               timeoutMs?: number): Promise<void>;
 
         captureSnapshot(timeoutMs?: number): CaptureResult[];
         captureSnapshotAsync(timeoutMs?: number): Promise<CaptureResult[]>;

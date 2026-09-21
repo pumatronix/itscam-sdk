@@ -110,7 +110,8 @@ GLIBC_FLOOR_LINUX_ARM64 ?= 2.23
 CHECK_GLIBC := $(REPO_ROOT)/tools/check-glibc.sh
 
 # Linker flags
-LDFLAGS_LINUX   := -shared -lpthread
+LDFLAGS_LINUX   := -shared
+LDLIBS_LINUX    := -lpthread
 # bcrypt is required by mbedTLS' Windows RNG.  Static link libgcc and
 # libstdc++ to avoid DLL dependencies; native Win32 threading is used.
 LDFLAGS_WINDOWS := -shared -lws2_32 -lbcrypt -lcrypt32 -static-libgcc -static-libstdc++
@@ -207,7 +208,7 @@ linux-all: linux linux-arm linux-arm64
 
 $(LIB_LINUX_SO): $(OBJS_LINUX)
 	@echo "Linking libitscam_sdk.so (linux-x64)..."
-	@$(CXX_LINUX) $(LDFLAGS_LINUX) -Wl,-soname,$(LIB_LINUX_SONAME) -o $(LIB_LINUX_REAL) $^
+	@$(CXX_LINUX) $(LDFLAGS) $(LDFLAGS_LINUX) -Wl,-soname,$(LIB_LINUX_SONAME) -o $(LIB_LINUX_REAL) $^ $(LDLIBS_LINUX)
 	@ln -sf libitscam_sdk.so.$(SDK_LIB_VERSION) $(BUILD_DIR_LINUX)/$(LIB_LINUX_SONAME)
 	@ln -sf libitscam_sdk.so.$(SDK_LIB_VERSION) $(LIB_LINUX_SO)
 
@@ -229,7 +230,7 @@ $(BUILD_DIR_LINUX)/mbedtls/%.o: $(MBEDTLS_DIR)/library/%.c
 
 $(LIB_LINUX_ARM_SO): $(OBJS_LINUX_ARM)
 	@echo "Linking libitscam_sdk.so (linux-arm)..."
-	@$(CXX_LINUX_ARM) $(LDFLAGS_LINUX) -Wl,-soname,$(LIB_LINUX_SONAME) -o $(LIB_LINUX_ARM_REAL) $^
+	@$(CXX_LINUX_ARM) $(LDFLAGS) $(LDFLAGS_LINUX) -Wl,-soname,$(LIB_LINUX_SONAME) -o $(LIB_LINUX_ARM_REAL) $^ $(LDLIBS_LINUX)
 	@ln -sf libitscam_sdk.so.$(SDK_LIB_VERSION) $(BUILD_DIR_LINUX_ARM)/$(LIB_LINUX_SONAME)
 	@ln -sf libitscam_sdk.so.$(SDK_LIB_VERSION) $(LIB_LINUX_ARM_SO)
 
@@ -251,7 +252,7 @@ $(BUILD_DIR_LINUX_ARM)/mbedtls/%.o: $(MBEDTLS_DIR)/library/%.c
 
 $(LIB_LINUX_ARM64_SO): $(OBJS_LINUX_ARM64)
 	@echo "Linking libitscam_sdk.so (linux-arm64)..."
-	@$(CXX_LINUX_ARM64) $(LDFLAGS_LINUX) -Wl,-soname,$(LIB_LINUX_SONAME) -o $(LIB_LINUX_ARM64_REAL) $^
+	@$(CXX_LINUX_ARM64) $(LDFLAGS) $(LDFLAGS_LINUX) -Wl,-soname,$(LIB_LINUX_SONAME) -o $(LIB_LINUX_ARM64_REAL) $^ $(LDLIBS_LINUX)
 	@ln -sf libitscam_sdk.so.$(SDK_LIB_VERSION) $(BUILD_DIR_LINUX_ARM64)/$(LIB_LINUX_SONAME)
 	@ln -sf libitscam_sdk.so.$(SDK_LIB_VERSION) $(LIB_LINUX_ARM64_SO)
 

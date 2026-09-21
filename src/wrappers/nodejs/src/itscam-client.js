@@ -78,12 +78,28 @@ class ItscamClient {
         checkCall(rc, 'connect(' + address + ':' + port + ')');
     }
 
-    connectAsync(address, port, timeoutMs, reconnect) {
+    connectAsync(address, port = 60000, timeoutMs = 10000, reconnect = null) {
+        this._requireOpen();
+        let cfgPtr = null;
+        if (reconnect) {
+            cfgPtr = {
+                enabled: reconnect.enabled ? 1 : 0,
+                intervalMs: reconnect.intervalMs || 3000,
+                maxRetries: reconnect.maxRetries || 0,
+            };
+        }
         return new Promise((resolve, reject) => {
-            try {
-                this.connect(address, port, timeoutMs, reconnect);
-                resolve();
-            } catch (e) { reject(e); }
+            fns.Client_connect.async(this._handle, address, port, timeoutMs,
+                cfgPtr, (err, rc) => {
+                    if (err) {
+                        reject(err);
+                        return;
+                    }
+                    try {
+                        checkCall(rc, 'connect(' + address + ':' + port + ')');
+                        resolve();
+                    } catch (e) { reject(e); }
+                });
         });
     }
 
@@ -132,6 +148,33 @@ class ItscamClient {
         }, _normaliseCaptureConfig(config));
         const rc = fns.Client_subscribeCaptures(this._handle, c, timeoutMs);
         checkCall(rc, 'subscribeCaptures');
+    }
+
+    subscribeCapturesAsync(config, timeoutMs = 10000) {
+        this._requireOpen();
+        const c = Object.assign({
+            includeTrigger: 1,
+            includeSnapshot: 1,
+            includeMetadata: 1,
+            embedComments: 1,
+            embedExif: 1,
+            embedSignature: 0,
+            triggerQuality: -1,
+            snapshotQuality: -1,
+        }, _normaliseCaptureConfig(config));
+        return new Promise((resolve, reject) => {
+            fns.Client_subscribeCaptures.async(this._handle, c, timeoutMs,
+                (err, rc) => {
+                    if (err) {
+                        reject(err);
+                        return;
+                    }
+                    try {
+                        checkCall(rc, 'subscribeCaptures');
+                        resolve();
+                    } catch (e) { reject(e); }
+                });
+        });
     }
 
     subscribe(events, timeoutMs = 10000) {
@@ -257,46 +300,49 @@ class ItscamClient {
     onDisconnect(callback) {
         if (!this._handle) return;
         if (callback === null || callback === undefined) {
-            this._unregister('disconnect');
             fns.Client_onDisconnect(this._handle, null, null);
+            this._unregister('disconnect');
             return;
         }
         const cb = koffi.register((reason, _ud) => {
             try { callback(reason || ''); } catch (_) { /* swallow */ }
         }, koffi.pointer(callbacks.DisconnectCb));
-        this._registerCallback('disconnect', cb);
+        fns.Client_onDisconnect(this._handle, null, null);
+        this._replaceCallback('disconnect', cb);
         fns.Client_onDisconnect(this._handle, cb, null);
     }
 
     onConnectionState(callback) {
         if (!this._handle) return;
         if (!callback) {
-            this._unregister('connectionState');
             fns.Client_onConnectionState(this._handle, null, null);
+            this._unregister('connectionState');
             return;
         }
         const cb = koffi.register((state, reason, _ud) => {
             try { callback(state, reason || ''); } catch (_) {}
         }, koffi.pointer(callbacks.ConnStateCb));
-        this._registerCallback('connectionState', cb);
+        fns.Client_onConnectionState(this._handle, null, null);
+        this._replaceCallback('connectionState', cb);
         fns.Client_onConnectionState(this._handle, cb, null);
     }
 
     onLog(callback) {
         if (!this._handle) return;
         if (!callback) {
-            this._unregister('log');
             fns.Client_onLog(this._handle, null, null);
+            this._unregister('log');
             return;
         }
         const cb = koffi.register((level, message, _ud) => {
             try { callback(level, message || ''); } catch (_) {}
         }, koffi.pointer(callbacks.LogCb));
-        this._registerCallback('log', cb);
+        fns.Client_onLog(this._handle, null, null);
+        this._replaceCallback('log', cb);
         fns.Client_onLog(this._handle, cb, null);
     }
 
-    _registerCallback(key, cb) {
+    _replaceCallback(key, cb) {
         this._unregister(key);
         this._callbackRefs.set(key, cb);
     }
@@ -312,8 +358,8 @@ class ItscamClient {
     _setCaptureCallback(key, userCallback, setter) {
         if (!this._handle) return;
         if (!userCallback) {
-            this._unregister(key);
             setter(this._handle, null, null);
+            this._unregister(key);
             return;
         }
         const cb = koffi.register((resultPtr, _ud) => {
@@ -321,7 +367,8 @@ class ItscamClient {
                 if (resultPtr) userCallback(_readSingleResult(resultPtr));
             } catch (_) { /* swallow */ }
         }, koffi.pointer(callbacks.CaptureCb));
-        this._registerCallback(key, cb);
+        setter(this._handle, null, null);
+        this._replaceCallback(key, cb);
         setter(this._handle, cb, null);
     }
 }
