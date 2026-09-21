@@ -493,6 +493,87 @@ namespace Pumatronix.Itscam.Native
                    CallingConvention = CallingConvention.Cdecl)]
         internal static extern void Rest_clearAuthToken(IntPtr c);
 
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        internal delegate int RestUploadProgressCallback(
+            ulong current, ulong total, IntPtr userData);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        internal delegate void RestSoftwareUpdateStatusCallback(
+            IntPtr statusJson, IntPtr userData);
+
+        [DllImport(Lib, EntryPoint = "ITSCAM_RestClient_uploadSoftwareArchive",
+                   CallingConvention = CallingConvention.Cdecl,
+                   CharSet = CharSet.Ansi, BestFitMapping = false)]
+        internal static extern NativeErrorCode Rest_uploadSoftwareArchive(
+            IntPtr c,
+            [MarshalAs(UnmanagedType.LPStr)] string swuPath,
+            uint timeoutMs,
+            RestUploadProgressCallback progressCallback,
+            IntPtr userData,
+            out IntPtr outResponse);
+
+        [DllImport(Lib, EntryPoint = "ITSCAM_RestClient_restartSoftwareUpdate",
+                   CallingConvention = CallingConvention.Cdecl)]
+        internal static extern NativeErrorCode Rest_restartSoftwareUpdate(
+            IntPtr c, uint timeoutMs, out IntPtr outResponse);
+
+        [DllImport(Lib, EntryPoint = "ITSCAM_RestClient_startSoftwareUpdate",
+                   CallingConvention = CallingConvention.Cdecl,
+                   CharSet = CharSet.Ansi, BestFitMapping = false)]
+        internal static extern NativeErrorCode Rest_startSoftwareUpdate(
+            IntPtr c,
+            [MarshalAs(UnmanagedType.LPStr)] string swuPath,
+            uint uploadTimeoutMs,
+            uint statusTimeoutMs,
+            uint restartTimeoutMs,
+            int requestRestart,
+            RestSoftwareUpdateStatusCallback statusCallback,
+            IntPtr userData,
+            out IntPtr outOperation);
+
+        [DllImport(Lib, EntryPoint = "ITSCAM_RestClient_updateSoftware",
+                   CallingConvention = CallingConvention.Cdecl,
+                   CharSet = CharSet.Ansi, BestFitMapping = false)]
+        internal static extern NativeErrorCode Rest_updateSoftware(
+            IntPtr c,
+            [MarshalAs(UnmanagedType.LPStr)] string swuPath,
+            uint uploadTimeoutMs,
+            uint statusTimeoutMs,
+            uint restartTimeoutMs,
+            int requestRestart,
+            RestSoftwareUpdateStatusCallback statusCallback,
+            IntPtr userData,
+            out IntPtr outStatus);
+
+        [DllImport(Lib, EntryPoint = "ITSCAM_SoftwareUpdateOperation_destroy",
+                   CallingConvention = CallingConvention.Cdecl)]
+        internal static extern void SoftwareUpdateOperation_destroy(IntPtr op);
+
+        [DllImport(Lib, EntryPoint = "ITSCAM_SoftwareUpdateOperation_status",
+                   CallingConvention = CallingConvention.Cdecl)]
+        internal static extern NativeErrorCode SoftwareUpdateOperation_status(
+            IntPtr op, out IntPtr outStatus);
+
+        [DllImport(Lib, EntryPoint = "ITSCAM_SoftwareUpdateOperation_setCallback",
+                   CallingConvention = CallingConvention.Cdecl)]
+        internal static extern void SoftwareUpdateOperation_setCallback(
+            IntPtr op,
+            RestSoftwareUpdateStatusCallback statusCallback,
+            IntPtr userData);
+
+        [DllImport(Lib, EntryPoint = "ITSCAM_SoftwareUpdateOperation_wait",
+                   CallingConvention = CallingConvention.Cdecl)]
+        internal static extern NativeErrorCode SoftwareUpdateOperation_wait(
+            IntPtr op, uint timeoutMs, out IntPtr outStatus);
+
+        [DllImport(Lib, EntryPoint = "ITSCAM_SoftwareUpdateOperation_isComplete",
+                   CallingConvention = CallingConvention.Cdecl)]
+        internal static extern int SoftwareUpdateOperation_isComplete(IntPtr op);
+
+        [DllImport(Lib, EntryPoint = "ITSCAM_SoftwareUpdateOperation_cancel",
+                   CallingConvention = CallingConvention.Cdecl)]
+        internal static extern void SoftwareUpdateOperation_cancel(IntPtr op);
+
         [DllImport(Lib, EntryPoint = "ITSCAM_RestClient_httpGet",
                    CallingConvention = CallingConvention.Cdecl,
                    CharSet = CharSet.Ansi, BestFitMapping = false)]

@@ -61,6 +61,40 @@ rest.clearAuthToken();
 
 Para a configuration de HTTPS veja [`docs/https-tls.md`](../https-tls.md).
 
+## Software update
+
+O update de software usa as rotas autenticadas do webapp backend. Faça
+`login()` ou `setAuthToken()` antes de chamar estes métodos.
+
+```cpp
+ItscamRestClient::SoftwareUpdateOptions options;
+options.swuPath = "/tmp/update.swu";
+options.requestRestart = true;
+
+auto finalStatus = rest.updateSoftware(
+    options,
+    [](const ItscamRestClient::SoftwareUpdateStatus& status) {
+        std::cout << status.toJson().dump() << '\n';
+    });
+
+if (!finalStatus) {
+    std::cerr << finalStatus.error().message << '\n';
+}
+```
+
+O arquivo SWU é lido pelo core C++ e enviado como `multipart/form-data`, sem
+copiar o archive inteiro para memory das wrappers. O core também conecta no
+websocket `/api/swupdate` antes do upload e acompanha mensagens `status`,
+`message` e `step` até `SUCCESS`, `FAILURE`, timeout ou cancelamento.
+
+Para operação non-blocking, use `startSoftwareUpdate()`, registre callback com
+`setCallback()`, consulte `status()` quando quiser e finalize com `wait()` ou
+`cancel()`.
+
+`ws://` é suportado pelo transporte interno mínimo. Para bases configuradas com
+`https`, a operação retorna `ConnectionFailed` até o backend vendorizado com
+libwebsockets ser adicionado para `wss://`.
+
 ## Image profiles
 
 ```cpp

@@ -49,6 +49,7 @@ EXAMPLE_NAMES := \
 	itscam_sdk_example \
 	itscam_rest_example \
 	itscam_cgi_example \
+	itscam_software_update_example \
 	itscam_trigger_recorder \
 	itscam_snapshot_to_freeflow
 
@@ -60,6 +61,7 @@ WIN_X64_EXAMPLES := \
 	$(BUILD_DIR_WIN_X64)/itscam_sdk_example.exe \
 	$(BUILD_DIR_WIN_X64)/itscam_rest_example.exe \
 	$(BUILD_DIR_WIN_X64)/itscam_cgi_example.exe \
+	$(BUILD_DIR_WIN_X64)/itscam_software_update_example.exe \
 	$(BUILD_DIR_WIN_X64)/itscam_trigger_recorder.exe \
 	$(BUILD_DIR_WIN_X64)/itscam_snapshot_to_freeflow.exe
 
@@ -67,6 +69,7 @@ WIN_X86_EXAMPLES := \
 	$(BUILD_DIR_WIN_X86)/itscam_sdk_example.exe \
 	$(BUILD_DIR_WIN_X86)/itscam_rest_example.exe \
 	$(BUILD_DIR_WIN_X86)/itscam_cgi_example.exe \
+	$(BUILD_DIR_WIN_X86)/itscam_software_update_example.exe \
 	$(BUILD_DIR_WIN_X86)/itscam_trigger_recorder.exe \
 	$(BUILD_DIR_WIN_X86)/itscam_snapshot_to_freeflow.exe
 
@@ -74,6 +77,7 @@ EXAMPLE_SOURCES := \
 	itscam_sdk_example.cpp \
 	itscam_rest_example.cpp \
 	itscam_cgi_example.cpp \
+	itscam_software_update_example.cpp \
 	itscam_trigger_recorder.cpp \
 	itscam_snapshot_to_freeflow.cpp
 
@@ -158,8 +162,8 @@ $(BUILD_DIR_$(2))/$(1).exe: $(1).cpp | $(BUILD_DIR_$(2))
 	    -static-libgcc -static-libstdc++ -lws2_32 -lbcrypt -lcrypt32
 endef
 
-$(foreach name,itscam_sdk_example itscam_rest_example itscam_cgi_example itscam_trigger_recorder itscam_snapshot_to_freeflow,$(eval $(call windows_example_rule,$(name),WIN_X64,win-x64)))
-$(foreach name,itscam_sdk_example itscam_rest_example itscam_cgi_example itscam_trigger_recorder itscam_snapshot_to_freeflow,$(eval $(call windows_example_rule,$(name),WIN_X86,win-x86)))
+$(foreach name,$(EXAMPLE_NAMES),$(eval $(call windows_example_rule,$(name),WIN_X64,win-x64)))
+$(foreach name,$(EXAMPLE_NAMES),$(eval $(call windows_example_rule,$(name),WIN_X86,win-x86)))
 
 # ============================================================================
 #  Cleanup

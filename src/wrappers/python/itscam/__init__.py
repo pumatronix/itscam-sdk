@@ -19,7 +19,7 @@ Copyright (c) 2026 Pumatronix
 """
 
 from .client import ItscamClient
-from .rest_client import ItscamRestClient
+from .rest_client import ItscamRestClient, SoftwareUpdateOperation
 from .cgi_client import (
     ItscamCgiClient,
     SnapshotCgiRequest,
@@ -113,6 +113,7 @@ __all__ = [
     "ItscamClient",
     "ItscamRestClient",
     "ItscamCgiClient",
+    "SoftwareUpdateOperation",
     # CGI types
     "SnapshotCgiRequest",
     "CgiImage",

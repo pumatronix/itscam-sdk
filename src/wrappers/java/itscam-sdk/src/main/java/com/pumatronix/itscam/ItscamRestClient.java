@@ -212,6 +212,177 @@ public final class ItscamRestClient implements AutoCloseable {
         return body;
     }
 
+    public interface UploadProgressCallback {
+        boolean onProgress(long current, long total);
+    }
+
+    public interface SoftwareUpdateStatusCallback {
+        void onStatus(String statusJson);
+    }
+
+    public static final class SoftwareUpdateOptions {
+        public String swuPath;
+        public int uploadTimeoutMs = 300000;
+        public int statusTimeoutMs = 900000;
+        public int restartTimeoutMs = 10000;
+        public boolean requestRestart;
+
+        public SoftwareUpdateOptions(String swuPath) {
+            this.swuPath = swuPath;
+        }
+    }
+
+    public final class SoftwareUpdateOperation implements AutoCloseable {
+        private Pointer operation;
+        private ItscamLibrary.SoftwareUpdateStatusCallback nativeCallback;
+
+        private SoftwareUpdateOperation(
+                Pointer operation,
+                ItscamLibrary.SoftwareUpdateStatusCallback nativeCallback) {
+            this.operation = operation;
+            this.nativeCallback = nativeCallback;
+        }
+
+        public synchronized String status() {
+            requireOpen();
+            PointerByReference out = new PointerByReference();
+            int rc = lib.ITSCAM_SoftwareUpdateOperation_status(operation, out);
+            String body = takeString(out.getValue());
+            ItscamException.throwIfFailed(rc, "softwareUpdateStatus");
+            return body;
+        }
+
+        public synchronized void setCallback(
+                final SoftwareUpdateStatusCallback callback) {
+            requireOpen();
+            nativeCallback = makeNativeStatusCallback(callback);
+            lib.ITSCAM_SoftwareUpdateOperation_setCallback(operation,
+                    nativeCallback, null);
+        }
+
+        public synchronized String waitForCompletion(int timeoutMs) {
+            requireOpen();
+            PointerByReference out = new PointerByReference();
+            int rc = lib.ITSCAM_SoftwareUpdateOperation_wait(operation,
+                    timeoutMs, out);
+            String body = takeString(out.getValue());
+            ItscamException.throwIfFailed(rc, "softwareUpdateWait");
+            return body;
+        }
+
+        public Future<String> waitForCompletionAsync(final int timeoutMs) {
+            return Async.submit(new Callable<String>() {
+                @Override
+                public String call() {
+                    return waitForCompletion(timeoutMs);
+                }
+            });
+        }
+
+        public synchronized boolean isComplete() {
+            requireOpen();
+            return lib.ITSCAM_SoftwareUpdateOperation_isComplete(operation) != 0;
+        }
+
+        public synchronized void cancel() {
+            requireOpen();
+            lib.ITSCAM_SoftwareUpdateOperation_cancel(operation);
+        }
+
+        @Override
+        public synchronized void close() {
+            if (operation == null) return;
+            lib.ITSCAM_SoftwareUpdateOperation_setCallback(operation,
+                    null, null);
+            lib.ITSCAM_SoftwareUpdateOperation_destroy(operation);
+            operation = null;
+            nativeCallback = null;
+        }
+
+        private void requireOpen() {
+            if (operation == null) {
+                throw new IllegalStateException("SoftwareUpdateOperation closed");
+            }
+        }
+    }
+
+    public String uploadSoftwareArchive(String swuPath, int timeoutMs,
+                                        final UploadProgressCallback progress) {
+        requireOpen();
+        final ItscamLibrary.UploadProgressCallback nativeProgress =
+                progress == null ? null : new ItscamLibrary.UploadProgressCallback() {
+                    @Override
+                    public int invoke(long current, long total, Pointer userData) {
+                        return progress.onProgress(current, total) ? 1 : 0;
+                    }
+                };
+        PointerByReference out = new PointerByReference();
+        int rc = lib.ITSCAM_RestClient_uploadSoftwareArchive(handle, swuPath,
+                timeoutMs, nativeProgress, null, out);
+        String body = takeString(out.getValue());
+        ItscamException.throwIfFailed(rc, "uploadSoftwareArchive");
+        return body;
+    }
+
+    public String restartSoftwareUpdate(int timeoutMs) {
+        requireOpen();
+        PointerByReference out = new PointerByReference();
+        int rc = lib.ITSCAM_RestClient_restartSoftwareUpdate(handle,
+                timeoutMs, out);
+        String body = takeString(out.getValue());
+        ItscamException.throwIfFailed(rc, "restartSoftwareUpdate");
+        return body;
+    }
+
+    public SoftwareUpdateOperation startSoftwareUpdate(
+            SoftwareUpdateOptions options,
+            final SoftwareUpdateStatusCallback callback) {
+        requireOpen();
+        if (options == null) throw new IllegalArgumentException("options is null");
+        final ItscamLibrary.SoftwareUpdateStatusCallback nativeCallback =
+                makeNativeStatusCallback(callback);
+        PointerByReference out = new PointerByReference();
+        int rc = lib.ITSCAM_RestClient_startSoftwareUpdate(handle,
+                options.swuPath,
+                options.uploadTimeoutMs,
+                options.statusTimeoutMs,
+                options.restartTimeoutMs,
+                options.requestRestart ? 1 : 0,
+                nativeCallback, null, out);
+        ItscamException.throwIfFailed(rc, "startSoftwareUpdate");
+        return new SoftwareUpdateOperation(out.getValue(), nativeCallback);
+    }
+
+    public String updateSoftware(SoftwareUpdateOptions options,
+                                 final SoftwareUpdateStatusCallback callback) {
+        requireOpen();
+        if (options == null) throw new IllegalArgumentException("options is null");
+        final ItscamLibrary.SoftwareUpdateStatusCallback nativeCallback =
+                makeNativeStatusCallback(callback);
+        PointerByReference out = new PointerByReference();
+        int rc = lib.ITSCAM_RestClient_updateSoftware(handle,
+                options.swuPath,
+                options.uploadTimeoutMs,
+                options.statusTimeoutMs,
+                options.restartTimeoutMs,
+                options.requestRestart ? 1 : 0,
+                nativeCallback, null, out);
+        String body = takeString(out.getValue());
+        ItscamException.throwIfFailed(rc, "updateSoftware");
+        return body;
+    }
+
+    public Future<String> updateSoftwareAsync(
+            final SoftwareUpdateOptions options,
+            final SoftwareUpdateStatusCallback callback) {
+        return Async.submit(new Callable<String>() {
+            @Override
+            public String call() {
+                return updateSoftware(options, callback);
+            }
+        });
+    }
+
     public String patchJson(String path, String partialJson, int timeoutMs) {
         return httpPut(path, partialJson, timeoutMs);
     }
@@ -440,6 +611,17 @@ public final class ItscamRestClient implements AutoCloseable {
     private <T extends RestObject> T require(T value, String name) {
         if (value == null) throw new IllegalArgumentException(name + " is null");
         return value;
+    }
+
+    private ItscamLibrary.SoftwareUpdateStatusCallback makeNativeStatusCallback(
+            final SoftwareUpdateStatusCallback callback) {
+        if (callback == null) return null;
+        return new ItscamLibrary.SoftwareUpdateStatusCallback() {
+            @Override
+            public void invoke(String statusJson, Pointer userData) {
+                callback.onStatus(statusJson);
+            }
+        };
     }
 
     private String takeString(Pointer p) {

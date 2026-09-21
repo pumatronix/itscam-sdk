@@ -34,6 +34,14 @@ struct ITSCAM_RestClient {
     void*              logUd = nullptr;
 };
 
+struct ITSCAM_SoftwareUpdateOperation {
+    itscam::ItscamRestClient::SoftwareUpdateOperation impl;
+
+    explicit ITSCAM_SoftwareUpdateOperation(
+        itscam::ItscamRestClient::SoftwareUpdateOperation&& op)
+        : impl(std::move(op)) {}
+};
+
 //=========================================================================
 // Helpers
 //=========================================================================
@@ -62,10 +70,53 @@ void assignOut(ITSCAM_String** out, const json& body) {
         body.is_null() ? std::string("") : body.dump());
 }
 
+itscam::ItscamRestClient::SoftwareUpdateOptions makeUpdateOptions(
+    const char* swuPath,
+    uint32_t uploadTimeoutMs,
+    uint32_t statusTimeoutMs,
+    uint32_t restartTimeoutMs,
+    int requestRestart) {
+    itscam::ItscamRestClient::SoftwareUpdateOptions options;
+    if (swuPath) options.swuPath = swuPath;
+    options.uploadTimeoutMs = uploadTimeoutMs;
+    options.statusTimeoutMs = statusTimeoutMs;
+    options.restartTimeoutMs = restartTimeoutMs;
+    options.requestRestart = requestRestart != 0;
+    return options;
+}
+
+itscam::ItscamRestClient::SoftwareUpdateStatusCallback makeStatusCallback(
+    ITSCAM_SoftwareUpdateStatusCallback callback,
+    void* userData) {
+    if (!callback) return nullptr;
+    return [callback, userData](
+        const itscam::ItscamRestClient::SoftwareUpdateStatus& status) {
+        const std::string text = status.toJson().dump();
+        callback(text.c_str(), userData);
+    };
+}
+
+void assignStatusOut(
+    ITSCAM_String** out,
+    const itscam::ItscamRestClient::SoftwareUpdateStatus& status) {
+    assignOut(out, status.toJson());
+}
+
 ITSCAM_ErrorCode handleResult(const itscam::Result<json>& res,
                               ITSCAM_String** out) {
     if (res) {
         assignOut(out, res.value());
+        return ITSCAM_OK;
+    }
+    if (out) *out = nullptr;
+    return translateError(res.error());
+}
+
+ITSCAM_ErrorCode handleStatusResult(
+    const itscam::Result<itscam::ItscamRestClient::SoftwareUpdateStatus>& res,
+    ITSCAM_String** out) {
+    if (res) {
+        assignStatusOut(out, res.value());
         return ITSCAM_OK;
     }
     if (out) *out = nullptr;
@@ -166,6 +217,127 @@ void ITSCAM_RestClient_setAuthToken(ITSCAM_RestClient* c, const char* t) {
 
 void ITSCAM_RestClient_clearAuthToken(ITSCAM_RestClient* c) {
     if (c) c->impl.clearAuthToken();
+}
+
+//=========================================================================
+// Software update
+//=========================================================================
+
+ITSCAM_ErrorCode ITSCAM_RestClient_uploadSoftwareArchive(
+    ITSCAM_RestClient* c,
+    const char* swuPath,
+    uint32_t timeoutMs,
+    ITSCAM_UploadProgressCallback progressCallback,
+    void* userData,
+    ITSCAM_String** outResponse) {
+    if (!c || !swuPath) return ITSCAM_ERROR_NULL_HANDLE;
+    auto progress = [progressCallback, userData](size_t current,
+                                                 size_t total) -> bool {
+        if (!progressCallback) return true;
+        return progressCallback(static_cast<uint64_t>(current),
+                                static_cast<uint64_t>(total),
+                                userData) != 0;
+    };
+    return handleResult(c->impl.uploadSoftwareArchive(swuPath, timeoutMs,
+                                                      std::move(progress)),
+                        outResponse);
+}
+
+ITSCAM_ErrorCode ITSCAM_RestClient_restartSoftwareUpdate(
+    ITSCAM_RestClient* c,
+    uint32_t timeoutMs,
+    ITSCAM_String** outResponse) {
+    if (!c) return ITSCAM_ERROR_NULL_HANDLE;
+    return handleResult(c->impl.restartSoftwareUpdate(timeoutMs), outResponse);
+}
+
+ITSCAM_ErrorCode ITSCAM_RestClient_startSoftwareUpdate(
+    ITSCAM_RestClient* c,
+    const char* swuPath,
+    uint32_t uploadTimeoutMs,
+    uint32_t statusTimeoutMs,
+    uint32_t restartTimeoutMs,
+    int requestRestart,
+    ITSCAM_SoftwareUpdateStatusCallback statusCallback,
+    void* userData,
+    ITSCAM_SoftwareUpdateOperation** outOperation) {
+    if (!c || !swuPath || !outOperation) return ITSCAM_ERROR_NULL_HANDLE;
+    *outOperation = nullptr;
+    auto options = makeUpdateOptions(swuPath, uploadTimeoutMs, statusTimeoutMs,
+                                     restartTimeoutMs, requestRestart);
+    auto result = c->impl.startSoftwareUpdate(
+        options, makeStatusCallback(statusCallback, userData));
+    if (!result) return translateError(result.error());
+
+    auto* op = new (std::nothrow) ITSCAM_SoftwareUpdateOperation(
+        std::move(result.value()));
+    if (!op) {
+        itscam::c_internal::setLastError("failed to allocate software update operation");
+        return ITSCAM_ERROR_ALLOCATION_FAILED;
+    }
+    *outOperation = op;
+    return ITSCAM_OK;
+}
+
+ITSCAM_ErrorCode ITSCAM_RestClient_updateSoftware(
+    ITSCAM_RestClient* c,
+    const char* swuPath,
+    uint32_t uploadTimeoutMs,
+    uint32_t statusTimeoutMs,
+    uint32_t restartTimeoutMs,
+    int requestRestart,
+    ITSCAM_SoftwareUpdateStatusCallback statusCallback,
+    void* userData,
+    ITSCAM_String** outStatus) {
+    if (!c || !swuPath) return ITSCAM_ERROR_NULL_HANDLE;
+    auto options = makeUpdateOptions(swuPath, uploadTimeoutMs, statusTimeoutMs,
+                                     restartTimeoutMs, requestRestart);
+    return handleStatusResult(
+        c->impl.updateSoftware(options,
+                               makeStatusCallback(statusCallback, userData)),
+        outStatus);
+}
+
+void ITSCAM_SoftwareUpdateOperation_destroy(
+    ITSCAM_SoftwareUpdateOperation* operation) {
+    if (!operation) return;
+    operation->impl.setCallback(nullptr);
+    operation->impl.cancel();
+    delete operation;
+}
+
+ITSCAM_ErrorCode ITSCAM_SoftwareUpdateOperation_status(
+    ITSCAM_SoftwareUpdateOperation* operation,
+    ITSCAM_String** outStatus) {
+    if (!operation) return ITSCAM_ERROR_NULL_HANDLE;
+    assignStatusOut(outStatus, operation->impl.status());
+    return ITSCAM_OK;
+}
+
+void ITSCAM_SoftwareUpdateOperation_setCallback(
+    ITSCAM_SoftwareUpdateOperation* operation,
+    ITSCAM_SoftwareUpdateStatusCallback statusCallback,
+    void* userData) {
+    if (!operation) return;
+    operation->impl.setCallback(makeStatusCallback(statusCallback, userData));
+}
+
+ITSCAM_ErrorCode ITSCAM_SoftwareUpdateOperation_wait(
+    ITSCAM_SoftwareUpdateOperation* operation,
+    uint32_t timeoutMs,
+    ITSCAM_String** outStatus) {
+    if (!operation) return ITSCAM_ERROR_NULL_HANDLE;
+    return handleStatusResult(operation->impl.wait(timeoutMs), outStatus);
+}
+
+int ITSCAM_SoftwareUpdateOperation_isComplete(
+    ITSCAM_SoftwareUpdateOperation* operation) {
+    return operation && operation->impl.isComplete() ? 1 : 0;
+}
+
+void ITSCAM_SoftwareUpdateOperation_cancel(
+    ITSCAM_SoftwareUpdateOperation* operation) {
+    if (operation) operation->impl.cancel();
 }
 
 //=========================================================================

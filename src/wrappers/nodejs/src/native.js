@@ -180,6 +180,14 @@ const StreamCb = koffi.proto(
     'CgiStreamCallback',
     'void',
     ['ITSCAM_CgiStreamFrame *', 'void *']);
+const UploadProgressCb = koffi.proto(
+    'UploadProgressCallback',
+    'int',
+    ['uint64', 'uint64', 'void *']);
+const SoftwareUpdateStatusCb = koffi.proto(
+    'SoftwareUpdateStatusCallback',
+    'void',
+    ['string', 'void *']);
 
 // ============================================================================
 //  Function bindings
@@ -312,6 +320,43 @@ const fns = {
         'void ITSCAM_RestClient_setAuthToken(void *client, const char *token)'),
     Rest_clearAuthToken: lib.func(
         'void ITSCAM_RestClient_clearAuthToken(void *client)'),
+
+    Rest_uploadSoftwareArchive: lib.func(
+        'int ITSCAM_RestClient_uploadSoftwareArchive(void *client, '
+        + 'const char *swuPath, uint32 timeoutMs, '
+        + 'UploadProgressCallback *progressCallback, void *userData, '
+        + '_Out_ void **outResponse)'),
+    Rest_restartSoftwareUpdate: lib.func(
+        'int ITSCAM_RestClient_restartSoftwareUpdate(void *client, '
+        + 'uint32 timeoutMs, _Out_ void **outResponse)'),
+
+    Rest_startSoftwareUpdate: lib.func(
+        'int ITSCAM_RestClient_startSoftwareUpdate(void *client, '
+        + 'const char *swuPath, uint32 uploadTimeoutMs, '
+        + 'uint32 statusTimeoutMs, uint32 restartTimeoutMs, '
+        + 'int requestRestart, SoftwareUpdateStatusCallback *statusCallback, '
+        + 'void *userData, _Out_ void **outOperation)'),
+    Rest_updateSoftware: lib.func(
+        'int ITSCAM_RestClient_updateSoftware(void *client, '
+        + 'const char *swuPath, uint32 uploadTimeoutMs, '
+        + 'uint32 statusTimeoutMs, uint32 restartTimeoutMs, '
+        + 'int requestRestart, SoftwareUpdateStatusCallback *statusCallback, '
+        + 'void *userData, _Out_ void **outStatus)'),
+    SoftwareUpdateOperation_destroy: lib.func(
+        'void ITSCAM_SoftwareUpdateOperation_destroy(void *operation)'),
+    SoftwareUpdateOperation_status: lib.func(
+        'int ITSCAM_SoftwareUpdateOperation_status(void *operation, '
+        + '_Out_ void **outStatus)'),
+    SoftwareUpdateOperation_setCallback: lib.func(
+        'void ITSCAM_SoftwareUpdateOperation_setCallback(void *operation, '
+        + 'SoftwareUpdateStatusCallback *statusCallback, void *userData)'),
+    SoftwareUpdateOperation_wait: lib.func(
+        'int ITSCAM_SoftwareUpdateOperation_wait(void *operation, '
+        + 'uint32 timeoutMs, _Out_ void **outStatus)'),
+    SoftwareUpdateOperation_isComplete: lib.func(
+        'int ITSCAM_SoftwareUpdateOperation_isComplete(void *operation)'),
+    SoftwareUpdateOperation_cancel: lib.func(
+        'void ITSCAM_SoftwareUpdateOperation_cancel(void *operation)'),
 
     Rest_httpGet: lib.func(
         'int ITSCAM_RestClient_httpGet(void *client, const char *path, '
@@ -471,5 +516,7 @@ module.exports = {
         ConnStateCb,
         LogCb,
         StreamCb,
+        UploadProgressCb,
+        SoftwareUpdateStatusCb,
     },
 };

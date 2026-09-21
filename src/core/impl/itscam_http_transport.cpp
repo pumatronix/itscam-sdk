@@ -26,6 +26,7 @@
 #include <stdio.h>
 
 #include <atomic>
+#include <fstream>
 
 // cpp-httplib (header-only).  When the SDK is compiled with TLS support,
 // CPPHTTPLIB_MBEDTLS_SUPPORT is defined externally by the build system so
@@ -387,6 +388,87 @@ Result<HttpResponse> HttpTransport::request(const HttpRequest& req,
     if (out) {
         mImpl->logInfo("%s %s -> %d", req.method.c_str(), req.path.c_str(),
                        out.value().status);
+    }
+    return out;
+}
+
+Result<HttpResponse> HttpTransport::postMultipartFile(
+    const std::string& path,
+    const std::string& fieldName,
+    const std::string& filePath,
+    const std::string& contentType,
+    uint32_t timeoutMs,
+    UploadProgress progress) {
+
+    if (!mImpl->configured) {
+        return Error{Error::ConnectionFailed,
+                     "base URL not configured -- call setBaseUrl() first"};
+    }
+    if (fieldName.empty()) {
+        return Error{Error::InvalidParameter,
+                     "multipart field name cannot be empty"};
+    }
+    if (filePath.empty()) {
+        return Error{Error::InvalidParameter,
+                     "multipart file path cannot be empty"};
+    }
+
+    std::ifstream file(filePath, std::ios::binary | std::ios::ate);
+    if (!file) {
+        return Error{Error::InvalidParameter,
+                     "cannot open multipart file: " + filePath};
+    }
+    const std::ifstream::pos_type end = file.tellg();
+    if (end < 0) {
+        return Error{Error::InvalidParameter,
+                     "cannot determine multipart file size: " + filePath};
+    }
+    const size_t total = static_cast<size_t>(end);
+    file.close();
+
+    const size_t slash = filePath.find_last_of("/\\");
+    const std::string filename =
+        slash == std::string::npos ? filePath : filePath.substr(slash + 1);
+    const std::string mimeType =
+        contentType.empty() ? std::string("application/octet-stream")
+                            : contentType;
+
+    auto cli = mImpl->makeClient(timeoutMs);
+
+    httplib::Headers extraHdrs;
+    httplib::FormDataProviderItems items;
+    items.push_back(httplib::FormDataProvider{
+        fieldName,
+        [filePath](size_t offset, httplib::DataSink& sink) -> bool {
+            std::ifstream in(filePath, std::ios::binary);
+            if (!in) return false;
+            in.seekg(static_cast<std::streamoff>(offset));
+            if (!in) return false;
+
+            char buffer[64 * 1024];
+            in.read(buffer, sizeof(buffer));
+            const std::streamsize count = in.gcount();
+            if (count > 0) {
+                return sink.write(buffer, static_cast<size_t>(count));
+            }
+            sink.done();
+            return true;
+        },
+        filename,
+        mimeType
+    });
+
+    auto uploadCb = [progress](size_t current, size_t totalBytes) -> bool {
+        return progress ? progress(current, totalBytes) : true;
+    };
+
+    httplib::Result res = cli->Post(path, extraHdrs,
+                                    httplib::UploadFormDataItems{},
+                                    items, uploadCb);
+    auto out = mImpl->processError(res, "POST", path);
+    if (out) {
+        mImpl->logInfo("POST %s (multipart %zu bytes) -> %d",
+                       path.c_str(), total, out.value().status);
     }
     return out;
 }

@@ -27,6 +27,62 @@ package itscam
 #cgo static,windows LDFLAGS: ${SRCDIR}/../../../core/build/win-x64/libitscam_sdk_static.a -lws2_32 -lbcrypt -lcrypt32 -lstdc++ -lm -static
 #include <stdlib.h>
 #include "../../../core/c_api/itscam_rest_client_c.h"
+
+extern int goRestUploadProgress(uint64_t current, uint64_t total, void* userdata);
+extern void goRestSoftwareUpdateStatus(const char* statusJson, void* userdata);
+
+static inline ITSCAM_ErrorCode restUploadSoftwareArchive(
+    ITSCAM_RestClient* client,
+    const char* swuPath,
+    uint32_t timeoutMs,
+    void* userdata,
+    ITSCAM_String** outResponse) {
+    return ITSCAM_RestClient_uploadSoftwareArchive(
+        client, swuPath, timeoutMs,
+        userdata ? (ITSCAM_UploadProgressCallback)goRestUploadProgress : NULL,
+        userdata, outResponse);
+}
+
+static inline ITSCAM_ErrorCode restStartSoftwareUpdate(
+	ITSCAM_RestClient* client,
+	const char* swuPath,
+	uint32_t uploadTimeoutMs,
+	uint32_t statusTimeoutMs,
+	uint32_t restartTimeoutMs,
+	int requestRestart,
+	void* userdata,
+	ITSCAM_SoftwareUpdateOperation** outOperation) {
+	return ITSCAM_RestClient_startSoftwareUpdate(
+		client, swuPath, uploadTimeoutMs, statusTimeoutMs, restartTimeoutMs,
+		requestRestart,
+		userdata ? (ITSCAM_SoftwareUpdateStatusCallback)goRestSoftwareUpdateStatus : NULL,
+		userdata, outOperation);
+}
+
+static inline ITSCAM_ErrorCode restUpdateSoftware(
+	ITSCAM_RestClient* client,
+	const char* swuPath,
+	uint32_t uploadTimeoutMs,
+	uint32_t statusTimeoutMs,
+	uint32_t restartTimeoutMs,
+	int requestRestart,
+	void* userdata,
+	ITSCAM_String** outStatus) {
+	return ITSCAM_RestClient_updateSoftware(
+		client, swuPath, uploadTimeoutMs, statusTimeoutMs, restartTimeoutMs,
+		requestRestart,
+		userdata ? (ITSCAM_SoftwareUpdateStatusCallback)goRestSoftwareUpdateStatus : NULL,
+		userdata, outStatus);
+}
+
+static inline void softwareUpdateOperationSetCallback(
+	ITSCAM_SoftwareUpdateOperation* operation,
+	void* userdata) {
+	ITSCAM_SoftwareUpdateOperation_setCallback(
+		operation,
+		userdata ? (ITSCAM_SoftwareUpdateStatusCallback)goRestSoftwareUpdateStatus : NULL,
+		userdata);
+}
 */
 import "C"
 import (
@@ -34,15 +90,68 @@ import (
 	"errors"
 	"fmt"
 	"runtime"
+	"runtime/cgo"
 	"sync"
 	"unsafe"
 )
+
+//export goRestUploadProgress
+func goRestUploadProgress(current C.uint64_t, total C.uint64_t, userdata unsafe.Pointer) C.int {
+	if userdata == nil {
+		return 1
+	}
+	callback := cgo.Handle(userdata).Value().(func(uint64, uint64) bool)
+	if callback(uint64(current), uint64(total)) {
+		return 1
+	}
+	return 0
+}
+
+//export goRestSoftwareUpdateStatus
+func goRestSoftwareUpdateStatus(statusJSON *C.char, userdata unsafe.Pointer) {
+	if userdata == nil {
+		return
+	}
+	callback := cgo.Handle(userdata).Value().(func(string))
+	callback(C.GoString(statusJSON))
+}
 
 // RestClient is the Go wrapper for ItscamRestClient.
 type RestClient struct {
 	handle *C.ITSCAM_RestClient
 	mu     sync.Mutex
 	closed bool
+}
+
+// SoftwareUpdateOptions configures a full software-update operation.
+type SoftwareUpdateOptions struct {
+	SWUPath          string
+	UploadTimeoutMs  uint32
+	StatusTimeoutMs  uint32
+	RestartTimeoutMs uint32
+	RequestRestart   bool
+}
+
+func (o SoftwareUpdateOptions) withDefaults() SoftwareUpdateOptions {
+	if o.UploadTimeoutMs == 0 {
+		o.UploadTimeoutMs = 300000
+	}
+	if o.StatusTimeoutMs == 0 {
+		o.StatusTimeoutMs = 900000
+	}
+	if o.RestartTimeoutMs == 0 {
+		o.RestartTimeoutMs = 10000
+	}
+	return o
+}
+
+// SoftwareUpdateOperation is a non-blocking software-update handle.
+type SoftwareUpdateOperation struct {
+	handle   *C.ITSCAM_SoftwareUpdateOperation
+	mu       sync.Mutex
+	closed   bool
+	callback cgo.Handle
+	hasCb    bool
 }
 
 // NewRestClient creates a new REST client.
@@ -260,6 +369,199 @@ func (r *RestClient) Delete(path string, timeoutMs uint32) (string, error) {
 		return body, err
 	}
 	return body, nil
+}
+
+// UploadSoftwareArchive uploads a SWU archive through the authenticated
+// webapp backend route. The native SDK streams the file as multipart field
+// "file".
+func (r *RestClient) UploadSoftwareArchive(path string, timeoutMs uint32, progress func(uint64, uint64) bool) (string, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	cPath := C.CString(path)
+	defer C.free(unsafe.Pointer(cPath))
+	var handle cgo.Handle
+	var userData unsafe.Pointer
+	if progress != nil {
+		handle = cgo.NewHandle(progress)
+		defer handle.Delete()
+		userData = unsafe.Pointer(handle)
+	}
+	var out *C.ITSCAM_String
+	rc := C.restUploadSoftwareArchive(r.handle, cPath,
+		C.uint32_t(timeoutMs), userData, &out)
+	body := takeString(out)
+	if err := errorFromCode(int(rc)); err != nil {
+		return body, err
+	}
+	return body, nil
+}
+
+// RestartSoftwareUpdate requests an equipment restart after a successful
+// software update installation.
+func (r *RestClient) RestartSoftwareUpdate(timeoutMs uint32) (string, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var out *C.ITSCAM_String
+	rc := C.ITSCAM_RestClient_restartSoftwareUpdate(r.handle,
+		C.uint32_t(timeoutMs), &out)
+	body := takeString(out)
+	if err := errorFromCode(int(rc)); err != nil {
+		return body, err
+	}
+	return body, nil
+}
+
+// StartSoftwareUpdate starts a non-blocking SWU upload + websocket status
+// operation. callback receives status JSON snapshots and may be nil.
+func (r *RestClient) StartSoftwareUpdate(options SoftwareUpdateOptions, callback func(string)) (*SoftwareUpdateOperation, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	options = options.withDefaults()
+	cPath := C.CString(options.SWUPath)
+	defer C.free(unsafe.Pointer(cPath))
+	var cb cgo.Handle
+	var userData unsafe.Pointer
+	if callback != nil {
+		cb = cgo.NewHandle(callback)
+		userData = unsafe.Pointer(cb)
+	}
+	var op *C.ITSCAM_SoftwareUpdateOperation
+	restart := C.int(0)
+	if options.RequestRestart {
+		restart = 1
+	}
+	rc := C.restStartSoftwareUpdate(
+		r.handle, cPath, C.uint32_t(options.UploadTimeoutMs),
+		C.uint32_t(options.StatusTimeoutMs),
+		C.uint32_t(options.RestartTimeoutMs), restart, userData, &op)
+	if err := errorFromCode(int(rc)); err != nil {
+		if callback != nil {
+			cb.Delete()
+		}
+		return nil, err
+	}
+	operation := &SoftwareUpdateOperation{handle: op, callback: cb, hasCb: callback != nil}
+	runtime.SetFinalizer(operation, (*SoftwareUpdateOperation).Close)
+	return operation, nil
+}
+
+// UpdateSoftware runs a blocking SWU upload + websocket status operation.
+func (r *RestClient) UpdateSoftware(options SoftwareUpdateOptions, callback func(string)) (string, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	options = options.withDefaults()
+	cPath := C.CString(options.SWUPath)
+	defer C.free(unsafe.Pointer(cPath))
+	var cb cgo.Handle
+	var userData unsafe.Pointer
+	if callback != nil {
+		cb = cgo.NewHandle(callback)
+		defer cb.Delete()
+		userData = unsafe.Pointer(cb)
+	}
+	restart := C.int(0)
+	if options.RequestRestart {
+		restart = 1
+	}
+	var out *C.ITSCAM_String
+	rc := C.restUpdateSoftware(
+		r.handle, cPath, C.uint32_t(options.UploadTimeoutMs),
+		C.uint32_t(options.StatusTimeoutMs),
+		C.uint32_t(options.RestartTimeoutMs), restart, userData, &out)
+	body := takeString(out)
+	if err := errorFromCode(int(rc)); err != nil {
+		return body, err
+	}
+	return body, nil
+}
+
+// Status returns the current operation status JSON.
+func (o *SoftwareUpdateOperation) Status() (string, error) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	if o.closed || o.handle == nil {
+		return "", ErrDisconnected
+	}
+	var out *C.ITSCAM_String
+	rc := C.ITSCAM_SoftwareUpdateOperation_status(o.handle, &out)
+	body := takeString(out)
+	if err := errorFromCode(int(rc)); err != nil {
+		return body, err
+	}
+	return body, nil
+}
+
+// SetCallback replaces the operation status callback.
+func (o *SoftwareUpdateOperation) SetCallback(callback func(string)) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	if o.closed || o.handle == nil {
+		return
+	}
+	if o.hasCb {
+		o.callback.Delete()
+		o.hasCb = false
+	}
+	var userData unsafe.Pointer
+	if callback != nil {
+		o.callback = cgo.NewHandle(callback)
+		o.hasCb = true
+		userData = unsafe.Pointer(o.callback)
+	}
+	C.softwareUpdateOperationSetCallback(o.handle, userData)
+}
+
+// Wait blocks until the operation completes or timeoutMs expires. timeoutMs=0
+// waits indefinitely.
+func (o *SoftwareUpdateOperation) Wait(timeoutMs uint32) (string, error) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	if o.closed || o.handle == nil {
+		return "", ErrDisconnected
+	}
+	var out *C.ITSCAM_String
+	rc := C.ITSCAM_SoftwareUpdateOperation_wait(o.handle,
+		C.uint32_t(timeoutMs), &out)
+	body := takeString(out)
+	if err := errorFromCode(int(rc)); err != nil {
+		return body, err
+	}
+	return body, nil
+}
+
+func (o *SoftwareUpdateOperation) IsComplete() bool {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	return !o.closed && o.handle != nil &&
+		C.ITSCAM_SoftwareUpdateOperation_isComplete(o.handle) != 0
+}
+
+func (o *SoftwareUpdateOperation) Cancel() {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	if !o.closed && o.handle != nil {
+		C.ITSCAM_SoftwareUpdateOperation_cancel(o.handle)
+	}
+}
+
+func (o *SoftwareUpdateOperation) Close() error {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	if o.closed {
+		return nil
+	}
+	o.closed = true
+	if o.handle != nil {
+		C.softwareUpdateOperationSetCallback(o.handle, nil)
+		C.ITSCAM_SoftwareUpdateOperation_destroy(o.handle)
+		o.handle = nil
+	}
+	if o.hasCb {
+		o.callback.Delete()
+		o.hasCb = false
+	}
+	runtime.SetFinalizer(o, nil)
+	return nil
 }
 
 // ============================================================================
