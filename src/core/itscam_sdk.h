@@ -35,7 +35,38 @@
  */
 #pragma once
 
+#if defined(__has_include) && __has_include("itscam_sdk_version.h")
 #include "itscam_sdk_version.h"
+#else
+/*
+ * Fallback version macros for source-tree includes when the generated
+ * itscam_sdk_version.h is not present yet (e.g. clean worktrees).
+ */
+#ifndef ITSCAM_SDK_VERSION_MAJOR
+#define ITSCAM_SDK_VERSION_MAJOR 0
+#endif
+#ifndef ITSCAM_SDK_VERSION_MINOR
+#define ITSCAM_SDK_VERSION_MINOR 0
+#endif
+#ifndef ITSCAM_SDK_VERSION_PATCH
+#define ITSCAM_SDK_VERSION_PATCH 0
+#endif
+#ifndef ITSCAM_SDK_VERSION_STRING
+#define ITSCAM_SDK_VERSION_STRING "0.0.0"
+#endif
+#ifndef ITSCAM_SDK_VERSION_FULL
+#define ITSCAM_SDK_VERSION_FULL "0.0.0+unknown"
+#endif
+#ifndef ITSCAM_SDK_GIT_SHA
+#define ITSCAM_SDK_GIT_SHA "0000000000000000000000000000000000000000"
+#endif
+#ifndef ITSCAM_SDK_GIT_SHA_SHORT
+#define ITSCAM_SDK_GIT_SHA_SHORT "0000000"
+#endif
+#ifndef ITSCAM_SDK_BUILD_DATE
+#define ITSCAM_SDK_BUILD_DATE "1970-01-01T00:00:00Z"
+#endif
+#endif
 
 #include "itscam_types.h"
 #include "itscam_client.h"
