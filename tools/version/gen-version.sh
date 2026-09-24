@@ -410,6 +410,8 @@ safe_write(version_json,
     )
     + "\n")
 
+core_header.touch()
+
 print(
     f"SDK version {info['package_version']} "
     f"(lib {info['lib_version']}, {info['git_sha_short']}, {info['build_date_short']})"
