@@ -29,7 +29,7 @@
 .PHONY: nodejs nodejs-pack nodejs-examples
 .PHONY: install
 .PHONY: version sdk-dist sdk-dist-clean docker-dist-pristine docker-sdk-dist docker-sdk-dist-examples
-.PHONY: docker-build docker-build-core-xenial docker-all docker-linux docker-windows docker-shell docker-go-gui
+.PHONY: docker-build docker-rebuild docker-build-core-xenial docker-all docker-linux docker-windows docker-shell docker-go-gui
 .PHONY: docker-linux-arm docker-linux-arm64 docker-linux-all docker-qemu-smoke
 .PHONY: docker-csharp docker-csharp-examples docker-csharp-examples-publish
 .PHONY: docker-java docker-java-pack docker-java-jdk7-check docker-nodejs docker-nodejs-pack
@@ -818,7 +818,15 @@ docker-docs-site: docker-build
 # ============================================================================
 
 docker-build:
-	@echo "=== Building Docker image ==="
+	@if docker image inspect $(DOCKER_IMAGE) > /dev/null 2>&1; then \
+		echo "=== Docker image $(DOCKER_IMAGE) already exists; skipping build ==="; \
+	else \
+		echo "=== Building Docker image ==="; \
+		docker build -t $(DOCKER_IMAGE) .; \
+	fi
+
+docker-rebuild:
+	@echo "=== Rebuilding Docker image $(DOCKER_IMAGE) ==="
 	docker build -t $(DOCKER_IMAGE) .
 
 docker-build-core-xenial:
@@ -1046,7 +1054,8 @@ help:
 	@echo "    Artifacts: .regression/<timestamp>_<camera_ip>/ (gitignored)"
 	@echo ""
 	@echo "Docker targets:"
-	@echo "  docker-build    Build the Docker image"
+	@echo "  docker-build    Build the Docker image when it is not already present"
+	@echo "  docker-rebuild  Force a rebuild of the Docker image"
 	@echo "  docker-build-core-xenial  Build the Ubuntu 16.04 core image"
 	@echo "  docker-all      Build everything inside Docker"
 	@echo "  docker-linux    Build Linux x64 library in Ubuntu 16.04 Docker"
