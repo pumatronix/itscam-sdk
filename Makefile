@@ -50,6 +50,19 @@ VERSION_MK := tools/version/sdk-version.mk
 # generated artefacts stay owned by the host user (never root).
 DOCKER_IMAGE := itscam-sdk-builder
 DOCKER_CORE_IMAGE := itscam-sdk-core-xenial
+# sha256sum is Linux-only; macOS ships shasum -a 256 (and both are absent on
+# some minimal images, where openssl is used as a last resort). Resolve the
+# first available tool explicitly so $(shell) never falls silently through
+# to an empty version.
+SHA256_CMD := $(shell command -v sha256sum >/dev/null 2>&1 && echo "sha256sum" \
+	|| { command -v shasum >/dev/null 2>&1 && echo "shasum -a 256"; } \
+	|| { command -v openssl >/dev/null 2>&1 && echo "openssl dgst -sha256 -r"; })
+ifeq ($(strip $(SHA256_CMD)),)
+$(error No SHA-256 utility found (need sha256sum, shasum, or openssl) to compute DOCKER_IMAGE_VERSION)
+endif
+
+DOCKER_IMAGE_VERSION_LABEL := com.pumatronix.itscam-sdk.builder.context-sha256
+DOCKER_IMAGE_VERSION := $(shell cat Dockerfile tools/docker/entrypoint.sh | $(SHA256_CMD) | cut -d ' ' -f1)
 DOCKER_UID := $(shell id -u)
 DOCKER_GID := $(shell id -g)
 DOCKER_RUN := docker run --rm \
@@ -818,16 +831,17 @@ docker-docs-site: docker-build
 # ============================================================================
 
 docker-build:
-	@if docker image inspect $(DOCKER_IMAGE) > /dev/null 2>&1; then \
-		echo "=== Docker image $(DOCKER_IMAGE) already exists; skipping build ==="; \
+	@image_version="$$(docker image inspect --format '{{ index .Config.Labels "$(DOCKER_IMAGE_VERSION_LABEL)" }}' $(DOCKER_IMAGE) 2> /dev/null || true)"; \
+	if [ "$$image_version" = "$(DOCKER_IMAGE_VERSION)" ]; then \
+		echo "=== Docker image $(DOCKER_IMAGE) is current; skipping build ==="; \
 	else \
 		echo "=== Building Docker image ==="; \
-		docker build -t $(DOCKER_IMAGE) .; \
+		docker build --build-arg BUILDER_VERSION=$(DOCKER_IMAGE_VERSION) -t $(DOCKER_IMAGE) .; \
 	fi
 
 docker-rebuild:
-	@echo "=== Rebuilding Docker image $(DOCKER_IMAGE) ==="
-	docker build -t $(DOCKER_IMAGE) .
+	@echo "=== Rebuilding Docker image $(DOCKER_IMAGE) (no cache) ==="
+	docker build --no-cache --pull --build-arg BUILDER_VERSION=$(DOCKER_IMAGE_VERSION) -t $(DOCKER_IMAGE) .
 
 docker-build-core-xenial:
 	@echo "=== Building Docker image for Linux core artefacts (Ubuntu 16.04 / glibc 2.23) ==="
