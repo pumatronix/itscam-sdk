@@ -50,6 +50,8 @@ VERSION_MK := tools/version/sdk-version.mk
 # generated artefacts stay owned by the host user (never root).
 DOCKER_IMAGE := itscam-sdk-builder
 DOCKER_CORE_IMAGE := itscam-sdk-core-xenial
+DOCKER_IMAGE_VERSION_LABEL := com.pumatronix.itscam-sdk.builder.context-sha256
+DOCKER_IMAGE_VERSION := $(shell cat Dockerfile tools/docker/entrypoint.sh | sha256sum | cut -d ' ' -f1)
 DOCKER_UID := $(shell id -u)
 DOCKER_GID := $(shell id -g)
 DOCKER_RUN := docker run --rm \
@@ -818,16 +820,17 @@ docker-docs-site: docker-build
 # ============================================================================
 
 docker-build:
-	@if docker image inspect $(DOCKER_IMAGE) > /dev/null 2>&1; then \
-		echo "=== Docker image $(DOCKER_IMAGE) already exists; skipping build ==="; \
+	@image_version="$$(docker image inspect --format '{{ index .Config.Labels "$(DOCKER_IMAGE_VERSION_LABEL)" }}' $(DOCKER_IMAGE) 2> /dev/null || true)"; \
+	if [ "$$image_version" = "$(DOCKER_IMAGE_VERSION)" ]; then \
+		echo "=== Docker image $(DOCKER_IMAGE) is current; skipping build ==="; \
 	else \
 		echo "=== Building Docker image ==="; \
-		docker build -t $(DOCKER_IMAGE) .; \
+		docker build --build-arg BUILDER_VERSION=$(DOCKER_IMAGE_VERSION) -t $(DOCKER_IMAGE) .; \
 	fi
 
 docker-rebuild:
 	@echo "=== Rebuilding Docker image $(DOCKER_IMAGE) ==="
-	docker build -t $(DOCKER_IMAGE) .
+	docker build --build-arg BUILDER_VERSION=$(DOCKER_IMAGE_VERSION) -t $(DOCKER_IMAGE) .
 
 docker-build-core-xenial:
 	@echo "=== Building Docker image for Linux core artefacts (Ubuntu 16.04 / glibc 2.23) ==="
