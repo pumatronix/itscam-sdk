@@ -29,7 +29,7 @@
 .PHONY: nodejs nodejs-pack nodejs-examples
 .PHONY: install
 .PHONY: version sdk-dist sdk-dist-clean docker-dist-pristine docker-sdk-dist docker-sdk-dist-examples
-.PHONY: docker-build docker-build-core-xenial docker-all docker-linux docker-windows docker-shell docker-go-gui
+.PHONY: docker-build docker-rebuild docker-build-core-xenial docker-all docker-linux docker-windows docker-shell docker-go-gui
 .PHONY: docker-linux-arm docker-linux-arm64 docker-linux-all docker-qemu-smoke
 .PHONY: docker-csharp docker-csharp-examples docker-csharp-examples-publish
 .PHONY: docker-java docker-java-pack docker-java-jdk7-check docker-nodejs docker-nodejs-pack
@@ -50,6 +50,8 @@ VERSION_MK := tools/version/sdk-version.mk
 # generated artefacts stay owned by the host user (never root).
 DOCKER_IMAGE := itscam-sdk-builder
 DOCKER_CORE_IMAGE := itscam-sdk-core-xenial
+DOCKER_IMAGE_VERSION_LABEL := com.pumatronix.itscam-sdk.builder.context-sha256
+DOCKER_IMAGE_VERSION := $(shell cat Dockerfile tools/docker/entrypoint.sh | sha256sum | cut -d ' ' -f1)
 DOCKER_UID := $(shell id -u)
 DOCKER_GID := $(shell id -g)
 DOCKER_RUN := docker run --rm \
@@ -818,8 +820,17 @@ docker-docs-site: docker-build
 # ============================================================================
 
 docker-build:
-	@echo "=== Building Docker image ==="
-	docker build -t $(DOCKER_IMAGE) .
+	@image_version="$$(docker image inspect --format '{{ index .Config.Labels "$(DOCKER_IMAGE_VERSION_LABEL)" }}' $(DOCKER_IMAGE) 2> /dev/null || true)"; \
+	if [ "$$image_version" = "$(DOCKER_IMAGE_VERSION)" ]; then \
+		echo "=== Docker image $(DOCKER_IMAGE) is current; skipping build ==="; \
+	else \
+		echo "=== Building Docker image ==="; \
+		docker build --build-arg BUILDER_VERSION=$(DOCKER_IMAGE_VERSION) -t $(DOCKER_IMAGE) .; \
+	fi
+
+docker-rebuild:
+	@echo "=== Rebuilding Docker image $(DOCKER_IMAGE) ==="
+	docker build --build-arg BUILDER_VERSION=$(DOCKER_IMAGE_VERSION) -t $(DOCKER_IMAGE) .
 
 docker-build-core-xenial:
 	@echo "=== Building Docker image for Linux core artefacts (Ubuntu 16.04 / glibc 2.23) ==="
@@ -1046,7 +1057,8 @@ help:
 	@echo "    Artifacts: .regression/<timestamp>_<camera_ip>/ (gitignored)"
 	@echo ""
 	@echo "Docker targets:"
-	@echo "  docker-build    Build the Docker image"
+	@echo "  docker-build    Build the Docker image when it is not already present"
+	@echo "  docker-rebuild  Force a rebuild of the Docker image"
 	@echo "  docker-build-core-xenial  Build the Ubuntu 16.04 core image"
 	@echo "  docker-all      Build everything inside Docker"
 	@echo "  docker-linux    Build Linux x64 library in Ubuntu 16.04 Docker"

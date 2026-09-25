@@ -61,8 +61,11 @@ CMD ["make", "-C", "src/core", "linux-all"]
 
 FROM ubuntu:18.04 AS builder
 
+ARG BUILDER_VERSION=unknown
+
 LABEL maintainer="Pumatronix"
 LABEL description="Build environment for ITSCAM SDK"
+LABEL com.pumatronix.itscam-sdk.builder.context-sha256="${BUILDER_VERSION}"
 
 # The main builder intentionally stays on Ubuntu 18.04 for wrapper and
 # tooling support.  Linux libitscam_sdk.so release artefacts are built in
