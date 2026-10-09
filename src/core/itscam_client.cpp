@@ -778,7 +778,10 @@ struct ItscamClient::Impl {
         uint64_t interval = std::max<uint32_t>(pingInterval.load(), 1);
         uint32_t failures = maxPingFailures.load();
         uint64_t missed = (failures > 0 ? failures : 10) + 1;
-        return static_cast<uint32_t>(std::min<uint64_t>(interval * 1000 * missed, INT32_MAX));
+        uint64_t ms = interval * 1000;  // < 2^42, cannot overflow
+        // Saturate before multiplying: the product of two large setter values
+        // can wrap uint64_t (even to 0, which would disable the timeout)
+        return static_cast<uint32_t>(ms > INT32_MAX / missed ? INT32_MAX : ms * missed);
     }
 
     nlohmann::json serverTimeoutOptions() const {
@@ -787,26 +790,63 @@ struct ItscamClient::Impl {
         return params;
     }
 
-    // Push a new timeout to the camera when ping settings change mid-session;
-    // otherwise it is applied by replaySession() on the next connection.
-    // The reply is awaited on a detached thread (the setters may run on an SDK
-    // callback thread, which must not block) only to log a failure: the camera
-    // would keep the previous timeout, possibly shorter than the new interval.
+    // Waiters started by updateServerInactivityTimeout() that are still running.
+    // ~Impl() waits for them, so none of them touches a destroyed Impl.
+    Mutex timeoutWaitersMtx;
+    ConditionVariable timeoutWaitersCv;
+    uint32_t timeoutWaiters = 0;
+
+    // Send the timeout to the camera: each time a session goes live and when
+    // the ping settings change mid-session. It is not awaited, so it never
+    // delays the connection, and the setters may run on an SDK callback thread
+    // that must not block. A detached waiter only logs a failure: the camera
+    // would keep its previous timeout (15 days by default, or the one set
+    // before the ping settings changed). Not fatal: the camera still drops
+    // dead peers through TCP keepalive, only more slowly.
     void updateServerInactivityTimeout() {
         if (state.load() != RUNNING) return;
         uint32_t id;
         if (!sendRequest(OP_SET_OPT_STR, serverTimeoutOptions(), id)) {
-            log(LogLevel::Error, "Unable to update server inactivity timeout: failed to send");
+            log(LogLevel::Error, "Unable to set server inactivity timeout: failed to send");
             return;
+        }
+        {
+            LockGuard<Mutex> lk(timeoutWaitersMtx);
+            ++timeoutWaiters;
         }
         auto* self = this;
         uint32_t timeoutMs = defaultTimeout.load();
-        Thread([self, id, timeoutMs]() {
-            auto r = self->waitResponse(OP_SET_OPT_STR, id, timeoutMs);
-            if (!r)
-                self->log(LogLevel::Error, "Unable to update server inactivity timeout: %s",
-                          r.error().message.c_str());
-        }).detach();
+        try {
+            Thread([self, id, timeoutMs]() {
+                auto r = self->waitResponse(OP_SET_OPT_STR, id, timeoutMs);
+                if (!r)
+                    self->log(LogLevel::Error, "Unable to set server inactivity timeout: %s",
+                              r.error().message.c_str());
+                // Last access to Impl: ~Impl() may proceed once this is released
+                LockGuard<Mutex> lk(self->timeoutWaitersMtx);
+                --self->timeoutWaiters;
+                self->timeoutWaitersCv.notifyAll();
+            }).detach();
+        } catch (const std::exception& ex) {
+            // No waiter: the reply is dropped when it arrives (no promise left)
+            {
+                LockGuard<Mutex> lk(timeoutWaitersMtx);
+                --timeoutWaiters;
+            }
+            {
+                LockGuard<Mutex> lk(promiseMtx);
+                promises.erase(id);
+            }
+            log(LogLevel::Error, "Unable to wait for server inactivity timeout reply: %s", ex.what());
+        }
+    }
+
+    ~Impl() {
+        // Wake the timeout waiters (disconnect normally already did) and wait
+        // for them to finish before the members they use are destroyed.
+        failPendingRequests("client destroyed");
+        UniqueLock<Mutex> lk(timeoutWaitersMtx);
+        while (timeoutWaiters > 0) timeoutWaitersCv.wait(lk);
     }
 
     // ---- Imgpkg tracking for unified image callbacks ----
@@ -1060,6 +1100,7 @@ struct ItscamClient::Impl {
             state.store(RUNNING);
             lastSentTime = os::monotonicNow();
             hadSuccessfulSession = true;
+            updateServerInactivityTimeout();
             log(LogLevel::Info, "Connected");
             fireConnectionState(ConnectionState::Connected, "connected");
 
@@ -1124,6 +1165,7 @@ struct ItscamClient::Impl {
 
             state.store(RUNNING);
             lastSentTime = os::monotonicNow();
+            updateServerInactivityTimeout();
             log(LogLevel::Info, "Reconnected (TCP)");
 
             // Start a new handler thread for this connection
@@ -1279,15 +1321,6 @@ struct ItscamClient::Impl {
             log(LogLevel::Info, "Replaying session (auth=%d, jpeg=%d, subscribe=%d, trigger=%d)",
                 hasPassword, hasJpegConfig, hasSubscription, hasTriggerConfig);
 
-            // Allowed before authentication. Not fatal: the camera still drops
-            // dead peers through TCP keepalive, only more slowly.
-            {
-                auto r = syncCallDirect(OP_SET_OPT_STR, serverTimeoutOptions(), timeout);
-                if (!r)
-                    log(LogLevel::Error, "Session: unable to set server inactivity timeout: %s",
-                        r.error().message.c_str());
-            }
-
             if (hasPassword) {
                 nlohmann::json params;
                 params["pass"] = lastPassword;
@@ -1411,6 +1444,19 @@ struct ItscamClient::Impl {
         }
     }
 
+    // Fail all pending requests, waking whoever waits for them
+    void failPendingRequests(const char* reason) {
+        LockGuard<Mutex> lk(promiseMtx);
+        for (auto& kv : promises) {
+            WireMsg fail;
+            fail.op = OP_NACK;
+            fail.id = kv.first;
+            fail.body = jsonToBody({{"reason", reason}});
+            kv.second.set_value(std::move(fail));
+        }
+        promises.clear();
+    }
+
     // -----------------------------------------------------------------------
     // cleanupAfterDisconnect()  --  fail pending promises, fire callbacks
     // -----------------------------------------------------------------------
@@ -1433,18 +1479,7 @@ struct ItscamClient::Impl {
         }
         fireConnectionState(ConnectionState::Disconnected, "disconnected");
 
-        // Fail all pending promises
-        {
-            LockGuard<Mutex> lk(promiseMtx);
-            for (auto& kv : promises) {
-                WireMsg fail;
-                fail.op = OP_NACK;
-                fail.id = kv.first;
-                fail.body = jsonToBody({{"reason", "disconnected"}});
-                kv.second.set_value(std::move(fail));
-            }
-            promises.clear();
-        }
+        failPendingRequests("disconnected");
         // Fail pending capture exposure groups (wake waiters with partial data)
         {
             LockGuard<Mutex> lk(captureMtx);
