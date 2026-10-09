@@ -213,6 +213,9 @@ static constexpr uint32_t ID_INCREMENT    = 2;
 static constexpr uint32_t ID_CLIENT_OFFSET = 0;
 static constexpr uint8_t  START_BYTE      = 0x66;
 static constexpr size_t   TCP_BUF_SIZE    = 0x10000;
+// Floor for the send timeout (defaultTimeout otherwise): requests are small,
+// so a short configured defaultTimeout must not drop healthy connections
+static constexpr uint32_t MIN_SEND_TIMEOUT_MS = 1000;
 
 //=========================================================================
 // Protocol opcodes
@@ -650,6 +653,10 @@ struct ItscamClient::Impl {
 
     // ---- Outbound serialisation ----
     Mutex sendMtx;
+    // Guards the socket handle's lifecycle (create/shutdown/close), so it can
+    // be shut down without sendMtx, which a stalled send may be holding.
+    // Lock order: sendMtx before sockMtx.
+    Mutex sockMtx;
     Mutex idMtx;
     uint32_t idCounter = ID_CLIENT_OFFSET;
 
@@ -950,8 +957,20 @@ struct ItscamClient::Impl {
         if (sock == ITSCAM_OS_INVALID_SOCKET) return false;
         int64_t n = os::socketSend(sock, data.data(), data.size());
         lastSentTime = os::monotonicNow();
-        if (n == -1) state.store(STOPPING);
-        return n == (int64_t)data.size();
+        if (n == (int64_t)data.size()) return true;
+        // Error, send timeout (stalled peer) or partial write: part of a frame
+        // may be on the wire, so the stream cannot go on. Drop the connection
+        // (a reconnect starts a clean stream); the read side sees it closed.
+        markConnectionLost();
+        os::socketShutdown(sock);  // close() needs sendMtx, held here
+        return false;
+    }
+
+    // Live session to STOPPING; leaves a user disconnect (DISCONNECTING) alone
+    void markConnectionLost() {
+        int st = state.load();
+        while ((st == RUNNING || st == CONNECTING) &&
+               !state.compare_exchange_weak(st, STOPPING)) {}
     }
 
     uint32_t nextId() {
@@ -1253,8 +1272,19 @@ struct ItscamClient::Impl {
         state.store(STOPPED);
     }
 
+    // Wake any thread blocked on the socket (a stalled send holding sendMtx,
+    // or a read) without closing it.
+    void shutdownSocket() {
+        LockGuard<Mutex> lk(sockMtx);
+        if (sock != ITSCAM_OS_INVALID_SOCKET) os::socketShutdown(sock);
+    }
+
     void closeSocket() {
+        // Shut down first: a send stalled on a full buffer holds sendMtx and
+        // would otherwise keep close() (and disconnect) waiting
+        shutdownSocket();
         LockGuard<Mutex> lk(sendMtx);
+        LockGuard<Mutex> sl(sockMtx);
         if (sock != ITSCAM_OS_INVALID_SOCKET) {
             os::socketClose(sock);
             sock = ITSCAM_OS_INVALID_SOCKET;
@@ -1276,6 +1306,7 @@ struct ItscamClient::Impl {
     bool tryConnect() {
         {
             LockGuard<Mutex> lk(sendMtx);
+            LockGuard<Mutex> sl(sockMtx);
             sock = os::socketCreate();
             if (sock == ITSCAM_OS_INVALID_SOCKET) {
                 int err = os::socketErrno();
@@ -1314,6 +1345,9 @@ struct ItscamClient::Impl {
 
         // Return to blocking mode for reads
         os::socketSetNonblocking(sock, false);
+        // Bound blocking sends: a peer that stops reading would otherwise
+        // block senders (and everything waiting on sendMtx) indefinitely
+        os::socketSetSendTimeout(sock, std::max<uint32_t>(defaultTimeout.load(), MIN_SEND_TIMEOUT_MS));
         return true;
     }
 
@@ -2336,6 +2370,8 @@ void ItscamClient::disconnect() {
         st == Impl::STOPPING) {
         // DISCONNECTING tells the reconnect loop to stop
         mImpl->state.store(Impl::DISCONNECTING);
+        // Wake the socket thread and any sender stalled on a full buffer
+        mImpl->shutdownSocket();
     }
     // Give threads some time to wind down
     for (int i = 0; i < 100 && mImpl->state.load() != Impl::STOPPED &&

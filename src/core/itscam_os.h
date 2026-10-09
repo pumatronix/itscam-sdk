@@ -135,6 +135,23 @@ SocketHandle socketCreate();
 int socketClose(SocketHandle sock);
 
 /**
+ * @brief Shut down both directions of a socket without closing it.
+ * Wakes any thread blocked in socketSend()/socketRead() on it.
+ * @param sock Socket handle.
+ * @return 0 on success, -1 on failure.
+ */
+int socketShutdown(SocketHandle sock);
+
+/**
+ * @brief Bound how long a blocking socketSend() may wait for buffer space.
+ * After the timeout socketSend() returns -1, or the bytes sent so far.
+ * @param sock Socket handle.
+ * @param timeoutMs Timeout in milliseconds (0 = wait forever).
+ * @return 0 on success, -1 on failure.
+ */
+int socketSetSendTimeout(SocketHandle sock, uint32_t timeoutMs);
+
+/**
  * @brief Set socket to non-blocking mode.
  * @param sock Socket handle.
  * @param enable true to enable non-blocking, false for blocking.
