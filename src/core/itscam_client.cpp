@@ -828,11 +828,22 @@ struct ItscamClient::Impl {
         Thread waiter;
         try {
             waiter = Thread([self, id, sent, timeoutMs]() {
-                auto r = sent ? self->waitResponse(OP_SET_OPT_STR, id, timeoutMs)
-                              : Result<nlohmann::json>(Error{Error::ConnectionFailed, "failed to send"});
-                if (!r)
-                    self->log(LogLevel::Error, "Unable to set server inactivity timeout: %s",
-                              r.error().message.c_str());
+                // Best effort: nothing may escape the thread entry (that would
+                // terminate the process) or skip retiring the waiter below.
+                // waitResponse() can throw on an unexpected NACK body and
+                // log() runs the user's handler unguarded.
+                try {
+                    auto r = sent ? self->waitResponse(OP_SET_OPT_STR, id, timeoutMs)
+                                  : Result<nlohmann::json>(Error{Error::ConnectionFailed, "failed to send"});
+                    if (!r)
+                        self->log(LogLevel::Error, "Unable to set server inactivity timeout: %s",
+                                  r.error().message.c_str());
+                } catch (const std::exception& ex) {
+                    try {
+                        self->log(LogLevel::Error, "Unable to set server inactivity timeout: %s",
+                                  ex.what());
+                    } catch (...) {}
+                } catch (...) {}
                 // Last access to Impl: ~Impl() may proceed once this is released
                 LockGuard<Mutex> lk(self->timeoutWaitersMtx);
                 --self->timeoutWaiters;
