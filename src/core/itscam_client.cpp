@@ -789,9 +789,24 @@ struct ItscamClient::Impl {
 
     // Push a new timeout to the camera when ping settings change mid-session;
     // otherwise it is applied by replaySession() on the next connection.
+    // The reply is awaited on a detached thread (the setters may run on an SDK
+    // callback thread, which must not block) only to log a failure: the camera
+    // would keep the previous timeout, possibly shorter than the new interval.
     void updateServerInactivityTimeout() {
         if (state.load() != RUNNING) return;
-        asyncCall(OP_SET_OPT_STR, serverTimeoutOptions(), defaultTimeout.load());
+        uint32_t id;
+        if (!sendRequest(OP_SET_OPT_STR, serverTimeoutOptions(), id)) {
+            log(LogLevel::Error, "Unable to update server inactivity timeout: failed to send");
+            return;
+        }
+        auto* self = this;
+        uint32_t timeoutMs = defaultTimeout.load();
+        Thread([self, id, timeoutMs]() {
+            auto r = self->waitResponse(OP_SET_OPT_STR, id, timeoutMs);
+            if (!r)
+                self->log(LogLevel::Error, "Unable to update server inactivity timeout: %s",
+                          r.error().message.c_str());
+        }).detach();
     }
 
     // ---- Imgpkg tracking for unified image callbacks ----
