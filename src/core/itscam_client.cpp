@@ -21,6 +21,7 @@
 #include <atomic>
 #include <cassert>
 #include <chrono>
+#include <cstdint>
 #include <cstdio>
 #include <cstring>
 #include <deque>
@@ -767,6 +768,32 @@ struct ItscamClient::Impl {
     std::atomic<uint32_t> maxPingFailures{10};   // 0 = disabled
     uint32_t consecutivePingFailures = 0;        // guarded by read-loop single-thread
 
+    // Inactivity timeout requested from the camera on every session: if nothing
+    // arrives from this client for that long, the camera closes the connection
+    // and frees its slot (e.g. client host lost power or the cable was pulled).
+    // Pings are sent whenever the client has been silent for pingInterval, so a
+    // live session never gets near it; the margin of one extra interval keeps the
+    // camera from giving up before this client would declare the link dead.
+    uint32_t serverInactivityTimeoutMs() const {
+        uint64_t interval = std::max<uint32_t>(pingInterval.load(), 1);
+        uint32_t failures = maxPingFailures.load();
+        uint64_t missed = (failures > 0 ? failures : 10) + 1;
+        return static_cast<uint32_t>(std::min<uint64_t>(interval * 1000 * missed, INT32_MAX));
+    }
+
+    nlohmann::json serverTimeoutOptions() const {
+        nlohmann::json params;
+        params["timeoutMs"] = serverInactivityTimeoutMs();
+        return params;
+    }
+
+    // Push a new timeout to the camera when ping settings change mid-session;
+    // otherwise it is applied by replaySession() on the next connection.
+    void updateServerInactivityTimeout() {
+        if (state.load() != RUNNING) return;
+        asyncCall(OP_SET_OPT_STR, serverTimeoutOptions(), defaultTimeout.load());
+    }
+
     // ---- Imgpkg tracking for unified image callbacks ----
     bool imgpkgActive = false; // updated whenever setJpegConfig is called
 
@@ -1236,6 +1263,15 @@ struct ItscamClient::Impl {
 
             log(LogLevel::Info, "Replaying session (auth=%d, jpeg=%d, subscribe=%d, trigger=%d)",
                 hasPassword, hasJpegConfig, hasSubscription, hasTriggerConfig);
+
+            // Allowed before authentication. Not fatal: the camera still drops
+            // dead peers through TCP keepalive, only more slowly.
+            {
+                auto r = syncCallDirect(OP_SET_OPT_STR, serverTimeoutOptions(), timeout);
+                if (!r)
+                    log(LogLevel::Error, "Session: unable to set server inactivity timeout: %s",
+                        r.error().message.c_str());
+            }
 
             if (hasPassword) {
                 nlohmann::json params;
@@ -2912,10 +2948,12 @@ void ItscamClient::onConnectionStateChanged(
 
 void ItscamClient::setPingInterval(uint32_t seconds) {
     mImpl->pingInterval.store(seconds);
+    mImpl->updateServerInactivityTimeout();
 }
 
 void ItscamClient::setMaxPingFailures(uint32_t count) {
     mImpl->maxPingFailures.store(count);
+    mImpl->updateServerInactivityTimeout();
 }
 
 void ItscamClient::setLogHandler(
