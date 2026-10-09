@@ -841,8 +841,10 @@ struct ItscamClient::Impl {
 
     // First step of every session (replaySession()), before authentication and
     // the other replay steps, so the camera has it even if this host vanishes
-    // mid-replay. Not awaited here: the worker waits for the reply.
-    void sendServerTimeoutForNewSession() {
+    // mid-replay. Not awaited here: the worker waits for the reply, and a NACK
+    // is only logged. Returns false if it could not be sent: the socket is
+    // then already shut down, so the session must not go live.
+    bool sendServerTimeoutForNewSession() {
         {
             LockGuard<Mutex> lk(timeoutMtx);
             timeoutDirty = false;  // this snapshot carries the latest settings
@@ -850,12 +852,13 @@ struct ItscamClient::Impl {
         uint32_t id;
         if (!sendRequest(OP_SET_OPT_STR, serverTimeoutOptions(), id)) {
             log(LogLevel::Error, "Session: unable to set server inactivity timeout: failed to send");
-            return;
+            return false;
         }
         LockGuard<Mutex> lk(timeoutMtx);
         timeoutReplyId = id;
         startTimeoutWorkerLocked();
         timeoutCv.notifyAll();
+        return true;
     }
 
     // Session setup failed before going live: drop what the attempt left
@@ -1427,7 +1430,16 @@ struct ItscamClient::Impl {
                 hasPassword, hasJpegConfig, hasSubscription, hasTriggerConfig);
 
             // Allowed before authentication
-            sendServerTimeoutForNewSession();
+            if (!sendServerTimeoutForNewSession()) return false;
+
+            // Optional steps below only log a refusal (NACK) or a timeout, but
+            // a transport failure means the socket is gone: the session must
+            // not go live on it.
+            auto lostTransport = [this](const Result<nlohmann::json>& r, const char* step) {
+                if (r || r.error().code != Error::ConnectionFailed) return false;
+                log(LogLevel::Error, "Reconnect: %s failed: %s", step, r.error().message.c_str());
+                return true;
+            };
 
             if (hasPassword) {
                 nlohmann::json params;
@@ -1446,6 +1458,7 @@ struct ItscamClient::Impl {
 
             if (hasJpegConfig) {
                 auto r = syncCallDirect(OP_SET_JPEG_CFGS, buildJpegJson(lastJpegConfig), timeout);
+                if (lostTransport(r, "setJpegConfig")) return false;
                 if (!r)
                     log(isAuthenticated ? LogLevel::Error : LogLevel::Info,
                         "Reconnect: setJpegConfig failed: %s%s",
@@ -1454,6 +1467,7 @@ struct ItscamClient::Impl {
             }
             if (hasSubscription) {
                 auto r = syncCallDirect(OP_SET_CALLBACKS, buildCallbacksJson(lastSubscription), timeout);
+                if (lostTransport(r, "subscribe")) return false;
                 if (!r)
                     log(isAuthenticated ? LogLevel::Error : LogLevel::Info,
                         "Reconnect: subscribe failed: %s%s",
@@ -1464,6 +1478,7 @@ struct ItscamClient::Impl {
                 auto r = syncCallDirect(OP_SET_EQUIP_CFGS,
                                         buildTriggerConfigJson(lastTriggerConfig, lastTriggerProfileId),
                                         timeout);
+                if (lostTransport(r, "setTriggerConfig")) return false;
                 if (!r)
                     log(isAuthenticated ? LogLevel::Error : LogLevel::Info,
                         "Reconnect: setTriggerConfig failed: %s%s",
