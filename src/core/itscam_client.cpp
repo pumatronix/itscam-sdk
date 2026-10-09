@@ -777,7 +777,8 @@ struct ItscamClient::Impl {
     uint32_t serverInactivityTimeoutMs() const {
         uint64_t interval = std::max<uint32_t>(pingInterval.load(), 1);
         uint32_t failures = maxPingFailures.load();
-        uint64_t missed = (failures > 0 ? failures : 10) + 1;
+        // Widen before adding: UINT32_MAX + 1 would wrap to 0 in 32 bits
+        uint64_t missed = static_cast<uint64_t>(failures > 0 ? failures : 10) + 1;
         uint64_t ms = interval * 1000;  // < 2^42, cannot overflow
         // Saturate before multiplying: the product of two large setter values
         // can wrap uint64_t (even to 0, which would disable the timeout)
@@ -795,6 +796,9 @@ struct ItscamClient::Impl {
     Mutex timeoutWaitersMtx;
     ConditionVariable timeoutWaitersCv;
     uint32_t timeoutWaiters = 0;
+    // Serialises snapshot + send, so with concurrent setters the last request
+    // sent always carries the latest stored ping settings.
+    Mutex timeoutSendMtx;
 
     // Send the timeout to the camera: each time a session goes live and when
     // the ping settings change mid-session. It is not awaited, so it never
@@ -803,12 +807,17 @@ struct ItscamClient::Impl {
     // would keep its previous timeout (15 days by default, or the one set
     // before the ping settings changed). Not fatal: the camera still drops
     // dead peers through TCP keepalive, only more slowly.
+    //
+    // Nothing is logged on the calling thread: SDK callbacks run with cbMtx
+    // held and log() takes it too, so a setter called from a callback would
+    // deadlock. Even a failed send is reported by the waiter.
     void updateServerInactivityTimeout() {
         if (state.load() != RUNNING) return;
-        uint32_t id;
-        if (!sendRequest(OP_SET_OPT_STR, serverTimeoutOptions(), id)) {
-            log(LogLevel::Error, "Unable to set server inactivity timeout: failed to send");
-            return;
+        uint32_t id = 0;
+        bool sent;
+        {
+            LockGuard<Mutex> lk(timeoutSendMtx);
+            sent = sendRequest(OP_SET_OPT_STR, serverTimeoutOptions(), id);
         }
         {
             LockGuard<Mutex> lk(timeoutWaitersMtx);
@@ -816,9 +825,11 @@ struct ItscamClient::Impl {
         }
         auto* self = this;
         uint32_t timeoutMs = defaultTimeout.load();
+        Thread waiter;
         try {
-            Thread([self, id, timeoutMs]() {
-                auto r = self->waitResponse(OP_SET_OPT_STR, id, timeoutMs);
+            waiter = Thread([self, id, sent, timeoutMs]() {
+                auto r = sent ? self->waitResponse(OP_SET_OPT_STR, id, timeoutMs)
+                              : Result<nlohmann::json>(Error{Error::ConnectionFailed, "failed to send"});
                 if (!r)
                     self->log(LogLevel::Error, "Unable to set server inactivity timeout: %s",
                               r.error().message.c_str());
@@ -826,19 +837,25 @@ struct ItscamClient::Impl {
                 LockGuard<Mutex> lk(self->timeoutWaitersMtx);
                 --self->timeoutWaiters;
                 self->timeoutWaitersCv.notifyAll();
-            }).detach();
-        } catch (const std::exception& ex) {
-            // No waiter: the reply is dropped when it arrives (no promise left)
+            });
+        } catch (...) {
+            // Allocation failure: handled below like a thread that did not start
+        }
+        if (!waiter.joinable()) {
+            // os::Thread reports a failed start as non-joinable, without
+            // throwing. Undo the registration; the reply, if any, is dropped
+            // on arrival (no promise left). Cannot log here (see above).
             {
                 LockGuard<Mutex> lk(timeoutWaitersMtx);
                 --timeoutWaiters;
             }
-            {
+            if (sent) {
                 LockGuard<Mutex> lk(promiseMtx);
                 promises.erase(id);
             }
-            log(LogLevel::Error, "Unable to wait for server inactivity timeout reply: %s", ex.what());
+            return;
         }
+        waiter.detach();
     }
 
     ~Impl() {
