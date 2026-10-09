@@ -791,90 +791,112 @@ struct ItscamClient::Impl {
         return params;
     }
 
-    // Waiters started by updateServerInactivityTimeout() that are still running.
-    // ~Impl() waits for them, so none of them touches a destroyed Impl.
-    Mutex timeoutWaitersMtx;
-    ConditionVariable timeoutWaitersCv;
-    uint32_t timeoutWaiters = 0;
-    // Serialises snapshot + send, so with concurrent setters the last request
-    // sent always carries the latest stored ping settings.
-    Mutex timeoutSendMtx;
+    // ---- Server inactivity timeout worker ----
+    // One managed thread sends the timeout and waits for its reply, so at most
+    // one request is in flight and rapid setter calls collapse into one send of
+    // the latest settings. The setters only flag the update: they never send,
+    // block or log (SDK callbacks run with cbMtx held, and log() takes it).
+    // Not fatal: the camera still drops dead peers through TCP keepalive.
+    Mutex timeoutMtx;
+    ConditionVariable timeoutCv;
+    bool timeoutDirty = false;      // settings changed since the last send
+    uint32_t timeoutReplyId = 0;    // sent by replaySession(), reply not awaited yet
+    bool timeoutStop = false;
+    Thread timeoutWorker;
 
-    // Send the timeout to the camera: each time a session goes live and when
-    // the ping settings change mid-session. It is not awaited, so it never
-    // delays the connection, and the setters may run on an SDK callback thread
-    // that must not block. A detached waiter only logs a failure: the camera
-    // would keep its previous timeout (15 days by default, or the one set
-    // before the ping settings changed). Not fatal: the camera still drops
-    // dead peers through TCP keepalive, only more slowly.
-    //
-    // Nothing is logged on the calling thread: SDK callbacks run with cbMtx
-    // held and log() takes it too, so a setter called from a callback would
-    // deadlock. Even a failed send is reported by the waiter.
-    void updateServerInactivityTimeout() {
-        if (state.load() != RUNNING) return;
-        uint32_t id = 0;
-        bool sent;
-        {
-            LockGuard<Mutex> lk(timeoutSendMtx);
-            sent = sendRequest(OP_SET_OPT_STR, serverTimeoutOptions(), id);
-        }
-        {
-            LockGuard<Mutex> lk(timeoutWaitersMtx);
-            ++timeoutWaiters;
-        }
-        auto* self = this;
-        uint32_t timeoutMs = defaultTimeout.load();
-        Thread waiter;
+    // Called with timeoutMtx held. On failure the update stays pending and is
+    // retried on the next request (the session setup always sends it anyway).
+    void startTimeoutWorkerLocked() {
+        if (timeoutWorker.joinable() || timeoutStop) return;
         try {
-            waiter = Thread([self, id, sent, timeoutMs]() {
-                // Best effort: nothing may escape the thread entry (that would
-                // terminate the process) or skip retiring the waiter below.
-                // waitResponse() can throw on an unexpected NACK body and
-                // log() runs the user's handler unguarded.
-                try {
-                    auto r = sent ? self->waitResponse(OP_SET_OPT_STR, id, timeoutMs)
-                                  : Result<nlohmann::json>(Error{Error::ConnectionFailed, "failed to send"});
-                    if (!r)
-                        self->log(LogLevel::Error, "Unable to set server inactivity timeout: %s",
-                                  r.error().message.c_str());
-                } catch (const std::exception& ex) {
-                    try {
-                        self->log(LogLevel::Error, "Unable to set server inactivity timeout: %s",
-                                  ex.what());
-                    } catch (...) {}
-                } catch (...) {}
-                // Last access to Impl: ~Impl() may proceed once this is released
-                LockGuard<Mutex> lk(self->timeoutWaitersMtx);
-                --self->timeoutWaiters;
-                self->timeoutWaitersCv.notifyAll();
-            });
-        } catch (...) {
-            // Allocation failure: handled below like a thread that did not start
+            timeoutWorker = Thread([this]() { runTimeoutWorker(); });
+        } catch (...) {}
+    }
+
+    // Ping settings changed: send them once the session is live.
+    void requestServerTimeoutUpdate() {
+        LockGuard<Mutex> lk(timeoutMtx);
+        timeoutDirty = true;
+        startTimeoutWorkerLocked();
+        timeoutCv.notifyAll();
+    }
+
+    // The session went live: send any change made while it was being set up.
+    void wakeTimeoutWorker() {
+        LockGuard<Mutex> lk(timeoutMtx);
+        timeoutCv.notifyAll();
+    }
+
+    // First step of every session (replaySession()), before authentication and
+    // the other replay steps, so the camera has it even if this host vanishes
+    // mid-replay. Not awaited here: the worker waits for the reply.
+    void sendServerTimeoutForNewSession() {
+        {
+            LockGuard<Mutex> lk(timeoutMtx);
+            timeoutDirty = false;  // this snapshot carries the latest settings
         }
-        if (!waiter.joinable()) {
-            // os::Thread reports a failed start as non-joinable, without
-            // throwing. Undo the registration; the reply, if any, is dropped
-            // on arrival (no promise left). Cannot log here (see above).
-            {
-                LockGuard<Mutex> lk(timeoutWaitersMtx);
-                --timeoutWaiters;
-            }
-            if (sent) {
-                LockGuard<Mutex> lk(promiseMtx);
-                promises.erase(id);
-            }
+        uint32_t id;
+        if (!sendRequest(OP_SET_OPT_STR, serverTimeoutOptions(), id)) {
+            log(LogLevel::Error, "Session: unable to set server inactivity timeout: failed to send");
             return;
         }
-        waiter.detach();
+        LockGuard<Mutex> lk(timeoutMtx);
+        timeoutReplyId = id;
+        startTimeoutWorkerLocked();
+        timeoutCv.notifyAll();
+    }
+
+    void logTimeoutFailure(const char* reason) {
+        try {
+            log(LogLevel::Error, "Unable to set server inactivity timeout: %s", reason);
+        } catch (...) {}  // user log handler: must not end the worker
+    }
+
+    void runTimeoutWorker() {
+        for (;;) {
+            uint32_t replyId = 0;
+            {
+                UniqueLock<Mutex> lk(timeoutMtx);
+                // Poll the state too: the session can go live or drop without a wake-up
+                while (!timeoutStop && timeoutReplyId == 0 &&
+                       !(timeoutDirty && state.load() == RUNNING))
+                    timeoutCv.waitFor(lk, 500);
+                if (timeoutStop) return;
+                if (timeoutReplyId != 0) {
+                    replyId = timeoutReplyId;
+                    timeoutReplyId = 0;
+                } else {
+                    timeoutDirty = false;
+                }
+            }
+            // Best effort: nothing may escape the thread entry (that would
+            // terminate the process); waitResponse() can throw on an
+            // unexpected NACK body.
+            try {
+                if (replyId == 0 && !sendRequest(OP_SET_OPT_STR, serverTimeoutOptions(), replyId)) {
+                    logTimeoutFailure("failed to send");
+                    continue;
+                }
+                auto r = waitResponse(OP_SET_OPT_STR, replyId, defaultTimeout.load());
+                if (!r) logTimeoutFailure(r.error().message.c_str());
+            } catch (const std::exception& ex) {
+                logTimeoutFailure(ex.what());
+            } catch (...) {
+                logTimeoutFailure("unknown exception");
+            }
+        }
     }
 
     ~Impl() {
-        // Wake the timeout waiters (disconnect normally already did) and wait
-        // for them to finish before the members they use are destroyed.
+        // Stop the timeout worker, wake it if it waits for a reply (disconnect
+        // normally already failed it) and join it before members go away.
+        {
+            LockGuard<Mutex> lk(timeoutMtx);
+            timeoutStop = true;
+            timeoutCv.notifyAll();
+        }
         failPendingRequests("client destroyed");
-        UniqueLock<Mutex> lk(timeoutWaitersMtx);
-        while (timeoutWaiters > 0) timeoutWaitersCv.wait(lk);
+        if (timeoutWorker.joinable()) timeoutWorker.join();
     }
 
     // ---- Imgpkg tracking for unified image callbacks ----
@@ -1128,7 +1150,7 @@ struct ItscamClient::Impl {
             state.store(RUNNING);
             lastSentTime = os::monotonicNow();
             hadSuccessfulSession = true;
-            updateServerInactivityTimeout();
+            wakeTimeoutWorker();
             log(LogLevel::Info, "Connected");
             fireConnectionState(ConnectionState::Connected, "connected");
 
@@ -1193,7 +1215,7 @@ struct ItscamClient::Impl {
 
             state.store(RUNNING);
             lastSentTime = os::monotonicNow();
-            updateServerInactivityTimeout();
+            wakeTimeoutWorker();
             log(LogLevel::Info, "Reconnected (TCP)");
 
             // Start a new handler thread for this connection
@@ -1348,6 +1370,9 @@ struct ItscamClient::Impl {
 
             log(LogLevel::Info, "Replaying session (auth=%d, jpeg=%d, subscribe=%d, trigger=%d)",
                 hasPassword, hasJpegConfig, hasSubscription, hasTriggerConfig);
+
+            // Allowed before authentication
+            sendServerTimeoutForNewSession();
 
             if (hasPassword) {
                 nlohmann::json params;
@@ -3026,12 +3051,12 @@ void ItscamClient::onConnectionStateChanged(
 
 void ItscamClient::setPingInterval(uint32_t seconds) {
     mImpl->pingInterval.store(seconds);
-    mImpl->updateServerInactivityTimeout();
+    mImpl->requestServerTimeoutUpdate();
 }
 
 void ItscamClient::setMaxPingFailures(uint32_t count) {
     mImpl->maxPingFailures.store(count);
-    mImpl->updateServerInactivityTimeout();
+    mImpl->requestServerTimeoutUpdate();
 }
 
 void ItscamClient::setLogHandler(
