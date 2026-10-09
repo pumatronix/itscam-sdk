@@ -373,6 +373,11 @@ struct MsgQueue {
         LockGuard<Mutex> lk(mtx);
         return (int)queue.size();
     }
+
+    void clear() {
+        LockGuard<Mutex> lk(mtx);
+        queue.clear();
+    }
 };
 
 //=========================================================================
@@ -853,6 +858,19 @@ struct ItscamClient::Impl {
         timeoutCv.notifyAll();
     }
 
+    // Session setup failed before going live: drop what the attempt left
+    // behind. syncCallDirect() may have queued replies (e.g. to the timeout
+    // request) for a handler that will not run for this connection, and the
+    // attempt's pending requests would otherwise stay registered forever.
+    void abandonSessionAttempt() {
+        inboundQueue.clear();
+        {
+            LockGuard<Mutex> lk(timeoutMtx);
+            timeoutReplyId = 0;
+        }
+        failPendingRequests("session setup failed");  // wakes the timeout worker
+    }
+
     void logTimeoutFailure(const char* reason) {
         try {
             log(LogLevel::Error, "Unable to set server inactivity timeout: %s", reason);
@@ -864,10 +882,11 @@ struct ItscamClient::Impl {
             uint32_t replyId = 0;
             {
                 UniqueLock<Mutex> lk(timeoutMtx);
-                // Poll the state too: the session can go live or drop without a wake-up
+                // Every change that can satisfy this notifies timeoutCv, including
+                // the RUNNING transitions (wakeTimeoutWorker())
                 while (!timeoutStop && timeoutReplyId == 0 &&
                        !(timeoutDirty && state.load() == RUNNING))
-                    timeoutCv.waitFor(lk, 500);
+                    timeoutCv.wait(lk);
                 if (timeoutStop) return;
                 if (timeoutReplyId != 0) {
                     replyId = timeoutReplyId;
@@ -1161,6 +1180,7 @@ struct ItscamClient::Impl {
             if (!replaySession()) {
                 log(LogLevel::Error, "Initial session setup failed");
                 closeSocket();
+                abandonSessionAttempt();
                 fireConnectionState(ConnectionState::Disconnected, "initial session setup failed");
                 state.store(STOPPED);
                 return;
@@ -1229,6 +1249,7 @@ struct ItscamClient::Impl {
             if (!replaySession()) {
                 log(LogLevel::Error, "Session replay failed, will retry");
                 closeSocket();
+                abandonSessionAttempt();
                 continue;
             }
 
