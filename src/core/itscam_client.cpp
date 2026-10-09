@@ -21,6 +21,7 @@
 #include <atomic>
 #include <cassert>
 #include <chrono>
+#include <cstdint>
 #include <cstdio>
 #include <cstring>
 #include <deque>
@@ -212,6 +213,9 @@ static constexpr uint32_t ID_INCREMENT    = 2;
 static constexpr uint32_t ID_CLIENT_OFFSET = 0;
 static constexpr uint8_t  START_BYTE      = 0x66;
 static constexpr size_t   TCP_BUF_SIZE    = 0x10000;
+// Floor for the send timeout (defaultTimeout otherwise): requests are small,
+// so a short configured defaultTimeout must not drop healthy connections
+static constexpr uint32_t MIN_SEND_TIMEOUT_MS = 1000;
 
 //=========================================================================
 // Protocol opcodes
@@ -368,6 +372,11 @@ struct MsgQueue {
     int size() {
         LockGuard<Mutex> lk(mtx);
         return (int)queue.size();
+    }
+
+    void clear() {
+        LockGuard<Mutex> lk(mtx);
+        queue.clear();
     }
 };
 
@@ -649,6 +658,10 @@ struct ItscamClient::Impl {
 
     // ---- Outbound serialisation ----
     Mutex sendMtx;
+    // Guards the socket handle's lifecycle (create/shutdown/close), so it can
+    // be shut down without sendMtx, which a stalled send may be holding.
+    // Lock order: sendMtx before sockMtx.
+    Mutex sockMtx;
     Mutex idMtx;
     uint32_t idCounter = ID_CLIENT_OFFSET;
 
@@ -767,6 +780,154 @@ struct ItscamClient::Impl {
     std::atomic<uint32_t> maxPingFailures{10};   // 0 = disabled
     uint32_t consecutivePingFailures = 0;        // guarded by read-loop single-thread
 
+    // Inactivity timeout requested from the camera on every session: if nothing
+    // arrives from this client for that long, the camera closes the connection
+    // and frees its slot (e.g. client host lost power or the cable was pulled).
+    // Pings are sent whenever the client has been silent for pingInterval, so a
+    // live session never gets near it; the margin of one extra interval keeps the
+    // camera from giving up before this client would declare the link dead.
+    uint32_t serverInactivityTimeoutMs() const {
+        uint64_t interval = std::max<uint32_t>(pingInterval.load(), 1);
+        uint32_t failures = maxPingFailures.load();
+        // Widen before adding: UINT32_MAX + 1 would wrap to 0 in 32 bits
+        uint64_t missed = static_cast<uint64_t>(failures > 0 ? failures : 10) + 1;
+        uint64_t ms = interval * 1000;  // < 2^42, cannot overflow
+        // Saturate before multiplying: the product of two large setter values
+        // can wrap uint64_t (even to 0, which would disable the timeout)
+        return static_cast<uint32_t>(ms > INT32_MAX / missed ? INT32_MAX : ms * missed);
+    }
+
+    nlohmann::json serverTimeoutOptions() const {
+        nlohmann::json params;
+        params["timeoutMs"] = serverInactivityTimeoutMs();
+        return params;
+    }
+
+    // ---- Server inactivity timeout worker ----
+    // One managed thread sends the timeout and waits for its reply, so at most
+    // one request is in flight and rapid setter calls collapse into one send of
+    // the latest settings. The setters only flag the update: they never send,
+    // block or log (SDK callbacks run with cbMtx held, and log() takes it).
+    // Not fatal: the camera still drops dead peers through TCP keepalive.
+    Mutex timeoutMtx;
+    ConditionVariable timeoutCv;
+    bool timeoutDirty = false;      // settings changed since the last send
+    uint32_t timeoutReplyId = 0;    // sent by replaySession(), reply not awaited yet
+    bool timeoutStop = false;
+    Thread timeoutWorker;
+
+    // Called with timeoutMtx held. On failure the update stays pending and is
+    // retried on the next request (the session setup always sends it anyway).
+    void startTimeoutWorkerLocked() {
+        if (timeoutWorker.joinable() || timeoutStop) return;
+        try {
+            timeoutWorker = Thread([this]() { runTimeoutWorker(); });
+        } catch (...) {}
+    }
+
+    // Ping settings changed: send them once the session is live.
+    void requestServerTimeoutUpdate() {
+        LockGuard<Mutex> lk(timeoutMtx);
+        timeoutDirty = true;
+        startTimeoutWorkerLocked();
+        timeoutCv.notifyAll();
+    }
+
+    // The session went live: send any change made while it was being set up.
+    void wakeTimeoutWorker() {
+        LockGuard<Mutex> lk(timeoutMtx);
+        timeoutCv.notifyAll();
+    }
+
+    // First step of every session (replaySession()), before authentication and
+    // the other replay steps, so the camera has it even if this host vanishes
+    // mid-replay. Not awaited here: the worker waits for the reply, and a NACK
+    // is only logged. Returns false if it could not be sent: the socket is
+    // then already shut down, so the session must not go live.
+    bool sendServerTimeoutForNewSession() {
+        {
+            LockGuard<Mutex> lk(timeoutMtx);
+            timeoutDirty = false;  // this snapshot carries the latest settings
+        }
+        uint32_t id;
+        if (!sendRequest(OP_SET_OPT_STR, serverTimeoutOptions(), id)) {
+            log(LogLevel::Error, "Session: unable to set server inactivity timeout: failed to send");
+            return false;
+        }
+        LockGuard<Mutex> lk(timeoutMtx);
+        timeoutReplyId = id;
+        startTimeoutWorkerLocked();
+        timeoutCv.notifyAll();
+        return true;
+    }
+
+    // Session setup failed before going live: drop what the attempt left
+    // behind. syncCallDirect() may have queued replies (e.g. to the timeout
+    // request) for a handler that will not run for this connection, and the
+    // attempt's pending requests would otherwise stay registered forever.
+    void abandonSessionAttempt() {
+        inboundQueue.clear();
+        {
+            LockGuard<Mutex> lk(timeoutMtx);
+            timeoutReplyId = 0;
+        }
+        failPendingRequests("session setup failed");  // wakes the timeout worker
+    }
+
+    void logTimeoutFailure(const char* reason) {
+        try {
+            log(LogLevel::Error, "Unable to set server inactivity timeout: %s", reason);
+        } catch (...) {}  // user log handler: must not end the worker
+    }
+
+    void runTimeoutWorker() {
+        for (;;) {
+            uint32_t replyId = 0;
+            {
+                UniqueLock<Mutex> lk(timeoutMtx);
+                // Every change that can satisfy this notifies timeoutCv, including
+                // the RUNNING transitions (wakeTimeoutWorker())
+                while (!timeoutStop && timeoutReplyId == 0 &&
+                       !(timeoutDirty && state.load() == RUNNING))
+                    timeoutCv.wait(lk);
+                if (timeoutStop) return;
+                if (timeoutReplyId != 0) {
+                    replyId = timeoutReplyId;
+                    timeoutReplyId = 0;
+                } else {
+                    timeoutDirty = false;
+                }
+            }
+            // Best effort: nothing may escape the thread entry (that would
+            // terminate the process); waitResponse() can throw on an
+            // unexpected NACK body.
+            try {
+                if (replyId == 0 && !sendRequest(OP_SET_OPT_STR, serverTimeoutOptions(), replyId)) {
+                    logTimeoutFailure("failed to send");
+                    continue;
+                }
+                auto r = waitResponse(OP_SET_OPT_STR, replyId, defaultTimeout.load());
+                if (!r) logTimeoutFailure(r.error().message.c_str());
+            } catch (const std::exception& ex) {
+                logTimeoutFailure(ex.what());
+            } catch (...) {
+                logTimeoutFailure("unknown exception");
+            }
+        }
+    }
+
+    ~Impl() {
+        // Stop the timeout worker, wake it if it waits for a reply (disconnect
+        // normally already failed it) and join it before members go away.
+        {
+            LockGuard<Mutex> lk(timeoutMtx);
+            timeoutStop = true;
+            timeoutCv.notifyAll();
+        }
+        failPendingRequests("client destroyed");
+        if (timeoutWorker.joinable()) timeoutWorker.join();
+    }
+
     // ---- Imgpkg tracking for unified image callbacks ----
     bool imgpkgActive = false; // updated whenever setJpegConfig is called
 
@@ -818,8 +979,20 @@ struct ItscamClient::Impl {
         if (sock == ITSCAM_OS_INVALID_SOCKET) return false;
         int64_t n = os::socketSend(sock, data.data(), data.size());
         lastSentTime = os::monotonicNow();
-        if (n == -1) state.store(STOPPING);
-        return n == (int64_t)data.size();
+        if (n == (int64_t)data.size()) return true;
+        // Error, send timeout (stalled peer) or partial write: part of a frame
+        // may be on the wire, so the stream cannot go on. Drop the connection
+        // (a reconnect starts a clean stream); the read side sees it closed.
+        markConnectionLost();
+        os::socketShutdown(sock);  // close() needs sendMtx, held here
+        return false;
+    }
+
+    // Live session to STOPPING; leaves a user disconnect (DISCONNECTING) alone
+    void markConnectionLost() {
+        int st = state.load();
+        while ((st == RUNNING || st == CONNECTING) &&
+               !state.compare_exchange_weak(st, STOPPING)) {}
     }
 
     uint32_t nextId() {
@@ -1010,6 +1183,7 @@ struct ItscamClient::Impl {
             if (!replaySession()) {
                 log(LogLevel::Error, "Initial session setup failed");
                 closeSocket();
+                abandonSessionAttempt();
                 fireConnectionState(ConnectionState::Disconnected, "initial session setup failed");
                 state.store(STOPPED);
                 return;
@@ -1018,6 +1192,7 @@ struct ItscamClient::Impl {
             state.store(RUNNING);
             lastSentTime = os::monotonicNow();
             hadSuccessfulSession = true;
+            wakeTimeoutWorker();
             log(LogLevel::Info, "Connected");
             fireConnectionState(ConnectionState::Connected, "connected");
 
@@ -1077,11 +1252,13 @@ struct ItscamClient::Impl {
             if (!replaySession()) {
                 log(LogLevel::Error, "Session replay failed, will retry");
                 closeSocket();
+                abandonSessionAttempt();
                 continue;
             }
 
             state.store(RUNNING);
             lastSentTime = os::monotonicNow();
+            wakeTimeoutWorker();
             log(LogLevel::Info, "Reconnected (TCP)");
 
             // Start a new handler thread for this connection
@@ -1119,8 +1296,19 @@ struct ItscamClient::Impl {
         state.store(STOPPED);
     }
 
+    // Wake any thread blocked on the socket (a stalled send holding sendMtx,
+    // or a read) without closing it.
+    void shutdownSocket() {
+        LockGuard<Mutex> lk(sockMtx);
+        if (sock != ITSCAM_OS_INVALID_SOCKET) os::socketShutdown(sock);
+    }
+
     void closeSocket() {
+        // Shut down first: a send stalled on a full buffer holds sendMtx and
+        // would otherwise keep close() (and disconnect) waiting
+        shutdownSocket();
         LockGuard<Mutex> lk(sendMtx);
+        LockGuard<Mutex> sl(sockMtx);
         if (sock != ITSCAM_OS_INVALID_SOCKET) {
             os::socketClose(sock);
             sock = ITSCAM_OS_INVALID_SOCKET;
@@ -1142,6 +1330,7 @@ struct ItscamClient::Impl {
     bool tryConnect() {
         {
             LockGuard<Mutex> lk(sendMtx);
+            LockGuard<Mutex> sl(sockMtx);
             sock = os::socketCreate();
             if (sock == ITSCAM_OS_INVALID_SOCKET) {
                 int err = os::socketErrno();
@@ -1180,6 +1369,9 @@ struct ItscamClient::Impl {
 
         // Return to blocking mode for reads
         os::socketSetNonblocking(sock, false);
+        // Bound blocking sends: a peer that stops reading would otherwise
+        // block senders (and everything waiting on sendMtx) indefinitely
+        os::socketSetSendTimeout(sock, std::max<uint32_t>(defaultTimeout.load(), MIN_SEND_TIMEOUT_MS));
         return true;
     }
 
@@ -1237,6 +1429,18 @@ struct ItscamClient::Impl {
             log(LogLevel::Info, "Replaying session (auth=%d, jpeg=%d, subscribe=%d, trigger=%d)",
                 hasPassword, hasJpegConfig, hasSubscription, hasTriggerConfig);
 
+            // Allowed before authentication
+            if (!sendServerTimeoutForNewSession()) return false;
+
+            // Optional steps below only log a refusal (NACK) or a timeout, but
+            // a transport failure means the socket is gone: the session must
+            // not go live on it.
+            auto lostTransport = [this](const Result<nlohmann::json>& r, const char* step) {
+                if (r || r.error().code != Error::ConnectionFailed) return false;
+                log(LogLevel::Error, "Reconnect: %s failed: %s", step, r.error().message.c_str());
+                return true;
+            };
+
             if (hasPassword) {
                 nlohmann::json params;
                 params["pass"] = lastPassword;
@@ -1254,6 +1458,7 @@ struct ItscamClient::Impl {
 
             if (hasJpegConfig) {
                 auto r = syncCallDirect(OP_SET_JPEG_CFGS, buildJpegJson(lastJpegConfig), timeout);
+                if (lostTransport(r, "setJpegConfig")) return false;
                 if (!r)
                     log(isAuthenticated ? LogLevel::Error : LogLevel::Info,
                         "Reconnect: setJpegConfig failed: %s%s",
@@ -1262,6 +1467,7 @@ struct ItscamClient::Impl {
             }
             if (hasSubscription) {
                 auto r = syncCallDirect(OP_SET_CALLBACKS, buildCallbacksJson(lastSubscription), timeout);
+                if (lostTransport(r, "subscribe")) return false;
                 if (!r)
                     log(isAuthenticated ? LogLevel::Error : LogLevel::Info,
                         "Reconnect: subscribe failed: %s%s",
@@ -1272,6 +1478,7 @@ struct ItscamClient::Impl {
                 auto r = syncCallDirect(OP_SET_EQUIP_CFGS,
                                         buildTriggerConfigJson(lastTriggerConfig, lastTriggerProfileId),
                                         timeout);
+                if (lostTransport(r, "setTriggerConfig")) return false;
                 if (!r)
                     log(isAuthenticated ? LogLevel::Error : LogLevel::Info,
                         "Reconnect: setTriggerConfig failed: %s%s",
@@ -1360,6 +1567,19 @@ struct ItscamClient::Impl {
         }
     }
 
+    // Fail all pending requests, waking whoever waits for them
+    void failPendingRequests(const char* reason) {
+        LockGuard<Mutex> lk(promiseMtx);
+        for (auto& kv : promises) {
+            WireMsg fail;
+            fail.op = OP_NACK;
+            fail.id = kv.first;
+            fail.body = jsonToBody({{"reason", reason}});
+            kv.second.set_value(std::move(fail));
+        }
+        promises.clear();
+    }
+
     // -----------------------------------------------------------------------
     // cleanupAfterDisconnect()  --  fail pending promises, fire callbacks
     // -----------------------------------------------------------------------
@@ -1382,18 +1602,7 @@ struct ItscamClient::Impl {
         }
         fireConnectionState(ConnectionState::Disconnected, "disconnected");
 
-        // Fail all pending promises
-        {
-            LockGuard<Mutex> lk(promiseMtx);
-            for (auto& kv : promises) {
-                WireMsg fail;
-                fail.op = OP_NACK;
-                fail.id = kv.first;
-                fail.body = jsonToBody({{"reason", "disconnected"}});
-                kv.second.set_value(std::move(fail));
-            }
-            promises.clear();
-        }
+        failPendingRequests("disconnected");
         // Fail pending capture exposure groups (wake waiters with partial data)
         {
             LockGuard<Mutex> lk(captureMtx);
@@ -2197,6 +2406,8 @@ void ItscamClient::disconnect() {
         st == Impl::STOPPING) {
         // DISCONNECTING tells the reconnect loop to stop
         mImpl->state.store(Impl::DISCONNECTING);
+        // Wake the socket thread and any sender stalled on a full buffer
+        mImpl->shutdownSocket();
     }
     // Give threads some time to wind down
     for (int i = 0; i < 100 && mImpl->state.load() != Impl::STOPPED &&
@@ -2912,10 +3123,12 @@ void ItscamClient::onConnectionStateChanged(
 
 void ItscamClient::setPingInterval(uint32_t seconds) {
     mImpl->pingInterval.store(seconds);
+    mImpl->requestServerTimeoutUpdate();
 }
 
 void ItscamClient::setMaxPingFailures(uint32_t count) {
     mImpl->maxPingFailures.store(count);
+    mImpl->requestServerTimeoutUpdate();
 }
 
 void ItscamClient::setLogHandler(

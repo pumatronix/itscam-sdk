@@ -171,6 +171,15 @@ int socketClose(SocketHandle sock) {
     return closesocket((SOCKET)sock);
 }
 
+int socketShutdown(SocketHandle sock) {
+    return shutdown((SOCKET)sock, SD_BOTH);
+}
+
+int socketSetSendTimeout(SocketHandle sock, uint32_t timeoutMs) {
+    DWORD ms = timeoutMs;
+    return setsockopt((SOCKET)sock, SOL_SOCKET, SO_SNDTIMEO, (const char*)&ms, sizeof(ms));
+}
+
 int socketSetNonblocking(SocketHandle sock, bool enable) {
     u_long mode = enable ? 1 : 0;
     return ioctlsocket((SOCKET)sock, FIONBIO, &mode);
