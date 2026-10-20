@@ -251,6 +251,8 @@ camera.setMaxPingFailures(10);          // 0 = desabilita
 camera.setExposureGroupTimeout(3000);   // ms (default: 5000)
 ```
 
+A cada conexão o client também pede para a câmera encerrar a sessão após `pingInterval × (maxPingFailures + 1)` segundos sem receber nada dele (55 s com os valores padrão; um `maxPingFailures` igual a 0 conta como 10 aqui). Os pings mantêm uma sessão ativa bem abaixo desse limite, e um client que desaparece sem fechar a conexão (queda de energia, cabo desconectado) deixa de ocupar uma das vagas de conexão da câmera.
+
 ## `captureSnapshot()` vs `onSnapshotImage`
 
 `captureSnapshot()` internamente registra um pending capture para o RID e devolve o exposure group completo como `Result<std::vector<CaptureResult>>`. `onSnapshotImage` continua disparando por frame e é útil quando os triggers vêm de fora do seu processo ou quando você precisa de uma lógica de acumulação custom.

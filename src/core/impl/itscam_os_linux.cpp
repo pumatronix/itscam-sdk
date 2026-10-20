@@ -134,6 +134,17 @@ int socketClose(SocketHandle sock) {
     return close(sock);
 }
 
+int socketShutdown(SocketHandle sock) {
+    return shutdown(sock, SHUT_RDWR);
+}
+
+int socketSetSendTimeout(SocketHandle sock, uint32_t timeoutMs) {
+    struct timeval tv;
+    tv.tv_sec = static_cast<time_t>(timeoutMs / 1000);
+    tv.tv_usec = static_cast<suseconds_t>((timeoutMs % 1000) * 1000);
+    return setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
+}
+
 int socketSetNonblocking(SocketHandle sock, bool enable) {
     int flags = fcntl(sock, F_GETFL);
     if (flags < 0) return -1;
@@ -202,7 +213,12 @@ int64_t socketRead(SocketHandle sock, void* buf, size_t len) {
 }
 
 int64_t socketSend(SocketHandle sock, const void* buf, size_t len) {
-    return send(sock, buf, len, MSG_NOSIGNAL);
+    ssize_t n;
+    // With SO_SNDTIMEO set, a signal is not restarted automatically
+    do {
+        n = send(sock, buf, len, MSG_NOSIGNAL);
+    } while (n < 0 && errno == EINTR);
+    return n;
 }
 
 int socketErrno() {
