@@ -242,6 +242,8 @@ camera.onConnectionStateChanged(
 
 Todos os callbacks rodam na worker thread do SDK; **não bloqueie** dentro deles.
 
+Ao destruir o cliente, nenhum callback começa depois que o destrutor retorna. Um callback já em execução tem até 2 s para retornar; depois disso o destrutor retorna mesmo assim (o callback pode estar esperando a própria thread que destrói o cliente, como acontece nos wrappers que rodam callbacks na thread principal). As threads do SDK terminam em segundo plano.
+
 ## System
 
 ```cpp
