@@ -47,6 +47,23 @@ class ItscamClient {
         }
     }
 
+    /**
+     * Disconnects on a worker thread, then releases the native client.
+     * Use it while callbacks are registered: SDK threads deliver callbacks
+     * through the JavaScript thread, so a synchronous disconnect() blocks
+     * them and close() may release the client while they still run.
+     * @returns {Promise<void>}
+     */
+    closeAsync() {
+        if (!this._handle) return Promise.resolve();
+        return new Promise(resolve => {
+            fns.Client_disconnect.async(this._handle, () => {
+                this.close();
+                resolve();
+            });
+        });
+    }
+
     _requireOpen() {
         if (!this._handle) {
             throw new Error('ItscamClient has been closed');
