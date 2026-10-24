@@ -22,6 +22,10 @@ const LogLevel = Object.freeze({
     ERROR: 1,
 });
 
+// How long close() keeps the native callbacks registered after destroying the
+// client (see close()).
+const CLOSE_UNREGISTER_DELAY_MS = 1000;
+
 class ItscamClient {
     constructor() {
         this._handle = fns.Client_create();
@@ -32,18 +36,32 @@ class ItscamClient {
         // Strong references for native callbacks so V8 doesn't reclaim
         // them while a worker thread is still calling in.
         this._callbackRefs = new Map();
+        this._closed = false;
     }
 
     [Symbol.dispose]() { this.close(); }
 
     close() {
         if (this._handle) {
+            // Calls still arriving from SDK threads are dropped from now on
+            this._closed = true;
             fns.Client_destroy(this._handle);
             this._handle = null;
-            for (const cb of this._callbackRefs.values()) {
-                try { koffi.unregister(cb); } catch (_) { /* ignore */ }
-            }
+            // Koffi runs the callbacks of SDK threads on this thread: one that
+            // was running while Client_destroy() waited is still queued here,
+            // and Koffi resolves its target when it runs. Unregistering now
+            // would let a callback registered meanwhile (e.g. by the next
+            // client) take its slot and receive it with the wrong arguments.
+            const refs = Array.from(this._callbackRefs.values());
             this._callbackRefs.clear();
+            if (refs.length > 0) {
+                const timer = setTimeout(() => {
+                    for (const cb of refs) {
+                        try { koffi.unregister(cb); } catch (_) { /* ignore */ }
+                    }
+                }, CLOSE_UNREGISTER_DELAY_MS);
+                if (timer.unref) timer.unref();
+            }
         }
     }
 
@@ -305,6 +323,7 @@ class ItscamClient {
             return;
         }
         const cb = koffi.register((reason, _ud) => {
+            if (this._closed) return;
             try { callback(reason || ''); } catch (_) { /* swallow */ }
         }, koffi.pointer(callbacks.DisconnectCb));
         fns.Client_onDisconnect(this._handle, null, null);
@@ -320,6 +339,7 @@ class ItscamClient {
             return;
         }
         const cb = koffi.register((state, reason, _ud) => {
+            if (this._closed) return;
             try { callback(state, reason || ''); } catch (_) {}
         }, koffi.pointer(callbacks.ConnStateCb));
         fns.Client_onConnectionState(this._handle, null, null);
@@ -335,6 +355,7 @@ class ItscamClient {
             return;
         }
         const cb = koffi.register((level, message, _ud) => {
+            if (this._closed) return;
             try { callback(level, message || ''); } catch (_) {}
         }, koffi.pointer(callbacks.LogCb));
         fns.Client_onLog(this._handle, null, null);
@@ -363,6 +384,7 @@ class ItscamClient {
             return;
         }
         const cb = koffi.register((resultPtr, _ud) => {
+            if (this._closed) return;
             try {
                 if (resultPtr) userCallback(_readSingleResult(resultPtr));
             } catch (_) { /* swallow */ }
