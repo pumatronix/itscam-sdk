@@ -22,10 +22,6 @@ const LogLevel = Object.freeze({
     ERROR: 1,
 });
 
-// How long close() keeps the native callbacks registered after destroying the
-// client (see close()).
-const CLOSE_UNREGISTER_DELAY_MS = 1000;
-
 class ItscamClient {
     constructor() {
         this._handle = fns.Client_create();
@@ -45,23 +41,21 @@ class ItscamClient {
         if (this._handle) {
             // Calls still arriving from SDK threads are dropped from now on
             this._closed = true;
-            fns.Client_destroy(this._handle);
+            const handle = this._handle;
             this._handle = null;
-            // Koffi runs the callbacks of SDK threads on this thread: one that
-            // was running while Client_destroy() waited is still queued here,
-            // and Koffi resolves its target when it runs. Unregistering now
-            // would let a callback registered meanwhile (e.g. by the next
-            // client) take its slot and receive it with the wrong arguments.
+            // Client_destroy() returns once no callback is running or can
+            // still start. Koffi runs the callbacks of SDK threads on this
+            // thread, so destroy on a worker thread and keep the callbacks
+            // registered until it is done: unregistered earlier, a callback
+            // registered meanwhile (e.g. by the next client) could take a
+            // slot and receive a late call with the wrong arguments.
             const refs = Array.from(this._callbackRefs.values());
             this._callbackRefs.clear();
-            if (refs.length > 0) {
-                const timer = setTimeout(() => {
-                    for (const cb of refs) {
-                        try { koffi.unregister(cb); } catch (_) { /* ignore */ }
-                    }
-                }, CLOSE_UNREGISTER_DELAY_MS);
-                if (timer.unref) timer.unref();
-            }
+            fns.Client_destroy.async(handle, () => {
+                for (const cb of refs) {
+                    try { koffi.unregister(cb); } catch (_) { /* ignore */ }
+                }
+            });
         }
     }
 

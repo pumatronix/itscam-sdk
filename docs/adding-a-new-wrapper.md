@@ -107,6 +107,7 @@ Use os Java/Node.js wrappers como referência. Cada item é obrigatório (ou exp
 - [ ] Callbacks (`onTriggerImage`, `onSnapshotImage`, `onConnectionState`, `onDisconnect`, `onLog`, `startMjpegStream`) **sempre** entregues na worker thread do SDK.
 - [ ] Documente: **não bloqueie callbacks**. Marshalling (queue / channel / dispatcher) é responsabilidade do user.
 - [ ] Mantenha referências fortes para os trampolines/callback objects para impedir GC enquanto native está chamando. Veja `_callbackRefs` em Node, `callbacks` map em Java/Python, `_streamDelegate` em C#.
+- [ ] Libere essas referências só depois que `ITSCAM_Client_destroy()` retornar: ele espera até nenhum callback estar rodando ou poder começar. Se a FFI roda callbacks na thread que chama `destroy` (Node.js / Koffi), chame-o de uma worker thread (`.async` do Koffi), senão ele espera para sempre.
 - [ ] Engole exceptions dentro do callback (com log/trace opcional). Nunca deixe uma exception vazar de volta para C.
 
 ### 6.4 JPEG utilities

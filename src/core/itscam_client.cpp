@@ -673,7 +673,8 @@ struct ItscamClient::Impl {
     }
 
     // Runs fn on a detached thread that keeps the Impl alive until fn returns.
-    // Returns false if the thread could not be started (fn does not run).
+    // Returns false if the thread could not be started: fn does not run, and
+    // the caller must complete whatever fn would have (e.g. its promise).
     template<typename Fn>
     bool spawnWorker(Fn&& fn) {
         refs.fetch_add(1, std::memory_order_relaxed);
@@ -689,6 +690,16 @@ struct ItscamClient::Impl {
         } catch (...) {}
         releaseRef();
         return false;
+    }
+
+    static Error workerStartError() {
+        return Error{Error::Unknown, "failed to start a worker thread"};
+    }
+
+    // A request whose response nobody will wait for
+    void dropRequest(uint32_t id) {
+        LockGuard<Mutex> lk(promiseMtx);
+        promises.erase(id);
     }
 
     // Ask the socket thread to stop for good (no reconnect) and wake it.
@@ -1234,7 +1245,7 @@ struct ItscamClient::Impl {
 
         // Spawn a detached waiter thread that will resolve the outer promise
         uint16_t expectedOp = op;
-        spawnWorker([this, expectedOp, id, timeoutMs, outer]() {
+        bool started = spawnWorker([this, expectedOp, id, timeoutMs, outer]() {
             try {
                 outer->set_value(waitResponse(expectedOp, id, timeoutMs));
             } catch (const std::exception& ex) {
@@ -1247,6 +1258,10 @@ struct ItscamClient::Impl {
                 } catch (...) {}
             }
         });
+        if (!started) {
+            dropRequest(id);
+            outer->set_value(workerStartError());
+        }
 
         return outerFut;
     }
@@ -2491,7 +2506,7 @@ Future<void> ItscamClient::connectAsync(const std::string& address,
     if (!started) mImpl->state.store(Impl::STOPPED);  // the poller reports it
 
     // Poll in a background thread for the connect state transition
-    mImpl->spawnWorker([impl, pShared, timeoutMs]() {
+    bool polling = mImpl->spawnWorker([impl, pShared, timeoutMs]() {
         try {
             auto start = os::monotonicNow();
             while (true) {
@@ -2523,6 +2538,11 @@ Future<void> ItscamClient::connectAsync(const std::string& address,
             catch (...) {}
         }
     });
+    if (!polling) {
+        // Nothing would report the outcome: stop the attempt and fail now
+        mImpl->requestDisconnect();
+        pShared->set_value(Impl::workerStartError());
+    }
 
     return fut;
 }
@@ -2590,7 +2610,7 @@ Future<void> ItscamClient::authenticateAsync(const std::string& password,
     auto pShared = std::make_shared<Promise<void>>();
     auto fut = pShared->get_future();
     auto* impl = mImpl.get();
-    impl->spawnWorker([jf = std::move(jsonFut), pShared, impl, password, timeoutMs]() mutable {
+    bool started = impl->spawnWorker([jf = std::move(jsonFut), pShared, impl, password, timeoutMs]() mutable {
         try {
             auto r = jf.get();
             if (!r) { pShared->set_value(r.error()); return; }
@@ -2616,6 +2636,7 @@ Future<void> ItscamClient::authenticateAsync(const std::string& password,
             catch (...) {}
         }
     });
+    if (!started) pShared->set_value(Impl::workerStartError());
     return fut;
 }
 
@@ -2761,7 +2782,7 @@ Future<std::vector<CaptureResult>> ItscamClient::captureSnapshotAsync(
     auto pShared = std::make_shared<Promise<std::vector<CaptureResult>>>();
     auto outerFut = pShared->get_future();
 
-    impl->spawnWorker([impl, msgId, timeoutMs, pShared]() mutable {
+    bool started = impl->spawnWorker([impl, msgId, timeoutMs, pShared]() mutable {
         try {
             auto respResult = impl->waitResponse(OP_TRIGGER_SNAPSHOT, msgId, timeoutMs);
             if (!respResult) {
@@ -2805,6 +2826,10 @@ Future<std::vector<CaptureResult>> ItscamClient::captureSnapshotAsync(
             catch (...) {}
         }
     });
+    if (!started) {
+        impl->dropRequest(msgId);
+        pShared->set_value(Impl::workerStartError());
+    }
 
     return outerFut;
 }
@@ -2828,7 +2853,7 @@ Future<std::vector<uint8_t>> ItscamClient::getLastFrameAsync(int quality,
     auto* impl = mImpl.get();
     auto pShared = std::make_shared<Promise<std::vector<uint8_t>>>();
     auto outerFut = pShared->get_future();
-    impl->spawnWorker([impl, id, timeoutMs, pShared]() mutable {
+    bool started = impl->spawnWorker([impl, id, timeoutMs, pShared]() mutable {
         try {
             // GET_LASTFRAME response body IS the JPEG data (no JSON wrapper)
             WireFuture<WireMsg> fut;
@@ -2867,6 +2892,10 @@ Future<std::vector<uint8_t>> ItscamClient::getLastFrameAsync(int quality,
             catch (...) {}
         }
     });
+    if (!started) {
+        impl->dropRequest(id);
+        pShared->set_value(Impl::workerStartError());
+    }
     return outerFut;
 }
 
