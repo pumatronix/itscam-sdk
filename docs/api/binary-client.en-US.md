@@ -242,6 +242,8 @@ camera.onConnectionStateChanged(
 
 All callbacks run on the SDK's worker thread; **do not block** inside them.
 
+When the client is destroyed, no new callback is dispatched. The destructor waits up to 2 s for a callback already running; if it does not return by then (it may be waiting for the very thread destroying the client, as in wrappers that run callbacks on the main thread), the destructor returns anyway and that one callback finishes later. The SDK keeps alive what that callback uses, but its target (function and `userData`) must stay valid until it returns. The SDK threads finish in the background. The C API's `ITSCAM_Client_destroy()` is stricter: it returns only once every callback has returned, with no time limit, so the bindings can release their callbacks right after.
+
 ## System
 
 ```cpp

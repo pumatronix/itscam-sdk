@@ -20,15 +20,24 @@ class ItscamCgiClient {
                 'ITSCAM_CgiClient_create returned NULL');
         }
         this._streamCb = null;
+        this._streamState = null;     // { stopped } of the running stream
+        this._streamStopping = null;  // Promise while a stop is in progress
     }
 
     [Symbol.dispose]() { this.close(); }
 
     close() {
         if (this._handle) {
+            const handle = this._handle;
             this.stopMjpegStream();
-            fns.Cgi_destroy(this._handle);
             this._handle = null;
+            // Destroying the client also joins the stream thread: wait for
+            // the stop to finish it first (see stopMjpegStream()).
+            if (this._streamStopping) {
+                this._streamStopping.then(() => fns.Cgi_destroy(handle));
+            } else {
+                fns.Cgi_destroy(handle);
+            }
         }
     }
 
@@ -209,8 +218,12 @@ class ItscamCgiClient {
         if (this._streamCb) {
             throw new Error('MJPEG stream already running');
         }
+        if (this._streamStopping) {
+            throw new Error('MJPEG stream still stopping: await stopMjpegStream() first');
+        }
+        const state = { stopped: false };
         const cb = koffi.register((framePtr, _ud) => {
-            if (!framePtr) return;
+            if (state.stopped || !framePtr) return;
             try {
                 const frame = koffi.decode(framePtr,
                     require('./native').structs.ITSCAM_CgiStreamFrame);
@@ -224,25 +237,44 @@ class ItscamCgiClient {
         }, koffi.pointer(callbacks.StreamCb));
 
         this._streamCb = cb;
+        this._streamState = state;
         const rc = fns.Cgi_startMjpegStream(this._handle, cb, null, timeoutMs);
         if (rc !== 0) {
             try { koffi.unregister(cb); } catch (_) {}
             this._streamCb = null;
+            this._streamState = null;
             checkCall(rc, 'startMjpegStream');
         }
     }
 
+    /**
+     * Stop the MJPEG stream.  Frames still arriving are dropped.  Returns a
+     * Promise that resolves once the stream thread has finished.
+     */
     stopMjpegStream() {
-        if (!this._handle) return;
-        fns.Cgi_stopMjpegStream(this._handle);
-        if (this._streamCb) {
-            try { koffi.unregister(this._streamCb); } catch (_) {}
-            this._streamCb = null;
-        }
+        if (this._streamStopping) return this._streamStopping;
+        if (!this._handle || !this._streamCb) return Promise.resolve();
+        const cb = this._streamCb;
+        this._streamState.stopped = true;
+        this._streamCb = null;
+        this._streamState = null;
+        // The native stop joins the stream thread, which runs the frame
+        // callback on this (the JS) thread and may be waiting for it right
+        // now: join it on a worker thread, so this one stays free to deliver
+        // (and drop) that frame.  The callback stays registered until then.
+        this._streamStopping = new Promise((resolve) => {
+            fns.Cgi_stopMjpegStream.async(this._handle, () => {
+                try { koffi.unregister(cb); } catch (_) {}
+                this._streamStopping = null;
+                resolve();
+            });
+        });
+        return this._streamStopping;
     }
 
     isMjpegStreamRunning() {
-        return Boolean(this._handle
+        // Not while stopping: the native stop is still running on a worker
+        return Boolean(this._handle && !this._streamStopping
             && fns.Cgi_isMjpegStreamRunning(this._handle));
     }
 

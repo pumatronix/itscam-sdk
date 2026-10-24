@@ -192,6 +192,14 @@ ITSCAM_C_API ITSCAM_Client* ITSCAM_Client_create(void);
 
 /**
  * @brief Destroy a client instance and free resources.
+ *
+ * Returns only once no callback of this client is running or can still
+ * start, so the caller may free whatever its callbacks use right after. It
+ * waits for a callback in progress without a time limit: no callback may wait
+ * for the thread calling this function (a binding that runs callbacks on the
+ * caller's thread, like Node.js, calls it from a worker thread). Called from
+ * one of this client's own callbacks, it returns while that one still runs.
+ *
  * @param client Handle to destroy (may be NULL).
  */
 ITSCAM_C_API void ITSCAM_Client_destroy(ITSCAM_Client* client);

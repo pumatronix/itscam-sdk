@@ -652,9 +652,124 @@ struct ItscamClient::Impl {
     socket_t sock = ITSCAM_OS_INVALID_SOCKET;
 
     // ---- Threading ----
-    Thread socketThread;
+    // The socket thread and the worker threads are detached and hold their
+    // own reference to the Impl (see spawnWorker()); the handler thread is
+    // joined by the socket thread.
     Thread handlerThread;
     MsgQueue inboundQueue;
+
+    // ---- Lifetime ----
+    // The client handle and every detached SDK thread each hold a reference;
+    // the last one to let go deletes the Impl, so a thread that outlives the
+    // handle (e.g. stuck in a connect or a user callback) never touches freed
+    // memory.
+    std::atomic<int> refs{1};
+    // Set once the handle is destroyed: no user callback is admitted after
+    // that. Read with cbMtx held, by the code that invokes the callbacks.
+    std::atomic<bool> callbacksClosed{false};
+
+    void releaseRef() {
+        if (refs.fetch_sub(1, std::memory_order_acq_rel) == 1) delete this;
+    }
+
+    // Runs fn on a detached thread that keeps the Impl alive until fn returns.
+    // Returns false if the thread could not be started: fn does not run, and
+    // the caller must complete whatever fn would have (e.g. its promise).
+    template<typename Fn>
+    bool spawnWorker(Fn&& fn) {
+        refs.fetch_add(1, std::memory_order_relaxed);
+        try {
+            Thread t([this, fn = std::forward<Fn>(fn)]() mutable {
+                try { fn(); } catch (...) {}  // nothing may skip the release
+                releaseRef();  // may delete the Impl: nothing after this
+            });
+            if (t.joinable()) {
+                t.detach();
+                return true;
+            }
+        } catch (...) {}
+        releaseRef();
+        return false;
+    }
+
+    static Error workerStartError() {
+        return Error{Error::Unknown, "failed to start a worker thread"};
+    }
+
+    // A request whose response nobody will wait for
+    void dropRequest(uint32_t id) {
+        LockGuard<Mutex> lk(promiseMtx);
+        promises.erase(id);
+    }
+
+    // Ask the socket thread to stop for good (no reconnect) and wake it.
+    // Returns true if a connection or connection attempt was active.
+    bool requestDisconnect() {
+        int st = state.load();
+        while (st == RUNNING || st == CONNECTING || st == STOPPING) {
+            if (state.compare_exchange_weak(st, DISCONNECTING)) {
+                shutdownSocket();
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // Session replay done: go live unless the user disconnected meanwhile
+    // (a plain store would overwrite DISCONNECTING and keep the session up).
+    bool goLive() {
+        int st = state.load();
+        while (st != DISCONNECTING) {
+            if (state.compare_exchange_weak(st, RUNNING)) return true;
+        }
+        return false;
+    }
+
+    // The handle is gone: stop every SDK thread without waiting for them (a
+    // binding may run callbacks on the thread destroying the client, so a
+    // thread blocked in one could never finish), then drop the handle's
+    // reference.
+    void closeAndRelease() {
+        requestDisconnect();
+        {
+            LockGuard<Mutex> lk(timeoutMtx);
+            timeoutStop = true;
+            timeoutCv.notifyAll();
+        }
+        failPendingRequests("client destroyed");
+        wakePendingCaptures();
+
+        // Admit no new callback, then let the one in progress (if any: it
+        // holds cbMtx and was admitted before the flag) return. Only for a
+        // while: it may be waiting for this very thread, and then it runs on
+        // after this returns. The Impl stays alive for it, and the C API
+        // callbacks carry their own copy of what they need.
+        callbacksClosed.store(true);
+        bool locked = false;
+        for (int i = 0; i < 100 && !(locked = cbMtx.tryLock()); ++i) {
+            os::sleepForMs(20);
+        }
+        if (locked) cbMtx.unlock();
+
+        releaseRef();
+    }
+
+    // runSocketThread() threw: wind the session down like a normal exit (the
+    // handler thread runs while the state is RUNNING) before publishing
+    // STOPPED, which lets a new connectAsync() start, then report it.
+    void stopAfterSocketThreadError(const std::string& what) {
+        markConnectionLost();
+        closeSocket();
+        if (handlerThread.joinable()) handlerThread.join();
+        state.store(STOPPED);
+        try {
+            log(LogLevel::Error, "Socket thread %s", what.c_str());
+        } catch (...) {}  // user log handler: the session is already down
+    }
+
+    // Last reference gone: no thread uses the Impl any more. Close what an
+    // exceptional exit of the socket thread may have left open.
+    ~Impl() { closeSocket(); }
 
     // ---- Outbound serialisation ----
     Mutex sendMtx;
@@ -814,14 +929,14 @@ struct ItscamClient::Impl {
     bool timeoutDirty = false;      // settings changed since the last send
     uint32_t timeoutReplyId = 0;    // sent by replaySession(), reply not awaited yet
     bool timeoutStop = false;
-    Thread timeoutWorker;
+    bool timeoutWorkerStarted = false;
 
     // Called with timeoutMtx held. On failure the update stays pending and is
     // retried on the next request (the session setup always sends it anyway).
     void startTimeoutWorkerLocked() {
-        if (timeoutWorker.joinable() || timeoutStop) return;
+        if (timeoutWorkerStarted || timeoutStop) return;
         try {
-            timeoutWorker = Thread([this]() { runTimeoutWorker(); });
+            timeoutWorkerStarted = spawnWorker([this]() { runTimeoutWorker(); });
         } catch (...) {}
     }
 
@@ -916,18 +1031,6 @@ struct ItscamClient::Impl {
         }
     }
 
-    ~Impl() {
-        // Stop the timeout worker, wake it if it waits for a reply (disconnect
-        // normally already failed it) and join it before members go away.
-        {
-            LockGuard<Mutex> lk(timeoutMtx);
-            timeoutStop = true;
-            timeoutCv.notifyAll();
-        }
-        failPendingRequests("client destroyed");
-        if (timeoutWorker.joinable()) timeoutWorker.join();
-    }
-
     // ---- Imgpkg tracking for unified image callbacks ----
     bool imgpkgActive = false; // updated whenever setJpegConfig is called
 
@@ -962,7 +1065,7 @@ struct ItscamClient::Impl {
     // -----------------------------------------------------------------------
     void log(LogLevel lvl, const char* fmt, ...) {
         LockGuard<Mutex> lk(cbMtx);
-        if (!cbLog) return;
+        if (!cbLog || callbacksClosed.load()) return;
         char buf[512];
         va_list args;
         va_start(args, fmt);
@@ -1093,6 +1196,10 @@ struct ItscamClient::Impl {
         uint64_t deadline = os::monotonicNow() + timeoutMs;
 
         while (os::monotonicNow() < deadline) {
+            // A socket created after disconnect() shut the old one down is
+            // never woken: give up between waits instead
+            if (state.load() == DISCONNECTING)
+                return Error{Error::ConnectionFailed, "disconnected"};
             uint64_t remaining = deadline - os::monotonicNow();
             int waitMs = static_cast<int>(std::min(remaining, (uint64_t)1000));
             int waitResult = os::socketWait(sock, waitMs, false);
@@ -1137,11 +1244,10 @@ struct ItscamClient::Impl {
         }
 
         // Spawn a detached waiter thread that will resolve the outer promise
-        auto* self = this;
         uint16_t expectedOp = op;
-        Thread([self, expectedOp, id, timeoutMs, outer]() {
+        bool started = spawnWorker([this, expectedOp, id, timeoutMs, outer]() {
             try {
-                outer->set_value(self->waitResponse(expectedOp, id, timeoutMs));
+                outer->set_value(waitResponse(expectedOp, id, timeoutMs));
             } catch (const std::exception& ex) {
                 try {
                     outer->set_value(Error{Error::Unknown, std::string("exception: ") + ex.what()});
@@ -1151,7 +1257,11 @@ struct ItscamClient::Impl {
                     outer->set_value(Error{Error::Unknown, "unknown exception"});
                 } catch (...) {}
             }
-        }).detach();
+        });
+        if (!started) {
+            dropRequest(id);
+            outer->set_value(workerStartError());
+        }
 
         return outerFut;
     }
@@ -1189,7 +1299,12 @@ struct ItscamClient::Impl {
                 return;
             }
 
-            state.store(RUNNING);
+            if (!goLive()) {
+                closeSocket();
+                abandonSessionAttempt();
+                state.store(STOPPED);
+                return;
+            }
             lastSentTime = os::monotonicNow();
             hadSuccessfulSession = true;
             wakeTimeoutWorker();
@@ -1256,7 +1371,11 @@ struct ItscamClient::Impl {
                 continue;
             }
 
-            state.store(RUNNING);
+            if (!goLive()) {
+                closeSocket();
+                abandonSessionAttempt();
+                break;
+            }
             lastSentTime = os::monotonicNow();
             wakeTimeoutWorker();
             log(LogLevel::Info, "Reconnected (TCP)");
@@ -1328,6 +1447,7 @@ struct ItscamClient::Impl {
     // Returns true if TCP is up; sets sock and leaves it in blocking mode.
     // -----------------------------------------------------------------------
     bool tryConnect() {
+        if (state.load() == DISCONNECTING) return false;
         {
             LockGuard<Mutex> lk(sendMtx);
             LockGuard<Mutex> sl(sockMtx);
@@ -1350,9 +1470,17 @@ struct ItscamClient::Impl {
             return false;
         }
 
-        // Wait for connection to complete
+        // Wait up to 3 seconds for connection to complete, in slices so that
+        // disconnect() does not have to wait for it
         // socketWait returns: 1 = socket ready, 0 = timeout, -1 = error
-        int waitResult = os::socketWait(sock, 3000, true);  // 3 second timeout, check write
+        int waitResult = 0;
+        for (int waitedMs = 0; waitResult == 0 && waitedMs < 3000; waitedMs += 100) {
+            if (state.load() == DISCONNECTING) {
+                closeSocket();
+                return false;
+            }
+            waitResult = os::socketWait(sock, 100, true);  // check write
+        }
         if (waitResult <= 0) {
             log(LogLevel::Error, "Connect timed out or error");
             closeSocket();
@@ -1545,12 +1673,12 @@ struct ItscamClient::Impl {
                     }
                 } else if (n == 0) {
                     log(LogLevel::Error, "Socket disconnected");
-                    state.store(STOPPING);
+                    markConnectionLost();
                 } else {
                     int err = os::socketErrno();
                     if (err != ITSCAM_SOCK_EWOULDBLOCK) {
                         log(LogLevel::Error, "Socket error %d: %s", err, os::socketStrerror(err));
-                        state.store(STOPPING);
+                        markConnectionLost();
                     }
                 }
             }
@@ -1580,6 +1708,16 @@ struct ItscamClient::Impl {
         promises.clear();
     }
 
+    // Fail pending capture exposure groups (wake waiters with partial data)
+    void wakePendingCaptures() {
+        LockGuard<Mutex> lk(captureMtx);
+        for (auto& kv : pendingCaptures) {
+            kv.second->complete = true;  // wake with whatever we have
+            kv.second->cv.notifyAll();
+        }
+        pendingCaptures.clear();
+    }
+
     // -----------------------------------------------------------------------
     // cleanupAfterDisconnect()  --  fail pending promises, fire callbacks
     // -----------------------------------------------------------------------
@@ -1603,15 +1741,7 @@ struct ItscamClient::Impl {
         fireConnectionState(ConnectionState::Disconnected, "disconnected");
 
         failPendingRequests("disconnected");
-        // Fail pending capture exposure groups (wake waiters with partial data)
-        {
-            LockGuard<Mutex> lk(captureMtx);
-            for (auto& kv : pendingCaptures) {
-                kv.second->complete = true;  // wake with whatever we have
-                kv.second->cv.notifyAll();
-            }
-            pendingCaptures.clear();
-        }
+        wakePendingCaptures();
 
         // Flush any partial exposure group accumulators for event callbacks
         {
@@ -1645,7 +1775,7 @@ struct ItscamClient::Impl {
                 switch (wm.op) {
                 // --- JSON events ---
                 case OP_SHUTDOWN:
-                    state.store(STOPPING);
+                    markConnectionLost();
                     break;
 
                 case OP_EVT_TRIGGER:
@@ -1712,7 +1842,7 @@ struct ItscamClient::Impl {
     /// logging for any re-thrown exceptions.
     template<typename Fn, typename... Args>
     void safeCallback(const char* /*name*/, const Fn& fn, Args&&... args) {
-        if (!fn) return;
+        if (!fn || callbacksClosed.load()) return;
         try {
             fn(std::forward<Args>(args)...);
         } catch (const std::exception&) {
@@ -1951,7 +2081,7 @@ struct ItscamClient::Impl {
                     "Ping timeout: %u consecutive unanswered pings "
                     "(limit %u), connection presumed dead",
                     consecutivePingFailures, limit);
-                state.store(STOPPING);
+                markConnectionLost();
                 return;
             }
             // Clean up the stale ping promise before sending a new one
@@ -2320,12 +2450,21 @@ struct ItscamClient::Impl {
 
 ItscamClient::ItscamClient() : mImpl(new Impl) {}
 
+// The Impl is not deleted here: SDK threads may still be running on it, and
+// the last one to stop deletes it (see Impl::closeAndRelease()).
 ItscamClient::~ItscamClient() {
-    if (mImpl) disconnect();
+    if (mImpl) mImpl.release()->closeAndRelease();
 }
 
 ItscamClient::ItscamClient(ItscamClient&&) noexcept = default;
-ItscamClient& ItscamClient::operator=(ItscamClient&&) noexcept = default;
+
+ItscamClient& ItscamClient::operator=(ItscamClient&& other) noexcept {
+    if (this != &other) {
+        if (mImpl) mImpl.release()->closeAndRelease();
+        mImpl = std::move(other.mImpl);
+    }
+    return *this;
+}
 
 // ---- Connection -----------------------------------------------------------
 
@@ -2355,21 +2494,19 @@ Future<void> ItscamClient::connectAsync(const std::string& address,
     auto fut = pShared->get_future();
 
     // The socket thread runs the full read loop until disconnect.
-    mImpl->socketThread = Thread([impl]() {
+    bool started = mImpl->spawnWorker([impl]() {
         try {
             impl->runSocketThread();
         } catch (const std::exception& ex) {
-            impl->log(LogLevel::Error, "Socket thread exception: %s", ex.what());
-            impl->state.store(Impl::STOPPED);
+            impl->stopAfterSocketThreadError(std::string("exception: ") + ex.what());
         } catch (...) {
-            impl->log(LogLevel::Error, "Socket thread unknown exception");
-            impl->state.store(Impl::STOPPED);
+            impl->stopAfterSocketThreadError("unknown exception");
         }
     });
-    mImpl->socketThread.detach();
+    if (!started) mImpl->state.store(Impl::STOPPED);  // the poller reports it
 
     // Poll in a background thread for the connect state transition
-    Thread([impl, pShared, timeoutMs]() {
+    bool polling = mImpl->spawnWorker([impl, pShared, timeoutMs]() {
         try {
             auto start = os::monotonicNow();
             while (true) {
@@ -2382,9 +2519,15 @@ Future<void> ItscamClient::connectAsync(const std::string& address,
                     pShared->set_value(Error{Error::ConnectionFailed, "connection failed"});
                     return;
                 }
+                if (st == Impl::DISCONNECTING) {
+                    pShared->set_value(Error{Error::ConnectionFailed, "disconnected"});
+                    return;
+                }
                 auto elapsed = os::monotonicNow() - start;
                 if (elapsed >= timeoutMs) {
-                    impl->state.store(Impl::STOPPING);
+                    // Only a pending attempt: never undo a disconnect()
+                    int expected = Impl::CONNECTING;
+                    impl->state.compare_exchange_strong(expected, Impl::STOPPING);
                     pShared->set_value(Error{Error::Timeout, "connect timed out"});
                     return;
                 }
@@ -2394,21 +2537,21 @@ Future<void> ItscamClient::connectAsync(const std::string& address,
             try { pShared->set_value(Error{Error::Unknown, "exception in connect poll"}); }
             catch (...) {}
         }
-    }).detach();
+    });
+    if (!polling) {
+        // Nothing would report the outcome: stop the attempt and fail now
+        mImpl->requestDisconnect();
+        pShared->set_value(Impl::workerStartError());
+    }
 
     return fut;
 }
 
 void ItscamClient::disconnect() {
     if (!mImpl) return;
-    int st = mImpl->state.load();
-    if (st == Impl::RUNNING || st == Impl::CONNECTING ||
-        st == Impl::STOPPING) {
-        // DISCONNECTING tells the reconnect loop to stop
-        mImpl->state.store(Impl::DISCONNECTING);
-        // Wake the socket thread and any sender stalled on a full buffer
-        mImpl->shutdownSocket();
-    }
+    // DISCONNECTING tells the reconnect loop to stop; the socket shutdown
+    // wakes the socket thread and any sender stalled on a full buffer
+    mImpl->requestDisconnect();
     // Give threads some time to wind down
     for (int i = 0; i < 100 && mImpl->state.load() != Impl::STOPPED &&
                      mImpl->state.load() != Impl::IDLE; ++i) {
@@ -2467,7 +2610,7 @@ Future<void> ItscamClient::authenticateAsync(const std::string& password,
     auto pShared = std::make_shared<Promise<void>>();
     auto fut = pShared->get_future();
     auto* impl = mImpl.get();
-    Thread([jf = std::move(jsonFut), pShared, impl, password, timeoutMs]() mutable {
+    bool started = impl->spawnWorker([jf = std::move(jsonFut), pShared, impl, password, timeoutMs]() mutable {
         try {
             auto r = jf.get();
             if (!r) { pShared->set_value(r.error()); return; }
@@ -2492,7 +2635,8 @@ Future<void> ItscamClient::authenticateAsync(const std::string& password,
             try { pShared->set_value(Error{Error::Unknown, "unknown exception"}); }
             catch (...) {}
         }
-    }).detach();
+    });
+    if (!started) pShared->set_value(Impl::workerStartError());
     return fut;
 }
 
@@ -2638,7 +2782,7 @@ Future<std::vector<CaptureResult>> ItscamClient::captureSnapshotAsync(
     auto pShared = std::make_shared<Promise<std::vector<CaptureResult>>>();
     auto outerFut = pShared->get_future();
 
-    Thread([impl, msgId, timeoutMs, pShared]() mutable {
+    bool started = impl->spawnWorker([impl, msgId, timeoutMs, pShared]() mutable {
         try {
             auto respResult = impl->waitResponse(OP_TRIGGER_SNAPSHOT, msgId, timeoutMs);
             if (!respResult) {
@@ -2681,7 +2825,11 @@ Future<std::vector<CaptureResult>> ItscamClient::captureSnapshotAsync(
             try { pShared->set_value(Error{Error::Unknown, "unknown exception"}); }
             catch (...) {}
         }
-    }).detach();
+    });
+    if (!started) {
+        impl->dropRequest(msgId);
+        pShared->set_value(Impl::workerStartError());
+    }
 
     return outerFut;
 }
@@ -2705,7 +2853,7 @@ Future<std::vector<uint8_t>> ItscamClient::getLastFrameAsync(int quality,
     auto* impl = mImpl.get();
     auto pShared = std::make_shared<Promise<std::vector<uint8_t>>>();
     auto outerFut = pShared->get_future();
-    Thread([impl, id, timeoutMs, pShared]() mutable {
+    bool started = impl->spawnWorker([impl, id, timeoutMs, pShared]() mutable {
         try {
             // GET_LASTFRAME response body IS the JPEG data (no JSON wrapper)
             WireFuture<WireMsg> fut;
@@ -2743,7 +2891,11 @@ Future<std::vector<uint8_t>> ItscamClient::getLastFrameAsync(int quality,
             try { pShared->set_value(Error{Error::Unknown, "unknown exception"}); }
             catch (...) {}
         }
-    }).detach();
+    });
+    if (!started) {
+        impl->dropRequest(id);
+        pShared->set_value(Impl::workerStartError());
+    }
     return outerFut;
 }
 

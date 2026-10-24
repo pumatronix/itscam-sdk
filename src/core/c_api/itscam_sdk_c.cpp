@@ -11,6 +11,7 @@
 #include "../itscam_client.h"
 #include "../itscam_sdk_utils.h"
 #include "../itscam_jpeg_utils.h"
+#include "../itscam_os.h"
 #include "impl/itscam_c_internal.h"
 
 #include <cstdarg>
@@ -53,21 +54,69 @@ static ITSCAM_ErrorCode translateError(const itscam::Error& err) {
 // Opaque Structure Definitions
 //=========================================================================
 
+namespace {
+
+// Tracks the C callbacks in progress, so ITSCAM_Client_destroy() can return
+// only once none is running or about to start: a binding frees its callback
+// registrations (ctypes, Koffi, ...) right after it.
+class CallbackGate {
+public:
+    // False once closed: the callback must not be called
+    bool enter() {
+        itscam::os::LockGuard<itscam::os::Mutex> lk(mMtx);
+        if (mClosed) return false;
+        ++mInFlight;
+        return true;
+    }
+
+    void leave() {
+        itscam::os::LockGuard<itscam::os::Mutex> lk(mMtx);
+        --mInFlight;
+        mCv.notifyAll();
+    }
+
+    // Admit no more callbacks and wait for the admitted ones to return,
+    // except the one the calling thread is running (destroy from a callback).
+    void closeAndWait() {
+        itscam::os::UniqueLock<itscam::os::Mutex> lk(mMtx);
+        mClosed = true;
+        int own = sCurrent == this ? 1 : 0;
+        while (mInFlight > own) mCv.wait(lk);
+    }
+
+    // Runs call() unless the gate is closed
+    template<typename Call>
+    void run(Call&& call) {
+        if (!enter()) return;
+        struct Exit {
+            CallbackGate* gate;
+            const CallbackGate* outer;
+            ~Exit() { sCurrent = outer; gate->leave(); }
+        } exit{this, sCurrent};
+        sCurrent = this;
+        call();
+    }
+
+private:
+    static thread_local const CallbackGate* sCurrent;  // gate of the callback this thread runs
+
+    itscam::os::Mutex mMtx;
+    itscam::os::ConditionVariable mCv;
+    bool mClosed = false;
+    int mInFlight = 0;
+};
+
+thread_local const CallbackGate* CallbackGate::sCurrent = nullptr;
+
+}  // namespace
+
+// The callback adapters below go through the gate and copy the C callback and
+// its user data instead of reading them from this struct, which the SDK
+// threads (and so the adapters) may outlive.
 struct ITSCAM_Client {
     std::unique_ptr<itscam::ItscamClient> impl;
-    
-    // Callback storage (prevent GC in bound languages)
-    ITSCAM_CaptureCallback           triggerImageCb = nullptr;
-    void*                            triggerImageUserData = nullptr;
-    ITSCAM_CaptureCallback           snapshotImageCb = nullptr;
-    void*                            snapshotImageUserData = nullptr;
-    ITSCAM_DisconnectCallback        disconnectCb = nullptr;
-    void*                            disconnectUserData = nullptr;
-    ITSCAM_ConnectionStateCallback   connectionStateCb = nullptr;
-    void*                            connectionStateUserData = nullptr;
-    ITSCAM_LogCallback               logCb = nullptr;
-    void*                            logUserData = nullptr;
-    
+    std::shared_ptr<CallbackGate> gate = std::make_shared<CallbackGate>();
+
     ITSCAM_Client() : impl(std::make_unique<itscam::ItscamClient>()) {}
 };
 
@@ -107,6 +156,11 @@ ITSCAM_Client* ITSCAM_Client_create(void) {
 }
 
 void ITSCAM_Client_destroy(ITSCAM_Client* client) {
+    if (!client) return;
+    // First let the callbacks in progress return (they may need the thread
+    // that called this one in the meantime: see the header), then stop the
+    // client, whose own wait for a callback then has nothing left to wait for
+    client->gate->closeAndWait();
     delete client;
 }
 
@@ -436,16 +490,14 @@ void ITSCAM_Client_onTriggerImage(
 {
     if (!client || !client->impl) return;
     
-    client->triggerImageCb = callback;
-    client->triggerImageUserData = userData;
-    
     if (callback) {
-        client->impl->onTriggerImage([client](const itscam::CaptureResult& cr) {
-            if (client->triggerImageCb) {
+        auto gate = client->gate;
+        client->impl->onTriggerImage([gate, callback, userData](const itscam::CaptureResult& cr) {
+            gate->run([&] {
                 ITSCAM_CaptureResult wrapped;
                 wrapped.data = cr;
-                client->triggerImageCb(&wrapped, client->triggerImageUserData);
-            }
+                callback(&wrapped, userData);
+            });
         });
     } else {
         client->impl->onTriggerImage(nullptr);
@@ -459,16 +511,14 @@ void ITSCAM_Client_onSnapshotImage(
 {
     if (!client || !client->impl) return;
     
-    client->snapshotImageCb = callback;
-    client->snapshotImageUserData = userData;
-    
     if (callback) {
-        client->impl->onSnapshotImage([client](const itscam::CaptureResult& cr) {
-            if (client->snapshotImageCb) {
+        auto gate = client->gate;
+        client->impl->onSnapshotImage([gate, callback, userData](const itscam::CaptureResult& cr) {
+            gate->run([&] {
                 ITSCAM_CaptureResult wrapped;
                 wrapped.data = cr;
-                client->snapshotImageCb(&wrapped, client->snapshotImageUserData);
-            }
+                callback(&wrapped, userData);
+            });
         });
     } else {
         client->impl->onSnapshotImage(nullptr);
@@ -482,14 +532,10 @@ void ITSCAM_Client_onDisconnect(
 {
     if (!client || !client->impl) return;
     
-    client->disconnectCb = callback;
-    client->disconnectUserData = userData;
-    
     if (callback) {
-        client->impl->onDisconnect([client](const std::string& reason) {
-            if (client->disconnectCb) {
-                client->disconnectCb(reason.c_str(), client->disconnectUserData);
-            }
+        auto gate = client->gate;
+        client->impl->onDisconnect([gate, callback, userData](const std::string& reason) {
+            gate->run([&] { callback(reason.c_str(), userData); });
         });
     } else {
         client->impl->onDisconnect(nullptr);
@@ -503,16 +549,11 @@ void ITSCAM_Client_onConnectionState(
 {
     if (!client || !client->impl) return;
     
-    client->connectionStateCb = callback;
-    client->connectionStateUserData = userData;
-    
     if (callback) {
+        auto gate = client->gate;
         client->impl->onConnectionStateChanged(
-            [client](itscam::ConnectionState state, const std::string& reason) {
-                if (client->connectionStateCb) {
-                    client->connectionStateCb(static_cast<int>(state), reason.c_str(),
-                                              client->connectionStateUserData);
-                }
+            [gate, callback, userData](itscam::ConnectionState state, const std::string& reason) {
+                gate->run([&] { callback(static_cast<int>(state), reason.c_str(), userData); });
             });
     } else {
         client->impl->onConnectionStateChanged(nullptr);
@@ -526,16 +567,11 @@ void ITSCAM_Client_onLog(
 {
     if (!client || !client->impl) return;
     
-    client->logCb = callback;
-    client->logUserData = userData;
-    
     if (callback) {
-        client->impl->setLogHandler([client](itscam::LogLevel level,
-                                              const std::string& msg) {
-            if (client->logCb) {
-                client->logCb(static_cast<int>(level), msg.c_str(),
-                              client->logUserData);
-            }
+        auto gate = client->gate;
+        client->impl->setLogHandler([gate, callback, userData](itscam::LogLevel level,
+                                                               const std::string& msg) {
+            gate->run([&] { callback(static_cast<int>(level), msg.c_str(), userData); });
         });
     } else {
         client->impl->setLogHandler(nullptr);

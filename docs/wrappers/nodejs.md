@@ -70,7 +70,7 @@ make docker-nodejs              # mesma coisa dentro do Docker
 | ------- | ---------------- |
 | Async | Toda blocking call tem `*Async` retornando `Promise<T>`. |
 | Lifetime | Todos os clients têm `close()` (e `Symbol.dispose` para `using` em Node 22+ ou TS 5.2+). |
-| Streaming | `startMjpegStream(callback)` invoca o callback na worker thread do SDK. |
+| Streaming | `startMjpegStream(callback)` entrega cada frame na thread do JS (via koffi); não bloqueie. `stopMjpegStream()` retorna uma `Promise` que resolve quando a worker thread do SDK termina; frames que ainda chegarem são descartados. |
 | Errors | Hierarquia `Error` rooted em `ItscamError` (`ItscamTimeoutError`, `ItscamAuthError`, ...). |
 | TS | Declarations completas em `types/index.d.ts` — IntelliSense funciona em JS e TS. |
 
@@ -94,10 +94,10 @@ try {
     images.forEach((img, i) => fs.writeFileSync(`snap-${i}.jpg`, img.data));
 
     cgi.startMjpegStream((frame) => {
-        // Roda na worker thread do SDK; não bloqueie.
+        // Roda na thread do JS; não bloqueie.
     });
     await new Promise(r => setTimeout(r, 5000));
-    cgi.stopMjpegStream();
+    await cgi.stopMjpegStream();
 } finally {
     cgi.close();
 }
