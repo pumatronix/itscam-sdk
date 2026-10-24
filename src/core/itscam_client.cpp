@@ -664,8 +664,8 @@ struct ItscamClient::Impl {
     // handle (e.g. stuck in a connect or a user callback) never touches freed
     // memory.
     std::atomic<int> refs{1};
-    // Set once the handle is destroyed: no user callback starts after that.
-    // Written and read with cbMtx held, except in closeAndRelease().
+    // Set once the handle is destroyed: no user callback is admitted after
+    // that. Read with cbMtx held, by the code that invokes the callbacks.
     std::atomic<bool> callbacksClosed{false};
 
     void releaseRef() {
@@ -728,17 +728,37 @@ struct ItscamClient::Impl {
         failPendingRequests("client destroyed");
         wakePendingCaptures();
 
-        // Let a callback in progress return before reporting the client closed,
-        // but only for a while: it may be waiting for this very thread.
+        // Admit no new callback, then let the one in progress (if any: it
+        // holds cbMtx and was admitted before the flag) return. Only for a
+        // while: it may be waiting for this very thread, and then it runs on
+        // after this returns. The Impl stays alive for it, and the C API
+        // callbacks carry their own copy of what they need.
+        callbacksClosed.store(true);
         bool locked = false;
         for (int i = 0; i < 100 && !(locked = cbMtx.tryLock()); ++i) {
             os::sleepForMs(20);
         }
-        callbacksClosed.store(true);
         if (locked) cbMtx.unlock();
 
         releaseRef();
     }
+
+    // runSocketThread() threw: wind the session down like a normal exit (the
+    // handler thread runs while the state is RUNNING) before publishing
+    // STOPPED, which lets a new connectAsync() start, then report it.
+    void stopAfterSocketThreadError(const std::string& what) {
+        markConnectionLost();
+        closeSocket();
+        if (handlerThread.joinable()) handlerThread.join();
+        state.store(STOPPED);
+        try {
+            log(LogLevel::Error, "Socket thread %s", what.c_str());
+        } catch (...) {}  // user log handler: the session is already down
+    }
+
+    // Last reference gone: no thread uses the Impl any more. Close what an
+    // exceptional exit of the socket thread may have left open.
+    ~Impl() { closeSocket(); }
 
     // ---- Outbound serialisation ----
     Mutex sendMtx;
@@ -2463,14 +2483,10 @@ Future<void> ItscamClient::connectAsync(const std::string& address,
         try {
             impl->runSocketThread();
         } catch (const std::exception& ex) {
-            impl->log(LogLevel::Error, "Socket thread exception: %s", ex.what());
-            impl->state.store(Impl::STOPPED);
+            impl->stopAfterSocketThreadError(std::string("exception: ") + ex.what());
         } catch (...) {
-            impl->log(LogLevel::Error, "Socket thread unknown exception");
-            impl->state.store(Impl::STOPPED);
+            impl->stopAfterSocketThreadError("unknown exception");
         }
-        // Normally joined on disconnect; an exception may have skipped that
-        if (impl->handlerThread.joinable()) impl->handlerThread.join();
     });
     if (!started) mImpl->state.store(Impl::STOPPED);  // the poller reports it
 
