@@ -6,6 +6,7 @@ High-level Pythonic wrapper for the ITSCAM camera client.
 
 from ctypes import byref, c_uint32, c_size_t, POINTER, c_ubyte, cast, c_char_p
 from typing import Optional, List, Callable, Any
+import sys
 import weakref
 
 from . import bindings as _b
@@ -402,7 +403,57 @@ class ItscamClient:
         if result != ErrorCode.OK:
             error_msg = self._lib.ITSCAM_getLastError()
             _raise_for_error(result, error_msg.decode("utf-8") if error_msg else "")
-    
+
+    # =========================================================================
+    #  Equipment Configuration  (replaces CougarClient.setEquipCfgs)
+    # =========================================================================
+
+    def set_config(self, path: str, data, timeout_ms: int = 5000) -> None:
+        """
+        Set a configuration value on the camera.
+
+        Direct replacement for CougarClient.setEquipCfgs() — uses the SDK's
+        SET_EQUIP_CFGS opcode internally over the same TCP connection.
+
+        Usage for GPIO control:
+            # Configure pin as output
+            client.set_config("equip.io.0", {"type": "general", "isInput": False})
+            # Set pin state
+            client.set_config("equip.io.0.out", True)
+
+        Args:
+            path:       Configuration path (e.g. "equip.io.0.out").
+            data:       Value to set — dict, list, bool, int, float or str.
+            timeout_ms: Request timeout in milliseconds (default 5000).
+
+        Raises:
+            ItscamError: If the operation fails.
+        """
+        import json as _json
+        if not self._handle:
+            raise RuntimeError("Client has been closed")
+
+        if not hasattr(self._lib, "ITSCAM_Client_setConfig"):
+            loaded_lib = getattr(self._lib, "_name", "<unknown>")
+            raise NotImplementedError(
+                "set_config() requires a newer .so exposing ITSCAM_Client_setConfig. "
+                f"Loaded library: {loaded_lib}. Python runtime: {sys.version.split()[0]}. "
+                "This usually means Python files were updated but /usr/lib/libitscam_sdk.so* is still old. "
+                "Rebuild/redeploy the core library (e.g., make lib, make lib-arm, or make lib-arm64)."
+            )
+
+        json_data = _json.dumps(data)
+        result = self._lib.ITSCAM_Client_setConfig(
+            self._handle,
+            path.encode("utf-8"),
+            json_data.encode("utf-8"),
+            timeout_ms,
+        )
+
+        if result != ErrorCode.OK:
+            error_msg = self._lib.ITSCAM_getLastError()
+            _raise_for_error(result, error_msg.decode("utf-8") if error_msg else "")
+        
     # =========================================================================
     #  Callbacks
     # =========================================================================
@@ -555,6 +606,21 @@ class ItscamClient:
                 results.append(self._convert_single_capture_result(result_ptr))
         return results
     
+    def _convert_metadata(self, metadata_ptr) -> dict:
+        """Convert native metadata map to Python dict."""
+        if not metadata_ptr or not hasattr(self._lib, "ITSCAM_MetadataMap_size"):
+            return {}
+        metadata = {}
+        count = self._lib.ITSCAM_MetadataMap_size(metadata_ptr)
+        for i in range(count):
+            key_ptr = self._lib.ITSCAM_MetadataMap_key(metadata_ptr, i)
+            value_ptr = self._lib.ITSCAM_MetadataMap_value(metadata_ptr, i)
+            if key_ptr and value_ptr:
+                key = key_ptr.decode("utf-8")
+                value = value_ptr.decode("utf-8")
+                metadata[key] = value
+        return metadata
+    
     def _convert_single_capture_result(self, result_ptr) -> CaptureResult:
         """Convert a single native capture result to Python object."""
         # Get frame info
@@ -570,13 +636,25 @@ class ItscamClient:
         
         info = FrameInfo(
             request_id=native_info.requestId,
-            scenario=native_info.scenario,
+            frame_count=native_info.frameCount,
             multi_exp_index=native_info.multiExpIndex,
             multi_exp_length=native_info.multiExpLength,
-            timestamp_us=native_info.timestampUs,
+            shutter=native_info.shutter,
+            gain=native_info.gain,
             width=native_info.width,
             height=native_info.height,
-            plates=plates
+            timestamp=Timestamp(
+                year=native_info.timestamp.year,
+                month=native_info.timestamp.month,
+                day=native_info.timestamp.day,
+                hour=native_info.timestamp.hour,
+                minute=native_info.timestamp.minute,
+                second=native_info.timestamp.second,
+                millisecond=native_info.timestamp.millisecond,
+            ),
+            timestamp_str=native_info.timestampStr.decode("utf-8") if native_info.timestampStr else "",
+            plates=plates,
+            metadata=self._convert_metadata(native_info.metadata),
         )
         
         # Get JPEG data
