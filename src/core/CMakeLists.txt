@@ -42,6 +42,7 @@ set(SDK_SOURCES
     itscam_rest_client.cpp
     itscam_cgi_client.cpp
     impl/itscam_http_transport.cpp
+    impl/itscam_websocket_transport.cpp
     impl/itscam_multipart.cpp
     c_api/itscam_sdk_c.cpp
     c_api/itscam_rest_client_c.cpp

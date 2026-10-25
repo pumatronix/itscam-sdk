@@ -76,6 +76,11 @@ struct HttpRequest {
 using ContentReceiver =
     std::function<bool(const uint8_t* data, size_t length)>;
 
+/// Called while a request body is being uploaded. Return false to abort the
+/// transfer.
+using UploadProgress =
+    std::function<bool(size_t current, size_t total)>;
+
 //=========================================================================
 // TLS configuration
 //=========================================================================
@@ -160,6 +165,16 @@ public:
     /// memory and surfaced through HttpResponse.  Maps cpp-httplib errors
     /// onto itscam::Error.
     Result<HttpResponse> request(const HttpRequest& req, uint32_t timeoutMs);
+
+    /// POST one local file as multipart/form-data. The file is streamed from
+    /// disk by cpp-httplib; callers only pass a path and receive progress
+    /// notifications.
+    Result<HttpResponse> postMultipartFile(const std::string& path,
+                                           const std::string& fieldName,
+                                           const std::string& filePath,
+                                           const std::string& contentType,
+                                           uint32_t timeoutMs,
+                                           UploadProgress progress = nullptr);
 
     // ----- Streaming request ----------------------------------------------
 

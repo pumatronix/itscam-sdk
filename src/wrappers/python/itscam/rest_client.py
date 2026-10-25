@@ -42,7 +42,7 @@ Copyright (c) 2026 Pumatronix
 from __future__ import annotations
 
 import json
-from typing import Any, List, Optional, Union
+from typing import Any, Callable, List, Optional, Union
 
 from . import bindings, rest_types as _rt
 from .types import _raise_for_error
@@ -74,6 +74,81 @@ def _decode(body: str) -> JsonValue:
 
 def _c_str(s: Optional[str]) -> Optional[bytes]:
     return s.encode("utf-8") if s is not None else None
+
+
+def _decode_status(raw: Optional[bytes]) -> JsonValue:
+    if not raw:
+        return None
+    return _decode(raw.decode("utf-8"))
+
+
+def _make_status_callback(
+    callback: Optional[Callable[[JsonValue], None]]
+):
+    if callback is None:
+        return None
+    return bindings.ITSCAM_SoftwareUpdateStatusCallback(
+        lambda status_json, _ud: callback(_decode_status(status_json)))
+
+
+class SoftwareUpdateOperation:
+    """Handle for a non-blocking software-update operation."""
+
+    def __init__(self, lib, handle, callback_ref=None) -> None:
+        self._lib = lib
+        self._handle = handle
+        self._callback_ref = callback_ref
+
+    def close(self) -> None:
+        if getattr(self, "_handle", None):
+            self._lib.ITSCAM_SoftwareUpdateOperation_setCallback(
+                self._handle, None, None)
+            self._lib.ITSCAM_SoftwareUpdateOperation_destroy(self._handle)
+            self._handle = None
+            self._callback_ref = None
+
+    def __enter__(self) -> "SoftwareUpdateOperation":
+        return self
+
+    def __exit__(self, *exc_info) -> None:
+        self.close()
+
+    def __del__(self) -> None:
+        try:
+            self.close()
+        except Exception:
+            pass
+
+    def status(self) -> JsonValue:
+        out = bindings.ITSCAM_String()
+        rc = self._lib.ITSCAM_SoftwareUpdateOperation_status(
+            self._handle, bindings.byref(out))
+        body = _take_string(out)
+        _raise_for_error(rc, "software_update_status")
+        return _decode(body)
+
+    def set_callback(
+        self,
+        callback: Optional[Callable[[JsonValue], None]],
+    ) -> None:
+        self._callback_ref = _make_status_callback(callback)
+        self._lib.ITSCAM_SoftwareUpdateOperation_setCallback(
+            self._handle, self._callback_ref, None)
+
+    def wait(self, timeout_ms: int = 0) -> JsonValue:
+        out = bindings.ITSCAM_String()
+        rc = self._lib.ITSCAM_SoftwareUpdateOperation_wait(
+            self._handle, timeout_ms, bindings.byref(out))
+        body = _take_string(out)
+        _raise_for_error(rc, "software_update_wait")
+        return _decode(body)
+
+    def is_complete(self) -> bool:
+        return bool(self._lib.ITSCAM_SoftwareUpdateOperation_isComplete(
+            self._handle))
+
+    def cancel(self) -> None:
+        self._lib.ITSCAM_SoftwareUpdateOperation_cancel(self._handle)
 
 
 class ItscamRestClient:
@@ -184,6 +259,76 @@ class ItscamRestClient:
             self._handle, _c_str(path), timeout_ms, bindings.byref(out))
         body = _take_string(out)
         _raise_for_error(rc, f"DELETE {path}")
+        return _decode(body)
+
+    # ----- software update --------------------------------------------------
+
+    def upload_software_archive(
+        self,
+        swu_path: str,
+        timeout_ms: int = 300000,
+        progress: Optional[Callable[[int, int], bool]] = None,
+    ) -> JsonValue:
+        """Upload a SWU archive through the authenticated webapp route."""
+        callback = bindings.ITSCAM_UploadProgressCallback(
+            lambda current, total, _ud: 1 if progress is None
+            else (1 if progress(int(current), int(total)) else 0))
+        out = bindings.ITSCAM_String()
+        rc = self._lib.ITSCAM_RestClient_uploadSoftwareArchive(
+            self._handle, _c_str(swu_path), timeout_ms,
+            callback, None, bindings.byref(out))
+        body = _take_string(out)
+        _raise_for_error(rc, "upload_software_archive")
+        return _decode(body)
+
+    def restart_software_update(self, timeout_ms: int = 10000) -> JsonValue:
+        """Request an equipment restart after a successful software update."""
+        out = bindings.ITSCAM_String()
+        rc = self._lib.ITSCAM_RestClient_restartSoftwareUpdate(
+            self._handle, timeout_ms, bindings.byref(out))
+        body = _take_string(out)
+        _raise_for_error(rc, "restart_software_update")
+        return _decode(body)
+
+    def start_software_update(
+        self,
+        swu_path: str,
+        upload_timeout_ms: int = 300000,
+        status_timeout_ms: int = 900000,
+        restart_timeout_ms: int = 10000,
+        request_restart: bool = False,
+        callback: Optional[Callable[[JsonValue], None]] = None,
+    ) -> SoftwareUpdateOperation:
+        """Start a non-blocking SWU upload + websocket status operation."""
+        status_callback = _make_status_callback(callback)
+        operation = bindings.ITSCAM_SoftwareUpdateOperation()
+        rc = self._lib.ITSCAM_RestClient_startSoftwareUpdate(
+            self._handle, _c_str(swu_path), upload_timeout_ms,
+            status_timeout_ms, restart_timeout_ms,
+            1 if request_restart else 0,
+            status_callback, None, bindings.byref(operation))
+        _raise_for_error(rc, "start_software_update")
+        return SoftwareUpdateOperation(self._lib, operation, status_callback)
+
+    def update_software(
+        self,
+        swu_path: str,
+        upload_timeout_ms: int = 300000,
+        status_timeout_ms: int = 900000,
+        restart_timeout_ms: int = 10000,
+        request_restart: bool = False,
+        callback: Optional[Callable[[JsonValue], None]] = None,
+    ) -> JsonValue:
+        """Run a blocking SWU upload + websocket status operation."""
+        status_callback = _make_status_callback(callback)
+        out = bindings.ITSCAM_String()
+        rc = self._lib.ITSCAM_RestClient_updateSoftware(
+            self._handle, _c_str(swu_path), upload_timeout_ms,
+            status_timeout_ms, restart_timeout_ms,
+            1 if request_restart else 0,
+            status_callback, None, bindings.byref(out))
+        body = _take_string(out)
+        _raise_for_error(rc, "update_software")
         return _decode(body)
 
     def _with_body(self, verb: str, path: str, body: Any,

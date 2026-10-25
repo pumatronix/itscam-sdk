@@ -7,9 +7,76 @@
  */
 'use strict';
 
-const { fns } = require('./native');
+const { koffi, fns, callbacks } = require('./native');
 const { ItscamError, ErrorCode } = require('./errors');
 const { takeString, checkCall } = require('./utils');
+
+class SoftwareUpdateOperation {
+    constructor(handle, callbackPtr = null) {
+        this._handle = handle;
+        this._callbackPtr = callbackPtr;
+    }
+
+    [Symbol.dispose]() { this.close(); }
+
+    close() {
+        if (!this._handle) return;
+        fns.SoftwareUpdateOperation_setCallback(this._handle, null, null);
+        fns.SoftwareUpdateOperation_destroy(this._handle);
+        this._handle = null;
+        this._unregisterCallback();
+    }
+
+    _requireOpen() {
+        if (!this._handle) throw new Error('SoftwareUpdateOperation closed');
+    }
+
+    _unregisterCallback() {
+        if (this._callbackPtr) {
+            koffi.unregister(this._callbackPtr);
+            this._callbackPtr = null;
+        }
+    }
+
+    status() {
+        this._requireOpen();
+        const out = [null];
+        const rc = fns.SoftwareUpdateOperation_status(this._handle, out);
+        const body = takeString(out[0]);
+        checkCall(rc, 'softwareUpdateStatus');
+        return _decodeJson(body);
+    }
+
+    setCallback(callback) {
+        this._requireOpen();
+        this._unregisterCallback();
+        this._callbackPtr = _registerStatusCallback(callback);
+        fns.SoftwareUpdateOperation_setCallback(this._handle,
+            this._callbackPtr, null);
+    }
+
+    wait(timeoutMs = 0) {
+        this._requireOpen();
+        const out = [null];
+        const rc = fns.SoftwareUpdateOperation_wait(this._handle,
+            timeoutMs, out);
+        const body = takeString(out[0]);
+        checkCall(rc, 'softwareUpdateWait');
+        return _decodeJson(body);
+    }
+
+    waitAsync(timeoutMs = 0) { return _async(() => this.wait(timeoutMs)); }
+
+    isComplete() {
+        this._requireOpen();
+        return fns.SoftwareUpdateOperation_isComplete(this._handle) !== 0;
+    }
+
+    cancel() {
+        this._requireOpen();
+        fns.SoftwareUpdateOperation_cancel(this._handle);
+    }
+}
 
 class ItscamRestClient {
     constructor() {
@@ -144,10 +211,89 @@ class ItscamRestClient {
         return _decodeJson(body);
     }
 
+    uploadSoftwareArchive(swuPath, timeoutMs = 300000, progress = null) {
+        this._requireOpen();
+        const out = [null];
+        let cb = null;
+        if (typeof progress === 'function') {
+            cb = koffi.register((current, total, _ud) =>
+                progress(Number(current), Number(total)) ? 1 : 0,
+                koffi.pointer(callbacks.UploadProgressCb));
+        }
+        try {
+            const rc = fns.Rest_uploadSoftwareArchive(this._handle, swuPath,
+                timeoutMs, cb, null, out);
+            const body = takeString(out[0]);
+            checkCall(rc, 'uploadSoftwareArchive');
+            return _decodeJson(body);
+        } finally {
+            if (cb) koffi.unregister(cb);
+        }
+    }
+
+    restartSoftwareUpdate(timeoutMs = 10000) {
+        this._requireOpen();
+        const out = [null];
+        const rc = fns.Rest_restartSoftwareUpdate(this._handle,
+            timeoutMs, out);
+        const body = takeString(out[0]);
+        checkCall(rc, 'restartSoftwareUpdate');
+        return _decodeJson(body);
+    }
+
+    startSoftwareUpdate(options, statusCallback = null) {
+        this._requireOpen();
+        const opts = _softwareUpdateOptions(options);
+        const callbackPtr = _registerStatusCallback(statusCallback);
+        const out = [null];
+        try {
+            const rc = fns.Rest_startSoftwareUpdate(this._handle,
+                opts.swuPath, opts.uploadTimeoutMs, opts.statusTimeoutMs,
+                opts.restartTimeoutMs, opts.requestRestart ? 1 : 0,
+                callbackPtr, null, out);
+            checkCall(rc, 'startSoftwareUpdate');
+            return new SoftwareUpdateOperation(out[0], callbackPtr);
+        } catch (err) {
+            if (callbackPtr) koffi.unregister(callbackPtr);
+            throw err;
+        }
+    }
+
+    updateSoftware(options, statusCallback = null) {
+        this._requireOpen();
+        const opts = _softwareUpdateOptions(options);
+        const callbackPtr = _registerStatusCallback(statusCallback);
+        const out = [null];
+        try {
+            const rc = fns.Rest_updateSoftware(this._handle,
+                opts.swuPath, opts.uploadTimeoutMs, opts.statusTimeoutMs,
+                opts.restartTimeoutMs, opts.requestRestart ? 1 : 0,
+                callbackPtr, null, out);
+            const body = takeString(out[0]);
+            checkCall(rc, 'updateSoftware');
+            return _decodeJson(body);
+        } finally {
+            if (callbackPtr) koffi.unregister(callbackPtr);
+        }
+    }
+
     getAsync(path, timeoutMs)        { return _async(() => this.get(path, timeoutMs)); }
     putAsync(path, body, timeoutMs)  { return _async(() => this.put(path, body, timeoutMs)); }
     postAsync(path, body, timeoutMs) { return _async(() => this.post(path, body, timeoutMs)); }
     deleteAsync(path, timeoutMs)     { return _async(() => this.delete(path, timeoutMs)); }
+    uploadSoftwareArchiveAsync(swuPath, timeoutMs, progress) {
+        return _async(() => this.uploadSoftwareArchive(swuPath, timeoutMs,
+            progress));
+    }
+    restartSoftwareUpdateAsync(timeoutMs) {
+        return _async(() => this.restartSoftwareUpdate(timeoutMs));
+    }
+    startSoftwareUpdateAsync(options, statusCallback) {
+        return _async(() => this.startSoftwareUpdate(options, statusCallback));
+    }
+    updateSoftwareAsync(options, statusCallback) {
+        return _async(() => this.updateSoftware(options, statusCallback));
+    }
 
     // ====================================================================
     //  Typed convenience helpers
@@ -300,6 +446,26 @@ function _decodeJson(body) {
     }
 }
 
+function _softwareUpdateOptions(options) {
+    if (typeof options === 'string') options = { swuPath: options };
+    if (!options || !options.swuPath) {
+        throw new Error('software update options require swuPath');
+    }
+    return {
+        swuPath: options.swuPath,
+        uploadTimeoutMs: options.uploadTimeoutMs ?? 300000,
+        statusTimeoutMs: options.statusTimeoutMs ?? 900000,
+        restartTimeoutMs: options.restartTimeoutMs ?? 10000,
+        requestRestart: !!options.requestRestart,
+    };
+}
+
+function _registerStatusCallback(callback) {
+    if (typeof callback !== 'function') return null;
+    return koffi.register((statusJson, _ud) => callback(_decodeJson(statusJson)),
+        koffi.pointer(callbacks.SoftwareUpdateStatusCb));
+}
+
 function _async(fn) {
     return new Promise((resolve, reject) => {
         try { resolve(fn()); }
@@ -307,4 +473,4 @@ function _async(fn) {
     });
 }
 
-module.exports = { ItscamRestClient };
+module.exports = { ItscamRestClient, SoftwareUpdateOperation };

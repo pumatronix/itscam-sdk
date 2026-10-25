@@ -13,6 +13,154 @@ using Pumatronix.Itscam.RestTypes;
 
 namespace Pumatronix.Itscam
 {
+    public sealed class SoftwareUpdateOptions
+    {
+        public string SwuPath { get; set; }
+        public uint UploadTimeoutMs { get; set; } = 300000;
+        public uint StatusTimeoutMs { get; set; } = 900000;
+        public uint RestartTimeoutMs { get; set; } = 10000;
+        public bool RequestRestart { get; set; }
+    }
+
+    public sealed class SoftwareUpdateStatusError
+    {
+        public string Code { get; set; }
+        public string Message { get; set; }
+    }
+
+    public sealed class SoftwareUpdateStatus
+    {
+        public string Phase { get; set; }
+        public bool Complete { get; set; }
+        public ulong UploadCurrent { get; set; }
+        public ulong UploadTotal { get; set; }
+        public string InstallStatus { get; set; }
+        public string StepName { get; set; }
+        public int StepPercent { get; set; }
+        public string Message { get; set; }
+        public string MessageLevel { get; set; }
+        public string RawMessage { get; set; }
+        public SoftwareUpdateStatusError Error { get; set; }
+    }
+
+    public sealed class SoftwareUpdateOperation : IDisposable
+    {
+        private IntPtr _handle;
+        private bool _disposed;
+        private Action<SoftwareUpdateStatus> _managedCallback;
+        private NativeMethods.RestSoftwareUpdateStatusCallback _nativeCallback;
+
+        internal SoftwareUpdateOperation(
+            IntPtr handle,
+            Action<SoftwareUpdateStatus> managedCallback,
+            NativeMethods.RestSoftwareUpdateStatusCallback nativeCallback)
+        {
+            _handle = handle;
+            _managedCallback = managedCallback;
+            _nativeCallback = nativeCallback;
+        }
+
+        public SoftwareUpdateStatus Status
+        {
+            get
+            {
+                ThrowIfDisposed();
+                var rc = NativeMethods.SoftwareUpdateOperation_status(
+                    _handle, out var ptr);
+                if (rc != NativeErrorCode.Ok)
+                {
+                    if (ptr != IntPtr.Zero) NativeMethods.String_destroy(ptr);
+                    ItscamException.ThrowIfFailed(rc,
+                        "SoftwareUpdateOperation.status");
+                }
+                return ParseStatus(NativeMethods.TakeString(ptr));
+            }
+        }
+
+        public bool IsComplete
+        {
+            get
+            {
+                ThrowIfDisposed();
+                return NativeMethods.SoftwareUpdateOperation_isComplete(
+                    _handle) != 0;
+            }
+        }
+
+        public void SetCallback(Action<SoftwareUpdateStatus> callback)
+        {
+            ThrowIfDisposed();
+            _managedCallback = callback;
+            _nativeCallback = MakeNativeCallback(callback);
+            NativeMethods.SoftwareUpdateOperation_setCallback(
+                _handle, _nativeCallback, IntPtr.Zero);
+        }
+
+        public SoftwareUpdateStatus Wait(uint timeoutMs = 0)
+        {
+            ThrowIfDisposed();
+            var rc = NativeMethods.SoftwareUpdateOperation_wait(
+                _handle, timeoutMs, out var ptr);
+            if (rc != NativeErrorCode.Ok)
+            {
+                if (ptr != IntPtr.Zero) NativeMethods.String_destroy(ptr);
+                ItscamException.ThrowIfFailed(rc,
+                    "SoftwareUpdateOperation.wait");
+            }
+            return ParseStatus(NativeMethods.TakeString(ptr));
+        }
+
+        public Task<SoftwareUpdateStatus> WaitAsync(uint timeoutMs = 0) =>
+            Task.Run(() => Wait(timeoutMs));
+
+        public void Cancel()
+        {
+            ThrowIfDisposed();
+            NativeMethods.SoftwareUpdateOperation_cancel(_handle);
+        }
+
+        public void Dispose()
+        {
+            if (_disposed) return;
+            _disposed = true;
+            if (_handle != IntPtr.Zero)
+            {
+                NativeMethods.SoftwareUpdateOperation_setCallback(
+                    _handle, null, IntPtr.Zero);
+                NativeMethods.SoftwareUpdateOperation_destroy(_handle);
+                _handle = IntPtr.Zero;
+            }
+            _managedCallback = null;
+            _nativeCallback = null;
+            GC.SuppressFinalize(this);
+        }
+
+        ~SoftwareUpdateOperation() { Dispose(); }
+
+        internal static NativeMethods.RestSoftwareUpdateStatusCallback
+            MakeNativeCallback(Action<SoftwareUpdateStatus> callback)
+        {
+            if (callback == null) return null;
+            return (statusJson, _) =>
+            {
+                callback(ParseStatus(NativeMethods.PtrToStringUtf8(statusJson)));
+            };
+        }
+
+        internal static SoftwareUpdateStatus ParseStatus(string json)
+        {
+            if (string.IsNullOrEmpty(json)) return new SoftwareUpdateStatus();
+            return JsonSerializer.Deserialize<SoftwareUpdateStatus>(
+                json, ItscamRestClient.JsonOpts) ?? new SoftwareUpdateStatus();
+        }
+
+        private void ThrowIfDisposed()
+        {
+            if (_disposed)
+                throw new ObjectDisposedException(nameof(SoftwareUpdateOperation));
+        }
+    }
+
     /// <summary>
     /// .NET wrapper for the ITSCAM REST API (webapp backend).
     ///
@@ -148,6 +296,122 @@ namespace Pumatronix.Itscam
         public Task<string> DeleteAsync(string path, uint timeoutMs = 10000) =>
             InvokeAsync("DELETE", path, null, timeoutMs,
                         NativeMethods.Rest_httpDelete);
+
+        // ====================================================================
+        //  Software update
+        // ====================================================================
+
+        /// <summary>
+        /// Upload a SWU archive through the authenticated webapp backend route.
+        /// The native SDK streams the file as multipart/form-data field
+        /// <c>file</c>.
+        /// </summary>
+        public Task<string> UploadSoftwareArchiveAsync(
+            string swuPath,
+            uint timeoutMs = 300000,
+            Func<ulong, ulong, bool> progress = null)
+        {
+            ThrowIfDisposed();
+            if (swuPath == null) throw new ArgumentNullException(nameof(swuPath));
+            return Task.Run(() =>
+            {
+                NativeMethods.RestUploadProgressCallback cb = null;
+                if (progress != null)
+                    cb = (current, total, _) => progress(current, total) ? 1 : 0;
+
+                var rc = NativeMethods.Rest_uploadSoftwareArchive(
+                    _handle, swuPath, timeoutMs, cb, IntPtr.Zero, out var ptr);
+                if (rc != NativeErrorCode.Ok)
+                {
+                    if (ptr != IntPtr.Zero) NativeMethods.String_destroy(ptr);
+                    ItscamException.ThrowIfFailed(rc,
+                        "Rest.uploadSoftwareArchive");
+                }
+                return NativeMethods.TakeString(ptr);
+            });
+        }
+
+        /// <summary>
+        /// Request an equipment restart after a successful software update.
+        /// </summary>
+        public Task<string> RestartSoftwareUpdateAsync(uint timeoutMs = 10000)
+        {
+            ThrowIfDisposed();
+            return Task.Run(() =>
+            {
+                var rc = NativeMethods.Rest_restartSoftwareUpdate(
+                    _handle, timeoutMs, out var ptr);
+                if (rc != NativeErrorCode.Ok)
+                {
+                    if (ptr != IntPtr.Zero) NativeMethods.String_destroy(ptr);
+                    ItscamException.ThrowIfFailed(rc,
+                        "Rest.restartSoftwareUpdate");
+                }
+                return NativeMethods.TakeString(ptr);
+            });
+        }
+
+        public SoftwareUpdateOperation StartSoftwareUpdate(
+            SoftwareUpdateOptions options,
+            Action<SoftwareUpdateStatus> statusCallback = null)
+        {
+            ThrowIfDisposed();
+            if (options == null) throw new ArgumentNullException(nameof(options));
+            if (options.SwuPath == null)
+                throw new ArgumentNullException(nameof(options.SwuPath));
+
+            var nativeCallback =
+                SoftwareUpdateOperation.MakeNativeCallback(statusCallback);
+            var rc = NativeMethods.Rest_startSoftwareUpdate(
+                _handle,
+                options.SwuPath,
+                options.UploadTimeoutMs,
+                options.StatusTimeoutMs,
+                options.RestartTimeoutMs,
+                options.RequestRestart ? 1 : 0,
+                nativeCallback,
+                IntPtr.Zero,
+                out var opHandle);
+            if (rc != NativeErrorCode.Ok)
+                ItscamException.ThrowIfFailed(rc, "Rest.startSoftwareUpdate");
+
+            return new SoftwareUpdateOperation(opHandle, statusCallback,
+                                               nativeCallback);
+        }
+
+        public Task<SoftwareUpdateStatus> UpdateSoftwareAsync(
+            SoftwareUpdateOptions options,
+            Action<SoftwareUpdateStatus> statusCallback = null)
+        {
+            ThrowIfDisposed();
+            if (options == null) throw new ArgumentNullException(nameof(options));
+            if (options.SwuPath == null)
+                throw new ArgumentNullException(nameof(options.SwuPath));
+
+            return Task.Run(() =>
+            {
+                var nativeCallback =
+                    SoftwareUpdateOperation.MakeNativeCallback(statusCallback);
+                var rc = NativeMethods.Rest_updateSoftware(
+                    _handle,
+                    options.SwuPath,
+                    options.UploadTimeoutMs,
+                    options.StatusTimeoutMs,
+                    options.RestartTimeoutMs,
+                    options.RequestRestart ? 1 : 0,
+                    nativeCallback,
+                    IntPtr.Zero,
+                    out var ptr);
+                GC.KeepAlive(nativeCallback);
+                if (rc != NativeErrorCode.Ok)
+                {
+                    if (ptr != IntPtr.Zero) NativeMethods.String_destroy(ptr);
+                    ItscamException.ThrowIfFailed(rc, "Rest.updateSoftware");
+                }
+                return SoftwareUpdateOperation.ParseStatus(
+                    NativeMethods.TakeString(ptr));
+            });
+        }
 
         // ====================================================================
         //  JSON patch helpers
