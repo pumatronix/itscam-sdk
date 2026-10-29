@@ -267,7 +267,8 @@ declare module '@pumatronix/itscam-sdk' {
 
         startMjpegStream(onFrame: (frame: CgiStreamFrame) => void,
                          timeoutMs?: number): void;
-        stopMjpegStream(): void;
+        /** Resolves once the stream thread has finished; later frames are dropped. */
+        stopMjpegStream(): Promise<void>;
         isMjpegStreamRunning(): boolean;
 
         forceTrigger(timeoutMs?: number): string;
