@@ -94,7 +94,7 @@ The `com.pumatronix.itscam.internal.NativeLibrary` class searches for `libitscam
 | Concern | What you get |
 | ------- | ------------ |
 | Async | Every blocking call has an `*Async` companion returning `java.util.concurrent.Future<T>`. |
-| Lifetime | Every client implements `AutoCloseable`; use try-with-resources. |
+| Lifetime | Every client implements `AutoCloseable`; use try-with-resources. `close()` does not wait for calls running on other threads: they complete, and the native client is released after the last one. |
 | Streaming | `startMjpegStream(ItscamConsumer<CgiStreamFrame>)` invokes the callback on the SDK worker thread. |
 | Errors | `RuntimeException` hierarchy rooted in `ItscamException` (`ItscamTimeoutException`, `ItscamAuthException`, ...). |
 | Strings | UTF-8 by default (delegated to JNA marshalling). |

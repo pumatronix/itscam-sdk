@@ -6,6 +6,7 @@ package com.pumatronix.itscam;
 
 import com.pumatronix.itscam.internal.ItscamLibrary;
 import com.pumatronix.itscam.internal.Async;
+import com.pumatronix.itscam.internal.NativeHandle;
 import com.pumatronix.itscam.internal.NativeLibrary;
 import com.sun.jna.Memory;
 import com.sun.jna.Pointer;
@@ -35,36 +36,74 @@ import java.util.concurrent.Future;
  * <p>Frame callbacks installed via
  * {@link #startMjpegStream(ItscamConsumer, int)} are delivered on the SDK's
  * worker thread.  <strong>Never block</strong> in the callback &mdash;
- * push frames to a queue and return immediately.
+ * push frames to a queue and return immediately.  The callback may stop or
+ * restart the stream, or close the client.
  */
 public final class ItscamCgiClient implements AutoCloseable {
 
     private final ItscamLibrary lib;
-    private Pointer handle;
-    private ItscamLibrary.CgiStreamCallback streamCallback;
+    private final NativeHandle handle;
+
+    // Guarded by this.  stopMjpegStream() releases the monitor while it
+    // waits for the stream thread, whose frame callback may call this client.
+    private volatile ItscamConsumer<CgiStreamFrame> frameConsumer;
+    private int stopsInProgress;
+
+    // One native callback for the client's whole life: a frame callback may
+    // stop the stream or close the client while it runs.
+    private final ItscamLibrary.CgiStreamCallback streamCallback =
+            new ItscamLibrary.CgiStreamCallback() {
+        @Override
+        public void invoke(ItscamLibrary.ITSCAMCgiStreamFrame frame,
+                           Pointer userData) {
+            ItscamConsumer<CgiStreamFrame> onFrame = frameConsumer;
+            if (frame == null || onFrame == null) return;
+            String mime = frame.mimeType == null ? "" : frame.mimeType;
+            byte[] body = (frame.data == null || frame.dataLen <= 0)
+                    ? new byte[0]
+                    : frame.data.getByteArray(0, (int) frame.dataLen);
+            try {
+                onFrame.accept(new CgiStreamFrame(frame.sequence, mime, body));
+            } catch (Throwable ignored) {
+                /* never let exceptions cross into native code */
+            }
+        }
+    };
 
     public ItscamCgiClient() {
         this.lib = NativeLibrary.get();
-        this.handle = lib.ITSCAM_CgiClient_create();
-        if (handle == null || handle.equals(Pointer.NULL)) {
+        Pointer h = lib.ITSCAM_CgiClient_create();
+        if (h == null || h.equals(Pointer.NULL)) {
             throw new ItscamException(ErrorCode.ALLOCATION_FAILED,
                     "ITSCAM_CgiClient_create returned NULL");
         }
+        this.handle = new NativeHandle(h, "ItscamCgiClient closed",
+                new NativeHandle.Destroyer() {
+                    @Override
+                    public void destroy(Pointer p) {
+                        lib.ITSCAM_CgiClient_destroy(p);
+                    }
+                });
     }
 
+    /**
+     * Stops the stream and releases the client.  Calls still running on
+     * other threads end normally, and the native client is released after
+     * the last one, such as a {@link #stopMjpegStream()} waiting for the
+     * frame callback that calls this.
+     */
     @Override
     public void close() {
-        if (handle != null) {
-            stopMjpegStream();
-            lib.ITSCAM_CgiClient_destroy(handle);
-            handle = null;
+        synchronized (this) {
+            frameConsumer = null;
         }
-    }
-
-    private void requireOpen() {
-        if (handle == null) {
-            throw new IllegalStateException("ItscamCgiClient closed");
-        }
+        // Without the monitor: stopping waits for the frame callback
+        handle.close(new NativeHandle.Closer() {
+            @Override
+            public void beforeDestroy(Pointer h) {
+                lib.ITSCAM_CgiClient_stopMjpegStream(h);
+            }
+        });
     }
 
     // ====================================================================
@@ -72,35 +111,59 @@ public final class ItscamCgiClient implements AutoCloseable {
     // ====================================================================
 
     public void setBaseUrl(String host, int port, String scheme) {
-        requireOpen();
-        int rc = lib.ITSCAM_CgiClient_setBaseUrl(handle, host,
-                (short) port, scheme == null ? "http" : scheme);
-        ItscamException.throwIfFailed(rc, "setBaseUrl(" + host + ":" + port + ")");
+        Pointer h = handle.acquire();
+        try {
+            int rc = lib.ITSCAM_CgiClient_setBaseUrl(h, host,
+                    (short) port, scheme == null ? "http" : scheme);
+            ItscamException.throwIfFailed(rc, "setBaseUrl(" + host + ":" + port + ")");
+        } finally {
+            handle.release();
+        }
     }
 
     public void setApiPrefix(String prefix) {
-        requireOpen();
-        lib.ITSCAM_CgiClient_setApiPrefix(handle, prefix);
+        Pointer h = handle.acquire();
+        try {
+            lib.ITSCAM_CgiClient_setApiPrefix(h, prefix);
+        } finally {
+            handle.release();
+        }
     }
 
     public void setCaCertFile(String pemPath) {
-        requireOpen();
-        lib.ITSCAM_CgiClient_setCaCertFile(handle, pemPath);
+        Pointer h = handle.acquire();
+        try {
+            lib.ITSCAM_CgiClient_setCaCertFile(h, pemPath);
+        } finally {
+            handle.release();
+        }
     }
 
     public void setCaCertData(String pem) {
-        requireOpen();
-        lib.ITSCAM_CgiClient_setCaCertData(handle, pem);
+        Pointer h = handle.acquire();
+        try {
+            lib.ITSCAM_CgiClient_setCaCertData(h, pem);
+        } finally {
+            handle.release();
+        }
     }
 
     public void setVerifyServerCertificate(boolean verify) {
-        requireOpen();
-        lib.ITSCAM_CgiClient_setVerifyServerCertificate(handle, verify ? 1 : 0);
+        Pointer h = handle.acquire();
+        try {
+            lib.ITSCAM_CgiClient_setVerifyServerCertificate(h, verify ? 1 : 0);
+        } finally {
+            handle.release();
+        }
     }
 
     public void setClientCertificate(String certPem, String keyPem) {
-        requireOpen();
-        lib.ITSCAM_CgiClient_setClientCertificate(handle, certPem, keyPem);
+        Pointer h = handle.acquire();
+        try {
+            lib.ITSCAM_CgiClient_setClientCertificate(h, certPem, keyPem);
+        } finally {
+            handle.release();
+        }
     }
 
     // ====================================================================
@@ -108,9 +171,13 @@ public final class ItscamCgiClient implements AutoCloseable {
     // ====================================================================
 
     public void login(String username, String password, int timeoutMs) {
-        requireOpen();
-        int rc = lib.ITSCAM_CgiClient_login(handle, username, password, timeoutMs);
-        ItscamException.throwIfFailed(rc, "login");
+        Pointer h = handle.acquire();
+        try {
+            int rc = lib.ITSCAM_CgiClient_login(h, username, password, timeoutMs);
+            ItscamException.throwIfFailed(rc, "login");
+        } finally {
+            handle.release();
+        }
     }
 
     public Future<Void> loginAsync(final String username, final String password,
@@ -124,23 +191,39 @@ public final class ItscamCgiClient implements AutoCloseable {
     }
 
     public void setAuthToken(String token) {
-        requireOpen();
-        lib.ITSCAM_CgiClient_setAuthToken(handle, token);
+        Pointer h = handle.acquire();
+        try {
+            lib.ITSCAM_CgiClient_setAuthToken(h, token);
+        } finally {
+            handle.release();
+        }
     }
 
     public void clearAuthToken() {
-        requireOpen();
-        lib.ITSCAM_CgiClient_clearAuthToken(handle);
+        Pointer h = handle.acquire();
+        try {
+            lib.ITSCAM_CgiClient_clearAuthToken(h);
+        } finally {
+            handle.release();
+        }
     }
 
     public void setBasicAuth(String user, String password) {
-        requireOpen();
-        lib.ITSCAM_CgiClient_setBasicAuth(handle, user, password);
+        Pointer h = handle.acquire();
+        try {
+            lib.ITSCAM_CgiClient_setBasicAuth(h, user, password);
+        } finally {
+            handle.release();
+        }
     }
 
     public void clearBasicAuth() {
-        requireOpen();
-        lib.ITSCAM_CgiClient_clearBasicAuth(handle);
+        Pointer h = handle.acquire();
+        try {
+            lib.ITSCAM_CgiClient_clearBasicAuth(h);
+        } finally {
+            handle.release();
+        }
     }
 
     // ====================================================================
@@ -148,11 +231,15 @@ public final class ItscamCgiClient implements AutoCloseable {
     // ====================================================================
 
     public CgiImage getLastFrame(int timeoutMs) {
-        requireOpen();
-        PointerByReference out = new PointerByReference();
-        int rc = lib.ITSCAM_CgiClient_getLastFrame(handle, timeoutMs, out);
-        ItscamException.throwIfFailed(rc, "getLastFrame");
-        return consumeImage(out.getValue());
+        Pointer h = handle.acquire();
+        try {
+            PointerByReference out = new PointerByReference();
+            int rc = lib.ITSCAM_CgiClient_getLastFrame(h, timeoutMs, out);
+            ItscamException.throwIfFailed(rc, "getLastFrame");
+            return consumeImage(out.getValue());
+        } finally {
+            handle.release();
+        }
     }
 
     public Future<CgiImage> getLastFrameAsync(final int timeoutMs) {
@@ -173,73 +260,77 @@ public final class ItscamCgiClient implements AutoCloseable {
     }
 
     public List<CgiImage> getSnapshot(SnapshotCgiRequest request, int timeoutMs) {
-        requireOpen();
-        ItscamLibrary.ITSCAMCgiSnapshotRequest n =
-                new ItscamLibrary.ITSCAMCgiSnapshotRequest();
-
-        Memory shuttersBuf = null;
-        if (request.shutters().length > 0) {
-            shuttersBuf = new Memory(request.shutters().length * 4L);
-            shuttersBuf.write(0, request.shutters(), 0,
-                    request.shutters().length);
-            n.shutters = shuttersBuf;
-            n.shuttersLen = request.shutters().length;
-        }
-        Memory gainsBuf = null;
-        if (request.gains().length > 0) {
-            gainsBuf = new Memory(request.gains().length * 4L);
-            gainsBuf.write(0, request.gains(), 0, request.gains().length);
-            n.gains = gainsBuf;
-            n.gainsLen = request.gains().length;
-        }
-        n.quality = request.quality();
-        n.mosaic = request.mosaic() ? 1 : 0;
-        n.format = request.format().isEmpty() ? null : request.format();
-        n.scenario = request.scenario();
-        n.crop = request.crop().isEmpty() ? null : request.crop();
-        n.textOverlay = request.textOverlay().isEmpty() ? null
-                : request.textOverlay();
-
-        StringArray keysArr = null;
-        StringArray valsArr = null;
-        if (!request.userMetadata().isEmpty()) {
-            String[] keys = new String[request.userMetadata().size() + 1];
-            String[] vals = new String[request.userMetadata().size() + 1];
-            int i = 0;
-            for (Map.Entry<String, String> e : request.userMetadata().entrySet()) {
-                keys[i] = e.getKey();
-                vals[i] = e.getValue();
-                i++;
-            }
-            keys[i] = null;
-            vals[i] = null;
-            keysArr = new StringArray(keys, "UTF-8");
-            valsArr = new StringArray(vals, "UTF-8");
-            n.userMetadataKeys = keysArr;
-            n.userMetadataValues = valsArr;
-        }
-
-        PointerByReference out = new PointerByReference();
-        int rc = lib.ITSCAM_CgiClient_getSnapshot(handle, n, timeoutMs, out);
-        // Keep references alive until the call returns to ensure JNA's
-        // GC doesn't reclaim the buffers mid-call.
-        if (shuttersBuf != null) shuttersBuf.clear(0);
-        if (gainsBuf != null) gainsBuf.clear(0);
-        if (keysArr != null) keysArr.getPointer(0);
-        if (valsArr != null) valsArr.getPointer(0);
-        ItscamException.throwIfFailed(rc, "getSnapshot");
-
-        Pointer arr = out.getValue();
+        Pointer h = handle.acquire();
         try {
-            List<CgiImage> images = new ArrayList<>();
-            long size = lib.ITSCAM_CgiImageArray_size(arr);
-            for (long i = 0; i < size; i++) {
-                Pointer p = lib.ITSCAM_CgiImageArray_get(arr, i);
-                if (p != null) images.add(borrowImage(p));
+            ItscamLibrary.ITSCAMCgiSnapshotRequest n =
+                    new ItscamLibrary.ITSCAMCgiSnapshotRequest();
+
+            Memory shuttersBuf = null;
+            if (request.shutters().length > 0) {
+                shuttersBuf = new Memory(request.shutters().length * 4L);
+                shuttersBuf.write(0, request.shutters(), 0,
+                        request.shutters().length);
+                n.shutters = shuttersBuf;
+                n.shuttersLen = request.shutters().length;
             }
-            return images;
+            Memory gainsBuf = null;
+            if (request.gains().length > 0) {
+                gainsBuf = new Memory(request.gains().length * 4L);
+                gainsBuf.write(0, request.gains(), 0, request.gains().length);
+                n.gains = gainsBuf;
+                n.gainsLen = request.gains().length;
+            }
+            n.quality = request.quality();
+            n.mosaic = request.mosaic() ? 1 : 0;
+            n.format = request.format().isEmpty() ? null : request.format();
+            n.scenario = request.scenario();
+            n.crop = request.crop().isEmpty() ? null : request.crop();
+            n.textOverlay = request.textOverlay().isEmpty() ? null
+                    : request.textOverlay();
+
+            StringArray keysArr = null;
+            StringArray valsArr = null;
+            if (!request.userMetadata().isEmpty()) {
+                String[] keys = new String[request.userMetadata().size() + 1];
+                String[] vals = new String[request.userMetadata().size() + 1];
+                int i = 0;
+                for (Map.Entry<String, String> e : request.userMetadata().entrySet()) {
+                    keys[i] = e.getKey();
+                    vals[i] = e.getValue();
+                    i++;
+                }
+                keys[i] = null;
+                vals[i] = null;
+                keysArr = new StringArray(keys, "UTF-8");
+                valsArr = new StringArray(vals, "UTF-8");
+                n.userMetadataKeys = keysArr;
+                n.userMetadataValues = valsArr;
+            }
+
+            PointerByReference out = new PointerByReference();
+            int rc = lib.ITSCAM_CgiClient_getSnapshot(h, n, timeoutMs, out);
+            // Keep references alive until the call returns to ensure JNA's
+            // GC doesn't reclaim the buffers mid-call.
+            if (shuttersBuf != null) shuttersBuf.clear(0);
+            if (gainsBuf != null) gainsBuf.clear(0);
+            if (keysArr != null) keysArr.getPointer(0);
+            if (valsArr != null) valsArr.getPointer(0);
+            ItscamException.throwIfFailed(rc, "getSnapshot");
+
+            Pointer arr = out.getValue();
+            try {
+                List<CgiImage> images = new ArrayList<>();
+                long size = lib.ITSCAM_CgiImageArray_size(arr);
+                for (long i = 0; i < size; i++) {
+                    Pointer p = lib.ITSCAM_CgiImageArray_get(arr, i);
+                    if (p != null) images.add(borrowImage(p));
+                }
+                return images;
+            } finally {
+                if (arr != null) lib.ITSCAM_CgiImageArray_destroy(arr);
+            }
         } finally {
-            if (arr != null) lib.ITSCAM_CgiImageArray_destroy(arr);
+            handle.release();
         }
     }
 
@@ -259,44 +350,65 @@ public final class ItscamCgiClient implements AutoCloseable {
 
     public synchronized void startMjpegStream(final ItscamConsumer<CgiStreamFrame> onFrame,
                                               int timeoutMs) {
-        requireOpen();
-        if (streamCallback != null) {
-            throw new IllegalStateException("MJPEG stream already running");
-        }
-        ItscamLibrary.CgiStreamCallback cb = new ItscamLibrary.CgiStreamCallback() {
-            @Override
-            public void invoke(ItscamLibrary.ITSCAMCgiStreamFrame frame,
-                               Pointer userData) {
-                if (frame == null) return;
-                String mime = frame.mimeType == null ? "" : frame.mimeType;
-                byte[] body = (frame.data == null || frame.dataLen <= 0)
-                        ? new byte[0]
-                        : frame.data.getByteArray(0, (int) frame.dataLen);
-                try {
-                    onFrame.accept(new CgiStreamFrame(frame.sequence, mime, body));
-                } catch (Throwable ignored) {
-                    /* never let exceptions cross into native code */
-                }
+        Pointer h = handle.acquire();
+        try {
+            if (onFrame == null) {
+                throw new IllegalArgumentException("onFrame must not be null");
             }
-        };
-        streamCallback = cb;
-        int rc = lib.ITSCAM_CgiClient_startMjpegStream(handle, cb, null,
-                timeoutMs);
-        if (rc != 0) {
-            streamCallback = null;
-            ItscamException.throwIfFailed(rc, "startMjpegStream");
+            if (frameConsumer != null) {
+                throw new IllegalStateException("MJPEG stream already running");
+            }
+            // A stop in progress would stop the new stream
+            if (stopsInProgress > 0) {
+                throw new IllegalStateException("MJPEG stream still stopping");
+            }
+            frameConsumer = onFrame;
+            int rc = lib.ITSCAM_CgiClient_startMjpegStream(h, streamCallback,
+                    null, timeoutMs);
+            if (rc != 0) {
+                frameConsumer = null;
+                ItscamException.throwIfFailed(rc, "startMjpegStream");
+            }
+        } finally {
+            handle.release();
         }
     }
 
-    public synchronized void stopMjpegStream() {
-        if (handle == null) return;
-        lib.ITSCAM_CgiClient_stopMjpegStream(handle);
-        streamCallback = null;
+    /**
+     * Stop the stream.  From another thread, this waits for the frame
+     * callback in progress, as well as the ones of streams stopped from
+     * their own callback; from the frame callback, it returns at once.
+     */
+    public void stopMjpegStream() {
+        Pointer h = handle.tryAcquire();
+        if (h == null) return;
+        try {
+            synchronized (this) {
+                frameConsumer = null;
+                ++stopsInProgress;
+            }
+            // Concurrent stops all wait: the native stop returns once no
+            // frame callback runs, whichever stop ended the stream
+            try {
+                lib.ITSCAM_CgiClient_stopMjpegStream(h);
+            } finally {
+                synchronized (this) {
+                    --stopsInProgress;
+                }
+            }
+        } finally {
+            handle.release();
+        }
     }
 
     public boolean isMjpegStreamRunning() {
-        return handle != null
-                && lib.ITSCAM_CgiClient_isMjpegStreamRunning(handle) != 0;
+        Pointer h = handle.tryAcquire();
+        if (h == null) return false;
+        try {
+            return lib.ITSCAM_CgiClient_isMjpegStreamRunning(h) != 0;
+        } finally {
+            handle.release();
+        }
     }
 
     // ====================================================================
@@ -304,21 +416,29 @@ public final class ItscamCgiClient implements AutoCloseable {
     // ====================================================================
 
     public String forceTrigger(int timeoutMs) {
-        requireOpen();
-        PointerByReference out = new PointerByReference();
-        int rc = lib.ITSCAM_CgiClient_forceTrigger(handle, timeoutMs, out);
-        String body = takeString(out.getValue());
-        ItscamException.throwIfFailed(rc, "forceTrigger");
-        return body;
+        Pointer h = handle.acquire();
+        try {
+            PointerByReference out = new PointerByReference();
+            int rc = lib.ITSCAM_CgiClient_forceTrigger(h, timeoutMs, out);
+            String body = takeString(out.getValue());
+            ItscamException.throwIfFailed(rc, "forceTrigger");
+            return body;
+        } finally {
+            handle.release();
+        }
     }
 
     public String reboot(int timeoutMs) {
-        requireOpen();
-        PointerByReference out = new PointerByReference();
-        int rc = lib.ITSCAM_CgiClient_reboot(handle, timeoutMs, out);
-        String body = takeString(out.getValue());
-        ItscamException.throwIfFailed(rc, "reboot");
-        return body;
+        Pointer h = handle.acquire();
+        try {
+            PointerByReference out = new PointerByReference();
+            int rc = lib.ITSCAM_CgiClient_reboot(h, timeoutMs, out);
+            String body = takeString(out.getValue());
+            ItscamException.throwIfFailed(rc, "reboot");
+            return body;
+        } finally {
+            handle.release();
+        }
     }
 
     // ====================================================================
