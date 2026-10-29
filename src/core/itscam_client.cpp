@@ -2545,16 +2545,20 @@ Result<void> ItscamClient::connect(const std::string& address, uint16_t port,
 Future<void> ItscamClient::connectAsync(const std::string& address,
                                          uint16_t port, uint32_t timeoutMs,
                                          const AutoReconnectConfig& reconnect) {
-    if (mImpl->state.load() != Impl::IDLE && mImpl->state.load() != Impl::STOPPED) {
-        Promise<void> p;
-        p.set_value(Error{Error::InvalidParameter, "already connected or connecting"});
-        return p.get_future();
-    }
+    // Claim the connection before writing its settings: a concurrent
+    // connectAsync() must fail instead of starting another socket thread
+    int st = mImpl->state.load();
+    do {
+        if (st != Impl::IDLE && st != Impl::STOPPED) {
+            Promise<void> p;
+            p.set_value(Error{Error::InvalidParameter, "already connected or connecting"});
+            return p.get_future();
+        }
+    } while (!mImpl->state.compare_exchange_weak(st, Impl::CONNECTING));
 
     mImpl->address = address;
     mImpl->port = port;
     mImpl->reconnectCfg = reconnect;
-    mImpl->state.store(Impl::CONNECTING);
 
     auto impl = mImpl.get();
     auto pShared = std::make_shared<Promise<void>>();
