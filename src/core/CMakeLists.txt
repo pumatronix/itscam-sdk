@@ -39,6 +39,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 # Source files
 set(SDK_SOURCES
     itscam_client.cpp
+    impl/itscam_callback_queue.cpp
     itscam_rest_client.cpp
     itscam_cgi_client.cpp
     impl/itscam_http_transport.cpp

@@ -742,6 +742,10 @@ const char* ITSCAM_getLastError(void) {
     return s_lastError;
 }
 
+void ITSCAM_setCallbackThreads(uint32_t count) {
+    itscam::utils::setCallbackThreadCount(count);
+}
+
 const char* ITSCAM_getVersion(void) {
     return ITSCAM_SDK_VERSION_FULL;
 }

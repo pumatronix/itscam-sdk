@@ -619,6 +619,18 @@ ITSCAM_C_API const char* ITSCAM_getLastError(void);
  */
 ITSCAM_C_API const char* ITSCAM_getVersion(void);
 
+/**
+ * @brief Set how many threads run client callbacks.
+ *
+ * Callbacks of every client (binary and CGI) run on a pool of SDK threads
+ * shared by all clients, in order and one at a time per client.  Threads
+ * start on demand and exit when idle.
+ *
+ * @param count Maximum number of threads; 0 restores the default (the
+ *              number of CPU cores, at most 4).
+ */
+ITSCAM_C_API void ITSCAM_setCallbackThreads(uint32_t count);
+
 #ifdef __cplusplus
 }
 #endif
