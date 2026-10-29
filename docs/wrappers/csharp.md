@@ -70,7 +70,7 @@ Notas específicas do wrapper (convenções de P/Invoke, layout dos native binar
 | Aspecto        | O que você ganha                                                              |
 | -------------- | ----------------------------------------------------------------------------- |
 | Async          | `Task` / `Task<T>` em toda blocking call (roda no ThreadPool).                |
-| Lifetime       | Todo client implementa `IDisposable`; use `using` ou `Dispose()`.             |
+| Lifetime       | Todo client implementa `IDisposable`; use `using` ou `Dispose()`. Chamadas feitas antes do `Dispose()` ainda terminam; o client nativo é liberado após a última. |
 | Streaming      | `event EventHandler<CgiStreamFrame> MjpegFrame` disparado na worker do SDK.   |
 | Errors         | Hierarquia `ItscamException` (`ItscamTimeoutException`, `ItscamAuthException`, ...). |
 | Strings        | Helpers de UTF-8 marshalling, seguros em netstandard2.0 (sem APIs do .NET 6+).|

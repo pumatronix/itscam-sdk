@@ -16,25 +16,37 @@ namespace Pumatronix.Itscam
     /// </summary>
     public sealed class ItscamCgiClient : IDisposable
     {
-        private IntPtr _handle;
-        private bool _disposed;
+        private readonly ClientHandle _native;
 
         // Hold the delegate to prevent garbage collection while the
-        // native stream worker is calling back into managed code.
-        private NativeMethods.NativeStreamCallback _streamDelegate;
+        // native stream worker is calling back into managed code.  It lives
+        // as long as the client: a handler may stop the stream or dispose
+        // the client while it runs.
+        private readonly NativeMethods.NativeStreamCallback _streamDelegate;
 
         /// <summary>
         /// Raised when a new MJPEG frame arrives.  Handlers run on the
-        /// native stream worker thread; do not block.
+        /// native stream worker thread; do not block.  A handler may stop
+        /// or restart the stream, or dispose the client.
         /// </summary>
         public event EventHandler<CgiStreamFrame> MjpegFrame;
 
         public ItscamCgiClient()
         {
-            _handle = NativeMethods.Cgi_create();
-            if (_handle == IntPtr.Zero)
+            _streamDelegate = OnNativeStreamFrame;
+            var handle = NativeMethods.Cgi_create();
+            if (handle == IntPtr.Zero)
                 throw new ItscamException(ItscamErrorCode.AllocationFailed,
                     "Failed to allocate native CGI client.");
+            // The destroy may be left to the last call in progress, after
+            // this client is collected: it keeps the stream delegate until
+            // no frame callback can run
+            var streamDelegate = _streamDelegate;
+            _native = new ClientHandle(handle, nameof(ItscamCgiClient), h =>
+            {
+                NativeMethods.Cgi_destroy(h);
+                GC.KeepAlive(streamDelegate);
+            });
         }
 
         // ====================================================================
@@ -44,39 +56,35 @@ namespace Pumatronix.Itscam
         public void SetBaseUrl(string host, ushort port = 80,
                                string scheme = "http")
         {
-            ThrowIfDisposed();
             if (host == null) throw new ArgumentNullException(nameof(host));
-            var rc = NativeMethods.Cgi_setBaseUrl(_handle, host, port,
-                                                   scheme ?? "http");
+            var rc = _native.Use(h => NativeMethods.Cgi_setBaseUrl(h, host,
+                port, scheme ?? "http"));
             ItscamException.ThrowIfFailed(rc, "Cgi_setBaseUrl");
         }
 
         public void SetApiPrefix(string prefix)
         {
-            ThrowIfDisposed();
-            NativeMethods.Cgi_setApiPrefix(_handle, prefix ?? "/api");
+            _native.Use(h => NativeMethods.Cgi_setApiPrefix(h, prefix ?? "/api"));
         }
 
         public void SetCaCertFile(string pemPath) {
-            ThrowIfDisposed();
-            NativeMethods.Cgi_setCaCertFile(_handle, pemPath ?? string.Empty);
+            _native.Use(h => NativeMethods.Cgi_setCaCertFile(h,
+                pemPath ?? string.Empty));
         }
 
         public void SetCaCertData(string pem) {
-            ThrowIfDisposed();
-            NativeMethods.Cgi_setCaCertData(_handle, pem ?? string.Empty);
+            _native.Use(h => NativeMethods.Cgi_setCaCertData(h,
+                pem ?? string.Empty));
         }
 
         public void SetVerifyServerCertificate(bool verify) {
-            ThrowIfDisposed();
-            NativeMethods.Cgi_setVerifyServerCertificate(_handle,
-                                                          verify ? 1 : 0);
+            _native.Use(h => NativeMethods.Cgi_setVerifyServerCertificate(h,
+                verify ? 1 : 0));
         }
 
         public void SetClientCertificate(string certPem, string keyPem) {
-            ThrowIfDisposed();
-            NativeMethods.Cgi_setClientCertificate(_handle,
-                certPem ?? string.Empty, keyPem ?? string.Empty);
+            _native.Use(h => NativeMethods.Cgi_setClientCertificate(h,
+                certPem ?? string.Empty, keyPem ?? string.Empty));
         }
 
         // ====================================================================
@@ -86,25 +94,23 @@ namespace Pumatronix.Itscam
         public Task LoginAsync(string username, string password,
                                uint timeoutMs = 10000)
         {
-            ThrowIfDisposed();
             if (username == null) throw new ArgumentNullException(nameof(username));
             if (password == null) throw new ArgumentNullException(nameof(password));
-            return Task.Run(() =>
+            return _native.UseAsync(h =>
             {
-                var rc = NativeMethods.Cgi_login(_handle, username, password,
+                var rc = NativeMethods.Cgi_login(h, username, password,
                                                   timeoutMs);
                 ItscamException.ThrowIfFailed(rc, "Cgi.login");
             });
         }
 
         public void SetAuthToken(string token) {
-            ThrowIfDisposed();
-            NativeMethods.Cgi_setAuthToken(_handle, token ?? string.Empty);
+            _native.Use(h => NativeMethods.Cgi_setAuthToken(h,
+                token ?? string.Empty));
         }
 
         public void ClearAuthToken() {
-            ThrowIfDisposed();
-            NativeMethods.Cgi_clearAuthToken(_handle);
+            _native.Use(h => NativeMethods.Cgi_clearAuthToken(h));
         }
 
         // ====================================================================
@@ -113,10 +119,9 @@ namespace Pumatronix.Itscam
 
         public Task<CgiImage> GetLastFrameAsync(uint timeoutMs = 10000)
         {
-            ThrowIfDisposed();
-            return Task.Run(() =>
+            return _native.UseAsync(h =>
             {
-                var rc = NativeMethods.Cgi_getLastFrame(_handle, timeoutMs,
+                var rc = NativeMethods.Cgi_getLastFrame(h, timeoutMs,
                                                         out var imgPtr);
                 if (rc != NativeErrorCode.Ok)
                 {
@@ -135,13 +140,12 @@ namespace Pumatronix.Itscam
         public Task<IReadOnlyList<CgiImage>> GetSnapshotAsync(
             SnapshotCgiRequest request, uint timeoutMs = 15000)
         {
-            ThrowIfDisposed();
             if (request == null) throw new ArgumentNullException(nameof(request));
-            return Task.Run(() =>
+            return _native.UseAsync(h =>
             {
                 using var pinned = SnapshotRequestPinner.Pin(request);
                 var nativeReq = pinned.Native;
-                var rc = NativeMethods.Cgi_getSnapshot(_handle, ref nativeReq,
+                var rc = NativeMethods.Cgi_getSnapshot(h, ref nativeReq,
                                                        timeoutMs, out var arrPtr);
                 if (rc != NativeErrorCode.Ok)
                 {
@@ -177,47 +181,50 @@ namespace Pumatronix.Itscam
         /// </summary>
         public void StartMjpegStream(uint timeoutMs = 10000)
         {
-            ThrowIfDisposed();
-            if (NativeMethods.Cgi_isMjpegStreamRunning(_handle) != 0)
-                throw new InvalidOperationException(
-                    "MJPEG stream already running.");
-
-            // Capture the delegate in a field to prevent GC.
-            _streamDelegate = OnNativeStreamFrame;
-            var rc = NativeMethods.Cgi_startMjpegStream(_handle,
-                _streamDelegate, IntPtr.Zero, timeoutMs);
-            if (rc != NativeErrorCode.Ok)
+            _native.Use(h =>
             {
-                _streamDelegate = null;
+                if (NativeMethods.Cgi_isMjpegStreamRunning(h) != 0)
+                    throw new InvalidOperationException(
+                        "MJPEG stream already running.");
+
+                var rc = NativeMethods.Cgi_startMjpegStream(h,
+                    _streamDelegate, IntPtr.Zero, timeoutMs);
                 ItscamException.ThrowIfFailed(rc, "Cgi.startMjpegStream");
-            }
+            });
         }
 
+        /// <summary>
+        /// Stop the stream.  From another thread, this waits for the
+        /// handler in progress; from a handler, it returns at once.
+        /// </summary>
         public void StopMjpegStream()
         {
-            if (_disposed) return;
-            NativeMethods.Cgi_stopMjpegStream(_handle);
-            _streamDelegate = null;
+            _native.UseIfOpen(h => NativeMethods.Cgi_stopMjpegStream(h));
         }
 
         public bool IsMjpegStreamRunning
         {
             get
             {
-                ThrowIfDisposed();
-                return NativeMethods.Cgi_isMjpegStreamRunning(_handle) != 0;
+                return _native.Use(h =>
+                    NativeMethods.Cgi_isMjpegStreamRunning(h) != 0);
             }
         }
 
         private void OnNativeStreamFrame(IntPtr framePtr, IntPtr userData)
         {
-            if (framePtr == IntPtr.Zero) return;
+            // A start racing Dispose may run the stream until the deferred
+            // destroy: no handler runs once disposed
+            if (framePtr == IntPtr.Zero || _native.IsClosed) return;
             var native = Marshal.PtrToStructure<NativeMethods.NativeStreamFrame>(framePtr);
             byte[] data = NativeMethods.CopyBytes(native.data,
                 (int)native.dataLen);
             var frame = new CgiStreamFrame(native.sequence,
                 NativeMethods.PtrToStringUtf8(native.mimeType), data);
             MjpegFrame?.Invoke(this, frame);
+            // The handler may have disposed the client: keep the delegate
+            // until the native call returns
+            GC.KeepAlive(this);
         }
 
         // ====================================================================
@@ -227,10 +234,9 @@ namespace Pumatronix.Itscam
 
         public Task<string> ForceTriggerAsync(uint timeoutMs = 10000)
         {
-            ThrowIfDisposed();
-            return Task.Run(() =>
+            return _native.UseAsync(h =>
             {
-                var rc = NativeMethods.Cgi_forceTrigger(_handle, timeoutMs,
+                var rc = NativeMethods.Cgi_forceTrigger(h, timeoutMs,
                     out var ptr);
                 if (rc != NativeErrorCode.Ok)
                 {
@@ -243,10 +249,9 @@ namespace Pumatronix.Itscam
 
         public Task<string> RebootAsync(uint timeoutMs = 10000)
         {
-            ThrowIfDisposed();
-            return Task.Run(() =>
+            return _native.UseAsync(h =>
             {
-                var rc = NativeMethods.Cgi_reboot(_handle, timeoutMs,
+                var rc = NativeMethods.Cgi_reboot(h, timeoutMs,
                     out var ptr);
                 if (rc != NativeErrorCode.Ok)
                 {
@@ -261,27 +266,21 @@ namespace Pumatronix.Itscam
         //  Lifecycle
         // ====================================================================
 
+        /// <summary>
+        /// Stop the stream and release the client.  Calls still running
+        /// end normally, and the native client is released after the last
+        /// one.
+        /// </summary>
         public void Dispose()
         {
-            if (_disposed) return;
-            _disposed = true;
-            if (_handle != IntPtr.Zero)
-            {
-                NativeMethods.Cgi_stopMjpegStream(_handle);
-                NativeMethods.Cgi_destroy(_handle);
-                _handle = IntPtr.Zero;
-            }
-            _streamDelegate = null;
+            // Null if the constructor failed
+            if (_native == null
+                || !_native.Close(h => NativeMethods.Cgi_stopMjpegStream(h)))
+                return;
             GC.SuppressFinalize(this);
         }
 
         ~ItscamCgiClient() { Dispose(); }
-
-        private void ThrowIfDisposed()
-        {
-            if (_disposed)
-                throw new ObjectDisposedException(nameof(ItscamCgiClient));
-        }
 
         // ====================================================================
         //  Helpers
