@@ -73,6 +73,15 @@ typedef void (*ITSCAM_CgiStreamCallback)(
  * ============================================================================ */
 
 ITSCAM_C_API ITSCAM_CgiClient* ITSCAM_CgiClient_create(void);
+
+/**
+ * @brief Stop the stream (see ITSCAM_CgiClient_stopMjpegStream) and free the
+ * client.
+ *
+ * Returns once no callback of this client is running or can still start.
+ * May be called from a frame callback: it then does not wait for that
+ * callback, which runs on.
+ */
 ITSCAM_C_API void              ITSCAM_CgiClient_destroy(ITSCAM_CgiClient*);
 
 /* ============================================================================
@@ -146,6 +155,14 @@ ITSCAM_C_API ITSCAM_ErrorCode ITSCAM_CgiClient_startMjpegStream(
     void* userData,
     uint32_t timeoutMs);
 
+/**
+ * @brief Stop the MJPEG stream.
+ *
+ * Returns once no frame callback of this client runs any more: no frame
+ * follows, not even one already queued.  No frame callback may wait for
+ * the calling thread.  Called from a frame callback, it does not wait for
+ * that callback, and a new stream may be started right away.
+ */
 ITSCAM_C_API void ITSCAM_CgiClient_stopMjpegStream(
     ITSCAM_CgiClient* client);
 
