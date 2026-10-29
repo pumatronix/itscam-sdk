@@ -42,28 +42,37 @@ import (
 	"unsafe"
 )
 
-// Global registry to map C pointers back to Go clients
+// clientCallbacks holds the Go callbacks of a Client. It does not refer to the
+// Client, so the registry does not keep the Client reachable.
+type clientCallbacks struct {
+	mu              sync.Mutex
+	capture         func(*CaptureResult)
+	snapshot        func(*CaptureResult)
+	disconnect      func(string)
+	connectionState func(ConnectionState, string)
+	log             func(LogLevel, string)
+}
+
+// Global registry to map C pointers back to Go callbacks
 var (
-	callbackRegistry = make(map[uintptr]*Client)
+	callbackRegistry = make(map[uintptr]*clientCallbacks)
 	callbackMu       sync.RWMutex
 )
 
-func registerClient(c *Client) uintptr {
+func registerCallbacks(cbs *clientCallbacks, handle *C.ITSCAM_Client) {
 	callbackMu.Lock()
 	defer callbackMu.Unlock()
-	key := uintptr(unsafe.Pointer(c.handle))
-	callbackRegistry[key] = c
-	return key
+	callbackRegistry[uintptr(unsafe.Pointer(handle))] = cbs
 }
 
-func unregisterClient(c *Client) {
+func unregisterCallbacks(handle *C.ITSCAM_Client) {
 	callbackMu.Lock()
 	defer callbackMu.Unlock()
-	key := uintptr(unsafe.Pointer(c.handle))
+	key := uintptr(unsafe.Pointer(handle))
 	delete(callbackRegistry, key)
 }
 
-func getClient(userdata unsafe.Pointer) *Client {
+func getCallbacks(userdata unsafe.Pointer) *clientCallbacks {
 	callbackMu.RLock()
 	defer callbackMu.RUnlock()
 	return callbackRegistry[uintptr(userdata)]
@@ -178,142 +187,113 @@ func takeProfiles(array *C.ITSCAM_ProfileArray) []ProfileInfo {
 	return profiles
 }
 
+// installCallbacks installs every native trampoline, while no callback can be
+// running yet (from NewClient): the setters then only swap the Go functions.
+// A native setter waits for the callback in progress, so calling one later
+// could deadlock with a callback that calls a method of this client.
+func installCallbacks(cbs *clientCallbacks, handle *C.ITSCAM_Client) {
+	registerCallbacks(cbs, handle)
+	key := unsafe.Pointer(handle) // userdata: the registry key
+	C.setCaptureCallback(handle, key)
+	C.setSnapshotCallback(handle, key)
+	C.setDisconnectCallback(handle, key)
+	C.setConnectionStateCallback(handle, key)
+	C.setLogCallback(handle, key)
+}
+
+// callbackOf reads a callback field of cbs under its mutex
+func callbackOf[F any](cbs *clientCallbacks, field *F) F {
+	cbs.mu.Lock()
+	defer cbs.mu.Unlock()
+	return *field
+}
+
 // SetCaptureCallback sets the callback for capture events.
 func (c *Client) SetCaptureCallback(callback func(*CaptureResult)) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	
-	if c.closed {
-		return
-	}
-	
-	c.captureCallback = callback
-	
-	if callback != nil {
-		key := registerClient(c)
-		C.setCaptureCallback(c.handle, unsafe.Pointer(key))
-	} else {
-		C.ITSCAM_Client_onTriggerImage(c.handle, nil, nil)
-	}
+	c.cbs.mu.Lock()
+	defer c.cbs.mu.Unlock()
+	c.cbs.capture = callback
 }
 
 // SetDisconnectCallback sets the callback for disconnect events.
 func (c *Client) SetDisconnectCallback(callback func(string)) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	
-	if c.closed {
-		return
-	}
-	
-	c.disconnectCallback = callback
-	
-	if callback != nil {
-		key := registerClient(c)
-		C.setDisconnectCallback(c.handle, unsafe.Pointer(key))
-	} else {
-		C.ITSCAM_Client_onDisconnect(c.handle, nil, nil)
-	}
+	c.cbs.mu.Lock()
+	defer c.cbs.mu.Unlock()
+	c.cbs.disconnect = callback
 }
 
 // SetConnectionStateCallback sets the callback for connection state changes.
 func (c *Client) SetConnectionStateCallback(callback func(ConnectionState, string)) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	
-	if c.closed {
-		return
-	}
-	
-	c.connectionStateCallback = callback
-	
-	if callback != nil {
-		key := registerClient(c)
-		C.setConnectionStateCallback(c.handle, unsafe.Pointer(key))
-	} else {
-		C.ITSCAM_Client_onConnectionState(c.handle, nil, nil)
-	}
+	c.cbs.mu.Lock()
+	defer c.cbs.mu.Unlock()
+	c.cbs.connectionState = callback
 }
 
 // SetLogCallback sets the callback for log messages.
 func (c *Client) SetLogCallback(callback func(LogLevel, string)) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	
-	if c.closed {
-		return
-	}
-	
-	c.logCallback = callback
-	
-	if callback != nil {
-		key := registerClient(c)
-		C.setLogCallback(c.handle, unsafe.Pointer(key))
-	} else {
-		C.ITSCAM_Client_onLog(c.handle, nil, nil)
-	}
+	c.cbs.mu.Lock()
+	defer c.cbs.mu.Unlock()
+	c.cbs.log = callback
 }
 
 // SetSnapshotCallback sets the callback for snapshot events.
 func (c *Client) SetSnapshotCallback(callback func(*CaptureResult)) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	
-	if c.closed {
-		return
-	}
-	
-	c.snapshotCallback = callback
-	
-	if callback != nil {
-		key := registerClient(c)
-		C.setSnapshotCallback(c.handle, unsafe.Pointer(key))
-	} else {
-		C.ITSCAM_Client_onSnapshotImage(c.handle, nil, nil)
-	}
+	c.cbs.mu.Lock()
+	defer c.cbs.mu.Unlock()
+	c.cbs.snapshot = callback
 }
 
 //export goCaptureCallback
 func goCaptureCallback(result *C.ITSCAM_CaptureResult, userdata unsafe.Pointer) {
-	client := getClient(userdata)
-	if client == nil || client.captureCallback == nil {
+	cbs := getCallbacks(userdata)
+	if cbs == nil {
 		return
 	}
-	client.captureCallback(captureResultFromC(result))
+	if cb := callbackOf(cbs, &cbs.capture); cb != nil {
+		cb(captureResultFromC(result))
+	}
 }
 
 //export goSnapshotCallback
 func goSnapshotCallback(result *C.ITSCAM_CaptureResult, userdata unsafe.Pointer) {
-	client := getClient(userdata)
-	if client == nil || client.snapshotCallback == nil {
+	cbs := getCallbacks(userdata)
+	if cbs == nil {
 		return
 	}
-	client.snapshotCallback(captureResultFromC(result))
+	if cb := callbackOf(cbs, &cbs.snapshot); cb != nil {
+		cb(captureResultFromC(result))
+	}
 }
 
 //export goDisconnectCallback
 func goDisconnectCallback(reason *C.char, userdata unsafe.Pointer) {
-	client := getClient(userdata)
-	if client == nil || client.disconnectCallback == nil {
+	cbs := getCallbacks(userdata)
+	if cbs == nil {
 		return
 	}
-	client.disconnectCallback(C.GoString(reason))
+	if cb := callbackOf(cbs, &cbs.disconnect); cb != nil {
+		cb(C.GoString(reason))
+	}
 }
 
 //export goConnectionStateCallback
 func goConnectionStateCallback(state C.int, reason *C.char, userdata unsafe.Pointer) {
-	client := getClient(userdata)
-	if client == nil || client.connectionStateCallback == nil {
+	cbs := getCallbacks(userdata)
+	if cbs == nil {
 		return
 	}
-	client.connectionStateCallback(ConnectionState(state), C.GoString(reason))
+	if cb := callbackOf(cbs, &cbs.connectionState); cb != nil {
+		cb(ConnectionState(state), C.GoString(reason))
+	}
 }
 
 //export goLogCallback
 func goLogCallback(level C.int, message *C.char, userdata unsafe.Pointer) {
-	client := getClient(userdata)
-	if client == nil || client.logCallback == nil {
+	cbs := getCallbacks(userdata)
+	if cbs == nil {
 		return
 	}
-	client.logCallback(LogLevel(level), C.GoString(message))
+	if cb := callbackOf(cbs, &cbs.log); cb != nil {
+		cb(LogLevel(level), C.GoString(message))
+	}
 }

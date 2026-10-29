@@ -41,22 +41,28 @@ import (
 )
 
 // Client represents a connection to an ITSCAM camera.
+//
+// The SDK runs callbacks on its own threads, and a callback may call methods
+// of its client while another goroutine is inside one; ITSCAM_Client_destroy()
+// waits for the callback in progress. So mu only guards the fields below and
+// is never held during a native call: calls on one client may run
+// concurrently, as in the other bindings.
 type Client struct {
-	handle  *C.ITSCAM_Client
-	mu      sync.Mutex
-	closed  bool
+	mu     sync.Mutex
+	handle *C.ITSCAM_Client
+	closed bool
+	calls  int // native calls in progress, see begin()
 
 	// Connection info (for reconnection/info)
 	address string
 	port    uint16
 
-	// Callback handlers
-	captureCallback         func(*CaptureResult)
-	snapshotCallback        func(*CaptureResult)
-	disconnectCallback      func(string)
-	connectionStateCallback func(ConnectionState, string)
-	logCallback             func(LogLevel, string)
+	// Read by the native callbacks, through a registry that must not keep the
+	// client reachable: a client dropped without Close is then finalized.
+	cbs *clientCallbacks
 }
+
+var errClosed = errors.New("client is closed")
 
 // NewClient creates a new ITSCAM client.
 func NewClient() (*Client, error) {
@@ -65,45 +71,93 @@ func NewClient() (*Client, error) {
 		return nil, errors.New("failed to create client")
 	}
 
-	client := &Client{handle: handle}
+	client := &Client{handle: handle, cbs: &clientCallbacks{}}
+	installCallbacks(client.cbs, handle)
 	runtime.SetFinalizer(client, (*Client).Close)
 	return client, nil
 }
 
-// Close releases the client resources.
-func (c *Client) Close() error {
+// begin starts a native call: it returns the handle, or nil if the client is
+// closed. Call c.end() once the native call has returned.
+func (c *Client) begin() *C.ITSCAM_Client {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-
 	if c.closed {
 		return nil
 	}
+	c.calls++
+	return c.handle
+}
 
-	unregisterClient(c)
-	C.ITSCAM_Client_destroy(c.handle)
+// end finishes a native call started by begin(). The last one to end after
+// Close destroys the handle, in another goroutine: a callback may be waiting
+// for this call, and ITSCAM_Client_destroy() waits for the callbacks.
+func (c *Client) end() {
+	c.mu.Lock()
+	c.calls--
+	handle := c.takeHandleIfUnused()
+	c.mu.Unlock()
+	if handle != nil {
+		go func() { C.ITSCAM_Client_destroy(handle) }()
+	}
+}
+
+// takeHandleIfUnused returns the handle once the client is closed and no
+// native call uses it, or nil. Called with mu held.
+func (c *Client) takeHandleIfUnused() *C.ITSCAM_Client {
+	if !c.closed || c.calls > 0 {
+		return nil
+	}
+	handle := c.handle
 	c.handle = nil
+	return handle
+}
+
+// Close releases the client resources. It does not wait for native calls in
+// progress, such as the one whose callback calls Close: the last of them
+// releases the client.
+func (c *Client) Close() error {
+	c.mu.Lock()
+	if c.closed {
+		c.mu.Unlock()
+		return nil
+	}
 	c.closed = true
+	// Callbacks still arriving are dropped. Unregistered under mu: once it
+	// is released, the last native call may destroy the handle, and a new
+	// client may then register the same address.
+	unregisterCallbacks(c.handle)
+	handle := c.takeHandleIfUnused()
 	runtime.SetFinalizer(c, nil)
+	c.mu.Unlock()
+
+	// ITSCAM_Client_destroy() waits for the callbacks in progress: those may
+	// call methods of this client, which find it closed since the mutex is
+	// not held here.
+	if handle != nil {
+		C.ITSCAM_Client_destroy(handle)
+	}
 	return nil
 }
 
 // Connect establishes a connection to the camera.
 func (c *Client) Connect(address string, port uint16, timeout time.Duration) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	if c.closed {
-		return errors.New("client is closed")
+	h := c.begin()
+	if h == nil {
+		return errClosed
 	}
+	defer c.end()
 
 	caddr := C.CString(address)
 	defer C.free(unsafe.Pointer(caddr))
 
+	c.mu.Lock()
 	c.address = address
 	c.port = port
+	c.mu.Unlock()
 
 	result := C.ITSCAM_Client_connect(
-		c.handle,
+		h,
 		caddr,
 		C.uint16_t(port),
 		C.uint32_t(timeout.Milliseconds()),
@@ -113,18 +167,19 @@ func (c *Client) Connect(address string, port uint16, timeout time.Duration) err
 
 // ConnectWithReconnect establishes a connection with auto-reconnect enabled.
 func (c *Client) ConnectWithReconnect(address string, port uint16, timeout time.Duration, reconnect AutoReconnectConfig) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	if c.closed {
-		return errors.New("client is closed")
+	h := c.begin()
+	if h == nil {
+		return errClosed
 	}
+	defer c.end()
 
 	caddr := C.CString(address)
 	defer C.free(unsafe.Pointer(caddr))
 
+	c.mu.Lock()
 	c.address = address
 	c.port = port
+	c.mu.Unlock()
 
 	var cReconnect C.ITSCAM_AutoReconnectConfig
 	if reconnect.Enabled {
@@ -136,7 +191,7 @@ func (c *Client) ConnectWithReconnect(address string, port uint16, timeout time.
 	cReconnect.maxRetries = C.uint32_t(reconnect.MaxAttempts)
 
 	result := C.ITSCAM_Client_connect(
-		c.handle,
+		h,
 		caddr,
 		C.uint16_t(port),
 		C.uint32_t(timeout.Milliseconds()),
@@ -146,49 +201,46 @@ func (c *Client) ConnectWithReconnect(address string, port uint16, timeout time.
 
 // Disconnect closes the connection to the camera.
 func (c *Client) Disconnect() {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	if !c.closed {
-		C.ITSCAM_Client_disconnect(c.handle)
+	h := c.begin()
+	if h == nil {
+		return
 	}
+	defer c.end()
+	C.ITSCAM_Client_disconnect(h)
 }
 
 // IsConnected returns whether the client is connected.
 func (c *Client) IsConnected() bool {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	if c.closed {
+	h := c.begin()
+	if h == nil {
 		return false
 	}
-	return C.ITSCAM_Client_isConnected(c.handle) != 0
+	defer c.end()
+	return C.ITSCAM_Client_isConnected(h) != 0
 }
 
 // Authenticate authenticates with the camera.
 func (c *Client) Authenticate(password string, timeout time.Duration) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	if c.closed {
-		return errors.New("client is closed")
+	h := c.begin()
+	if h == nil {
+		return errClosed
 	}
+	defer c.end()
 
 	cpass := C.CString(password)
 	defer C.free(unsafe.Pointer(cpass))
 
-	result := C.ITSCAM_Client_authenticate(c.handle, cpass, C.uint32_t(timeout.Milliseconds()))
+	result := C.ITSCAM_Client_authenticate(h, cpass, C.uint32_t(timeout.Milliseconds()))
 	return errorFromCode(int(result))
 }
 
 // Subscribe subscribes to camera events.
 func (c *Client) Subscribe(events EventSubscription, timeout time.Duration) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	if c.closed {
-		return errors.New("client is closed")
+	h := c.begin()
+	if h == nil {
+		return errClosed
 	}
+	defer c.end()
 
 	var cEvents C.ITSCAM_EventSubscription
 	if events.Pipeline {
@@ -222,18 +274,17 @@ func (c *Client) Subscribe(events EventSubscription, timeout time.Duration) erro
 		cEvents.serial2 = 1
 	}
 
-	result := C.ITSCAM_Client_subscribe(c.handle, &cEvents, C.uint32_t(timeout.Milliseconds()))
+	result := C.ITSCAM_Client_subscribe(h, &cEvents, C.uint32_t(timeout.Milliseconds()))
 	return errorFromCode(int(result))
 }
 
 // SubscribeCaptures subscribes to capture events using the SDK high-level defaults.
 func (c *Client) SubscribeCaptures(config CaptureSubscriptionConfig, timeout time.Duration) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	if c.closed {
-		return errors.New("client is closed")
+	h := c.begin()
+	if h == nil {
+		return errClosed
 	}
+	defer c.end()
 
 	cConfig := C.ITSCAM_CaptureSubscriptionConfig{}
 	if config.IncludeTrigger {
@@ -257,21 +308,20 @@ func (c *Client) SubscribeCaptures(config CaptureSubscriptionConfig, timeout tim
 	cConfig.triggerQuality = C.int(config.TriggerQuality)
 	cConfig.snapshotQuality = C.int(config.SnapshotQuality)
 
-	result := C.ITSCAM_Client_subscribeCaptures(c.handle, &cConfig, C.uint32_t(timeout.Milliseconds()))
+	result := C.ITSCAM_Client_subscribeCaptures(h, &cConfig, C.uint32_t(timeout.Milliseconds()))
 	return errorFromCode(int(result))
 }
 
 // GetActiveProfile returns the active profile ID.
 func (c *Client) GetActiveProfile(timeout time.Duration) (uint32, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	if c.closed {
-		return 0, errors.New("client is closed")
+	h := c.begin()
+	if h == nil {
+		return 0, errClosed
 	}
+	defer c.end()
 
 	var profileId C.uint32_t
-	result := C.ITSCAM_Client_getActiveProfileId(c.handle, C.uint32_t(timeout.Milliseconds()), &profileId)
+	result := C.ITSCAM_Client_getActiveProfileId(h, C.uint32_t(timeout.Milliseconds()), &profileId)
 	if err := errorFromCode(int(result)); err != nil {
 		return 0, err
 	}
@@ -280,14 +330,13 @@ func (c *Client) GetActiveProfile(timeout time.Duration) (uint32, error) {
 
 // SetActiveProfile sets the active profile.
 func (c *Client) SetActiveProfile(profileId uint32, timeout time.Duration) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	if c.closed {
-		return errors.New("client is closed")
+	h := c.begin()
+	if h == nil {
+		return errClosed
 	}
+	defer c.end()
 
-	result := C.ITSCAM_Client_setActiveProfile(c.handle, C.uint32_t(profileId), C.uint32_t(timeout.Milliseconds()))
+	result := C.ITSCAM_Client_setActiveProfile(h, C.uint32_t(profileId), C.uint32_t(timeout.Milliseconds()))
 	return errorFromCode(int(result))
 }
 
@@ -300,15 +349,14 @@ func (c *Client) RequestSnapshot(timeout time.Duration) error {
 
 // CaptureSnapshot requests a snapshot and returns all resulting frames.
 func (c *Client) CaptureSnapshot(timeout time.Duration) ([]CaptureResult, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	if c.closed {
-		return nil, errors.New("client is closed")
+	h := c.begin()
+	if h == nil {
+		return nil, errClosed
 	}
+	defer c.end()
 
 	var resultArray *C.ITSCAM_CaptureResultArray
-	result := C.ITSCAM_Client_captureSnapshot(c.handle, nil, C.uint32_t(timeout.Milliseconds()), &resultArray)
+	result := C.ITSCAM_Client_captureSnapshot(h, nil, C.uint32_t(timeout.Milliseconds()), &resultArray)
 	if err := errorFromCode(int(result)); err != nil {
 		return nil, err
 	}
@@ -318,16 +366,15 @@ func (c *Client) CaptureSnapshot(timeout time.Duration) ([]CaptureResult, error)
 
 // GetLastFrame fetches the last preview frame as JPEG bytes.
 func (c *Client) GetLastFrame(quality int, timeout time.Duration) ([]byte, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	if c.closed {
-		return nil, errors.New("client is closed")
+	h := c.begin()
+	if h == nil {
+		return nil, errClosed
 	}
+	defer c.end()
 
 	var outJpeg *C.ITSCAM_ByteArray
 	result := C.ITSCAM_Client_getLastFrame(
-		c.handle,
+		h,
 		C.int(quality),
 		C.uint32_t(timeout.Milliseconds()),
 		&outJpeg)
@@ -340,16 +387,15 @@ func (c *Client) GetLastFrame(quality int, timeout time.Duration) ([]byte, error
 
 // ListProfiles returns all camera profiles.
 func (c *Client) ListProfiles(timeout time.Duration) ([]ProfileInfo, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	if c.closed {
-		return nil, errors.New("client is closed")
+	h := c.begin()
+	if h == nil {
+		return nil, errClosed
 	}
+	defer c.end()
 
 	var outProfiles *C.ITSCAM_ProfileArray
 	result := C.ITSCAM_Client_listProfiles(
-		c.handle,
+		h,
 		C.uint32_t(timeout.Milliseconds()),
 		&outProfiles)
 	if err := errorFromCode(int(result)); err != nil {
@@ -361,14 +407,13 @@ func (c *Client) ListProfiles(timeout time.Duration) ([]ProfileInfo, error) {
 
 // Reboot reboots the camera.
 func (c *Client) Reboot(timeout time.Duration) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	if c.closed {
-		return errors.New("client is closed")
+	h := c.begin()
+	if h == nil {
+		return errClosed
 	}
+	defer c.end()
 
-	result := C.ITSCAM_Client_reboot(c.handle, C.uint32_t(timeout.Milliseconds()))
+	result := C.ITSCAM_Client_reboot(h, C.uint32_t(timeout.Milliseconds()))
 	return errorFromCode(int(result))
 }
 
