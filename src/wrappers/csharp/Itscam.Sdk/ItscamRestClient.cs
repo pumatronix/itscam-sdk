@@ -35,15 +35,16 @@ namespace Pumatronix.Itscam
     /// </summary>
     public sealed class ItscamRestClient : IDisposable
     {
-        private IntPtr _handle;
-        private bool _disposed;
+        private readonly ClientHandle _native;
 
         public ItscamRestClient()
         {
-            _handle = NativeMethods.Rest_create();
-            if (_handle == IntPtr.Zero)
+            var handle = NativeMethods.Rest_create();
+            if (handle == IntPtr.Zero)
                 throw new ItscamException(ItscamErrorCode.AllocationFailed,
                     "Failed to allocate native REST client.");
+            _native = new ClientHandle(handle, nameof(ItscamRestClient),
+                                       NativeMethods.Rest_destroy);
         }
 
         // ====================================================================
@@ -57,38 +58,34 @@ namespace Pumatronix.Itscam
         public void SetBaseUrl(string host, ushort port = 80,
                                string scheme = "http")
         {
-            ThrowIfDisposed();
             if (host == null) throw new ArgumentNullException(nameof(host));
-            var rc = NativeMethods.Rest_setBaseUrl(_handle, host, port,
-                                                   scheme ?? "http");
+            var rc = _native.Use(h => NativeMethods.Rest_setBaseUrl(h, host,
+                port, scheme ?? "http"));
             ItscamException.ThrowIfFailed(rc, "Rest_setBaseUrl");
         }
 
         public void SetCaCertFile(string pemPath)
         {
-            ThrowIfDisposed();
-            NativeMethods.Rest_setCaCertFile(_handle,
-                                             pemPath ?? string.Empty);
+            _native.Use(h => NativeMethods.Rest_setCaCertFile(h,
+                pemPath ?? string.Empty));
         }
 
         public void SetCaCertData(string pem)
         {
-            ThrowIfDisposed();
-            NativeMethods.Rest_setCaCertData(_handle, pem ?? string.Empty);
+            _native.Use(h => NativeMethods.Rest_setCaCertData(h,
+                pem ?? string.Empty));
         }
 
         public void SetVerifyServerCertificate(bool verify)
         {
-            ThrowIfDisposed();
-            NativeMethods.Rest_setVerifyServerCertificate(_handle,
-                                                          verify ? 1 : 0);
+            _native.Use(h => NativeMethods.Rest_setVerifyServerCertificate(h,
+                verify ? 1 : 0));
         }
 
         public void SetClientCertificate(string certPem, string keyPem)
         {
-            ThrowIfDisposed();
-            NativeMethods.Rest_setClientCertificate(
-                _handle, certPem ?? string.Empty, keyPem ?? string.Empty);
+            _native.Use(h => NativeMethods.Rest_setClientCertificate(
+                h, certPem ?? string.Empty, keyPem ?? string.Empty));
         }
 
         // ====================================================================
@@ -102,12 +99,11 @@ namespace Pumatronix.Itscam
         public Task<string> LoginAsync(string username, string password,
                                        uint timeoutMs = 10000)
         {
-            ThrowIfDisposed();
             if (username == null) throw new ArgumentNullException(nameof(username));
             if (password == null) throw new ArgumentNullException(nameof(password));
-            return Task.Run(() =>
+            return _native.UseAsync(h =>
             {
-                var rc = NativeMethods.Rest_login(_handle, username, password,
+                var rc = NativeMethods.Rest_login(h, username, password,
                                                   timeoutMs, out var ptr);
                 if (rc != NativeErrorCode.Ok)
                 {
@@ -120,14 +116,13 @@ namespace Pumatronix.Itscam
 
         public void SetAuthToken(string token)
         {
-            ThrowIfDisposed();
-            NativeMethods.Rest_setAuthToken(_handle, token ?? string.Empty);
+            _native.Use(h => NativeMethods.Rest_setAuthToken(h,
+                token ?? string.Empty));
         }
 
         public void ClearAuthToken()
         {
-            ThrowIfDisposed();
-            NativeMethods.Rest_clearAuthToken(_handle);
+            _native.Use(h => NativeMethods.Rest_clearAuthToken(h));
         }
 
         // ====================================================================
@@ -888,25 +883,24 @@ namespace Pumatronix.Itscam
                                          string body, uint timeoutMs,
                                          NoBodyVerb noBodyFn)
         {
-            ThrowIfDisposed();
             if (path == null) throw new ArgumentNullException(nameof(path));
-            return Task.Run(() =>
+            return _native.UseAsync(h =>
             {
                 NativeErrorCode rc;
                 IntPtr ptr;
                 if (noBodyFn != null)
                 {
-                    rc = noBodyFn(_handle, path, timeoutMs, out ptr);
+                    rc = noBodyFn(h, path, timeoutMs, out ptr);
                 }
                 else if (verb == "PUT")
                 {
-                    rc = NativeMethods.Rest_httpPut(_handle, path,
+                    rc = NativeMethods.Rest_httpPut(h, path,
                                                     body ?? "", timeoutMs,
                                                     out ptr);
                 }
                 else
                 {
-                    rc = NativeMethods.Rest_httpPost(_handle, path,
+                    rc = NativeMethods.Rest_httpPost(h, path,
                                                      body ?? "", timeoutMs,
                                                      out ptr);
                 }
@@ -923,24 +917,17 @@ namespace Pumatronix.Itscam
         //  Lifecycle
         // ====================================================================
 
+        /// <summary>
+        /// Release the client.  Calls still running end normally, and the
+        /// native client is released after the last one.
+        /// </summary>
         public void Dispose()
         {
-            if (_disposed) return;
-            _disposed = true;
-            if (_handle != IntPtr.Zero)
-            {
-                NativeMethods.Rest_destroy(_handle);
-                _handle = IntPtr.Zero;
-            }
+            // Null if the constructor failed
+            if (_native == null || !_native.Close(null)) return;
             GC.SuppressFinalize(this);
         }
 
         ~ItscamRestClient() { Dispose(); }
-
-        private void ThrowIfDisposed()
-        {
-            if (_disposed)
-                throw new ObjectDisposedException(nameof(ItscamRestClient));
-        }
     }
 }
