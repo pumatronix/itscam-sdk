@@ -112,7 +112,8 @@ public:
         uint32_t timeoutMs = 15000);
 
     /// Async variant.  The returned Future resolves once all exposures
-    /// have been received (or the timeout elapses).
+    /// have been received (or the timeout elapses).  The client may be
+    /// destroyed before then: the request still completes or times out.
     Future<std::vector<CgiImage>> getSnapshotAsync(
         const SnapshotCgiRequest& request,
         uint32_t timeoutMs = 15000);

@@ -299,11 +299,35 @@ struct ItscamCgiClient::Impl {
 
     // ----- HTTP helpers ----------------------------------------------------
 
-    Result<HttpResponse> get(const std::string& path, uint32_t timeoutMs) {
+    static Result<HttpResponse> get(Transport& transport,
+                                    const std::string& path,
+                                    uint32_t timeoutMs) {
         HttpRequest req;
         req.method = "GET";
         req.path   = path;
-        return transport->request(req, timeoutMs);
+        return transport.request(req, timeoutMs);
+    }
+
+    Result<HttpResponse> get(const std::string& path, uint32_t timeoutMs) {
+        return get(*transport, path, timeoutMs);
+    }
+
+    // Uses only the transport: getSnapshotAsync runs it on a thread that
+    // may outlive the client.
+    static Result<std::vector<CgiImage>> fetchSnapshot(
+        Transport& transport, const std::string& path, uint32_t timeoutMs) {
+        auto res = get(transport, path, timeoutMs);
+        if (!res) return res.error();
+        const auto& rsp = res.value();
+        if (rsp.status < 200 || rsp.status >= 300) {
+            return detail::mapHttpStatusToError(rsp.status, {}, "GET", path);
+        }
+        auto images = decodeSnapshot(rsp);
+        if (images.empty()) {
+            return Error{Error::ServerError,
+                         "snapshot.cgi returned empty body"};
+        }
+        return images;
     }
 
     // ----- Snapshot URL ----------------------------------------------------
@@ -489,29 +513,26 @@ Result<CgiImage> ItscamCgiClient::getLastFrame(uint32_t timeoutMs) {
 
 Result<std::vector<CgiImage>> ItscamCgiClient::getSnapshot(
     const SnapshotCgiRequest& request, uint32_t timeoutMs) {
-    std::string path = mImpl->snapshotPath(request);
-    auto res = mImpl->get(path, timeoutMs);
-    if (!res) return res.error();
-    const auto& rsp = res.value();
-    if (rsp.status < 200 || rsp.status >= 300) {
-        return detail::mapHttpStatusToError(rsp.status, {}, "GET", path);
-    }
-    auto images = Impl::decodeSnapshot(rsp);
-    if (images.empty()) {
-        return Error{Error::ServerError,
-                     "snapshot.cgi returned empty body"};
-    }
-    return images;
+    return Impl::fetchSnapshot(*mImpl->transport,
+                               mImpl->snapshotPath(request), timeoutMs);
 }
 
 Future<std::vector<CgiImage>> ItscamCgiClient::getSnapshotAsync(
     const SnapshotCgiRequest& request, uint32_t timeoutMs) {
-    Promise<std::vector<CgiImage>> promise;
-    auto future = promise.get_future();
-    Thread([this, request, timeoutMs,
-            promise = std::move(promise)]() mutable {
-        promise.set_value(this->getSnapshot(request, timeoutMs));
-    }).detach();
+    // The thread holds the transport, not the client: the client may be
+    // destroyed before the snapshot arrives.
+    auto promise = std::make_shared<Promise<std::vector<CgiImage>>>();
+    auto future = promise->get_future();
+    Thread thread([transport = mImpl->transport,
+                   path = mImpl->snapshotPath(request), timeoutMs,
+                   promise]() {
+        promise->set_value(Impl::fetchSnapshot(*transport, path, timeoutMs));
+    });
+    if (!thread.joinable()) {
+        promise->set_value(Error{Error::Unknown,
+                                 "failed to start the snapshot thread"});
+    }
+    thread.detach();
     return future;
 }
 
