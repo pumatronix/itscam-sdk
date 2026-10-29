@@ -82,6 +82,7 @@ Use the Java/Node.js wrappers as the reference. Every item is mandatory or expli
 ### 6.1 Core surface
 
 - [ ] **Lifecycle:** `create` / `destroy` mapped to constructor + destructor / `close()` / `Symbol.dispose` / `IDisposable` / `with`-context / `defer Close()`.
+    - Never destroy the native client while another thread is in a native call with it (an async call, a callback calling a method). Count the calls in progress: closing marks the client closed, and the last call to return destroys it on a thread of its own, not one of a bounded pool that runs the async calls: a callback may be waiting for that call, or for an async call queued on that pool, and destroying waits for the callbacks. See `ClientHandle` in C# and `NativeHandle` in Java and Python.
 - [ ] **Connection (binary):** `connect`, `disconnect`, `isConnected`, `setAutoReconnect`, or `AutoReconnectConfig` parameter on `connect`.
 - [ ] **Authentication:**
     - Binary: `authenticate(password)`.
@@ -104,9 +105,12 @@ Use the Java/Node.js wrappers as the reference. Every item is mandatory or expli
 
 ### 6.3 Callbacks / streaming
 
-- [ ] Callbacks (`onTriggerImage`, `onSnapshotImage`, `onConnectionState`, `onDisconnect`, `onLog`, `startMjpegStream`) are **always** delivered on the SDK worker thread.
-- [ ] Document: **do not block callbacks**. Marshalling (queue / channel / dispatcher) is the user's responsibility.
+- [ ] Callbacks (`onTriggerImage`, `onSnapshotImage`, `onConnectionState`, `onDisconnect`, `onLog`, `startMjpegStream`) are **always** delivered on the SDK's callback pool: in order and one at a time per client, never on the thread of the call that produced them, with no SDK lock held. A callback may call any function of its client.
+- [ ] Document: **do not block callbacks**: a blocked callback holds a pool thread and delays its client's later callbacks. Marshalling (queue / channel / dispatcher) is the user's responsibility.
 - [ ] Hold strong references to the trampoline / callback objects so the GC does not collect them while native code is invoking them. See `_callbackRefs` in Node, `callbacks` map in Java/Python, `_streamDelegate` in C#.
+- [ ] Release those references only after `ITSCAM_Client_destroy()` returns: it waits until no callback is running or can still start. The setters that replace a callback, `ITSCAM_CgiClient_stopMjpegStream()` and `ITSCAM_CgiClient_destroy()` also wait for the callback in progress. If the FFI runs callbacks on another thread that the caller may be (Node.js / Koffi runs them on the JS thread), call those from a worker thread (Koffi `.async`), or install each native callback once and swap the target on the binding side, as the Node and Go wrappers do: installing a first callback waits for nothing. For the same reason, never hold a lock that callbacks (or the methods they call) may take across those calls, e.g. the client's own mutex: mark the client closed under the lock, release it, then destroy.
+- [ ] Never release a native callback that a setter replaced while the client lives: called from a callback of the client, the setter returns without waiting, and a callback thread may still be running the replaced one. Install one native callback per type for the client's whole life and swap the handler it calls on the binding side, as every wrapper here does (C# with static delegates).
+- [ ] The CGI frame callback may stop the stream or destroy the client: keep the native stream callback alive for the client's whole life, not only until `ITSCAM_CgiClient_stopMjpegStream()` returns, which it does without waiting when called from the callback.
 - [ ] Swallow exceptions inside callbacks (with optional log/trace). Never let an exception cross back into C.
 
 ### 6.4 JPEG utilities
