@@ -84,7 +84,7 @@ async function main() {
             }
         }, 10000);
         await sleep(5000);
-        cgi.stopMjpegStream();
+        await cgi.stopMjpegStream();
         console.log(`  -> received ${frameCount} MJPEG frame(s)`);
     } finally {
         cgi.close();
