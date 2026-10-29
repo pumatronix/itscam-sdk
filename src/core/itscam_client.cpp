@@ -1095,25 +1095,53 @@ struct ItscamClient::Impl {
     }
 
     // ---- Imgpkg tracking for unified image callbacks ----
-    bool imgpkgActive = false; // updated whenever setJpegConfig is called
+    std::atomic<bool> imgpkgActive{false}; // updated whenever setJpegConfig is called
 
     // ---- Auto-reconnect ----
     AutoReconnectConfig reconnectCfg;
-    std::string lastPassword;
-    EventSubscription lastSubscription{};
-    JpegConfig lastJpegConfig{};
-    TriggerConfig lastTriggerConfig{};
-    uint32_t lastTriggerProfileId = 0;
-    bool hasPassword       = false;
-    bool isAuthenticated   = false;  // true after authenticate() succeeds; reset on disconnect
-    bool hasSubscription   = false;
-    bool hasJpegConfig     = false;
-    bool hasTriggerConfig  = false;
     bool hadSuccessfulSession = false;  // true once a session has been established
+
+    // Session replayed on reconnect. The user's calls write it and the socket
+    // thread reads it, so it is guarded by sessionMtx; nothing else is taken
+    // while holding it (no request, no log).
+    struct Session {
+        std::string lastPassword;
+        EventSubscription lastSubscription{};
+        JpegConfig lastJpegConfig{};
+        TriggerConfig lastTriggerConfig{};
+        uint32_t lastTriggerProfileId = 0;
+        bool hasPassword       = false;
+        bool isAuthenticated   = false;  // true after authenticate() succeeds; reset on disconnect
+        bool hasSubscription   = false;
+        bool hasJpegConfig     = false;
+        bool hasTriggerConfig  = false;
+    };
+    mutable Mutex sessionMtx;
+    Session session;
+
+    Session sessionCopy() const {
+        LockGuard<Mutex> lk(sessionMtx);
+        return session;
+    }
+
+    void setAuthenticated(bool authenticated) {
+        LockGuard<Mutex> lk(sessionMtx);
+        session.isAuthenticated = authenticated;
+    }
+
+    void recordAuthentication(const std::string& password) {
+        LockGuard<Mutex> lk(sessionMtx);
+        session.lastPassword    = password;
+        session.hasPassword     = true;
+        session.isAuthenticated = true;
+    }
 
     // Returns true when a command should be deferred because we know the server
     // requires authentication that hasn't been performed yet this session.
-    bool pendingAuth() const { return hasPassword && !isAuthenticated; }
+    bool pendingAuth() const {
+        LockGuard<Mutex> lk(sessionMtx);
+        return session.hasPassword && !session.isAuthenticated;
+    }
 
     bool canQueueForReplay() const {
         int st = state.load();
@@ -1570,8 +1598,9 @@ struct ItscamClient::Impl {
 
     bool applyStoredCaptureSetup(const char* context, uint32_t timeout) {
         try {
-            if (hasJpegConfig) {
-                auto jpegJson = buildJpegJson(lastJpegConfig);
+            const Session ss = sessionCopy();
+            if (ss.hasJpegConfig) {
+                auto jpegJson = buildJpegJson(ss.lastJpegConfig);
                 log(LogLevel::Info, "%s: applying JPEG config %s", context, jpegJson.dump().c_str());
                 auto r = syncCall(OP_SET_JPEG_CFGS, jpegJson, timeout);
                 if (!r) {
@@ -1580,20 +1609,20 @@ struct ItscamClient::Impl {
                     return false;
                 }
             }
-            if (hasSubscription) {
+            if (ss.hasSubscription) {
                 log(LogLevel::Info, "%s: applying subscription (triggerImage=%d, imgpkgActive=%d)",
-                    context, lastSubscription.triggerImage, imgpkgActive);
-                auto r = syncCall(OP_SET_CALLBACKS, buildCallbacksJson(lastSubscription), timeout);
+                    context, ss.lastSubscription.triggerImage, imgpkgActive.load());
+                auto r = syncCall(OP_SET_CALLBACKS, buildCallbacksJson(ss.lastSubscription), timeout);
                 if (!r) {
                     log(LogLevel::Error, "%s: subscribe failed: %s",
                         context, r.error().message.c_str());
                     return false;
                 }
             }
-            if (hasTriggerConfig) {
+            if (ss.hasTriggerConfig) {
                 log(LogLevel::Info, "%s: applying trigger config", context);
                 auto r = syncCall(OP_SET_EQUIP_CFGS,
-                                  buildTriggerConfigJson(lastTriggerConfig, lastTriggerProfileId),
+                                  buildTriggerConfigJson(ss.lastTriggerConfig, ss.lastTriggerProfileId),
                                   timeout);
                 if (!r) {
                     log(LogLevel::Error, "%s: setTriggerConfig failed: %s",
@@ -1618,9 +1647,11 @@ struct ItscamClient::Impl {
     bool replaySession() {
         try {
             uint32_t timeout = defaultTimeout.load();
+            const Session ss = sessionCopy();
+            bool authenticated = ss.isAuthenticated;
 
             log(LogLevel::Info, "Replaying session (auth=%d, jpeg=%d, subscribe=%d, trigger=%d)",
-                hasPassword, hasJpegConfig, hasSubscription, hasTriggerConfig);
+                ss.hasPassword, ss.hasJpegConfig, ss.hasSubscription, ss.hasTriggerConfig);
 
             // Allowed before authentication
             if (!sendServerTimeoutForNewSession()) return false;
@@ -1634,9 +1665,9 @@ struct ItscamClient::Impl {
                 return true;
             };
 
-            if (hasPassword) {
+            if (ss.hasPassword) {
                 nlohmann::json params;
-                params["pass"] = lastPassword;
+                params["pass"] = ss.lastPassword;
                 auto r = syncCallDirect(OP_AUTHENTICATE, params, timeout);
                 if (!r) {
                     log(LogLevel::Error, "Reconnect: auth failed: %s", r.error().message.c_str());
@@ -1646,37 +1677,38 @@ struct ItscamClient::Impl {
                     log(LogLevel::Error, "Reconnect: auth rejected");
                     return false;
                 }
-                isAuthenticated = true;
+                authenticated = true;
+                setAuthenticated(true);
             }
 
-            if (hasJpegConfig) {
-                auto r = syncCallDirect(OP_SET_JPEG_CFGS, buildJpegJson(lastJpegConfig), timeout);
+            if (ss.hasJpegConfig) {
+                auto r = syncCallDirect(OP_SET_JPEG_CFGS, buildJpegJson(ss.lastJpegConfig), timeout);
                 if (lostTransport(r, "setJpegConfig")) return false;
                 if (!r)
-                    log(isAuthenticated ? LogLevel::Error : LogLevel::Info,
+                    log(authenticated ? LogLevel::Error : LogLevel::Info,
                         "Reconnect: setJpegConfig failed: %s%s",
                         r.error().message.c_str(),
-                        isAuthenticated ? "" : " (will be applied after authenticate())");
+                        authenticated ? "" : " (will be applied after authenticate())");
             }
-            if (hasSubscription) {
-                auto r = syncCallDirect(OP_SET_CALLBACKS, buildCallbacksJson(lastSubscription), timeout);
+            if (ss.hasSubscription) {
+                auto r = syncCallDirect(OP_SET_CALLBACKS, buildCallbacksJson(ss.lastSubscription), timeout);
                 if (lostTransport(r, "subscribe")) return false;
                 if (!r)
-                    log(isAuthenticated ? LogLevel::Error : LogLevel::Info,
+                    log(authenticated ? LogLevel::Error : LogLevel::Info,
                         "Reconnect: subscribe failed: %s%s",
                         r.error().message.c_str(),
-                        isAuthenticated ? "" : " (will be applied after authenticate())");
+                        authenticated ? "" : " (will be applied after authenticate())");
             }
-            if (hasTriggerConfig) {
+            if (ss.hasTriggerConfig) {
                 auto r = syncCallDirect(OP_SET_EQUIP_CFGS,
-                                        buildTriggerConfigJson(lastTriggerConfig, lastTriggerProfileId),
+                                        buildTriggerConfigJson(ss.lastTriggerConfig, ss.lastTriggerProfileId),
                                         timeout);
                 if (lostTransport(r, "setTriggerConfig")) return false;
                 if (!r)
-                    log(isAuthenticated ? LogLevel::Error : LogLevel::Info,
+                    log(authenticated ? LogLevel::Error : LogLevel::Info,
                         "Reconnect: setTriggerConfig failed: %s%s",
                         r.error().message.c_str(),
-                        isAuthenticated ? "" : " (will be applied after authenticate())");
+                        authenticated ? "" : " (will be applied after authenticate())");
             }
 
             return true;
@@ -1794,7 +1826,7 @@ struct ItscamClient::Impl {
         // Reset ping state and auth state so reconnection starts clean
         lastPingId.store(0);
         consecutivePingFailures = 0;
-        isAuthenticated = false;
+        setAuthenticated(false);
 
         log(LogLevel::Info, "Disconnected");
 
@@ -2638,8 +2670,9 @@ bool ItscamClient::isConnected() const {
 // ---- Authentication -------------------------------------------------------
 
 void ItscamClient::setPassword(const std::string& password) {
-    mImpl->lastPassword = password;
-    mImpl->hasPassword  = true;
+    LockGuard<Mutex> lk(mImpl->sessionMtx);
+    mImpl->session.lastPassword = password;
+    mImpl->session.hasPassword  = true;
 }
 
 Result<void> ItscamClient::authenticate(const std::string& password,
@@ -2652,9 +2685,7 @@ Result<void> ItscamClient::authenticate(const std::string& password,
         auto& resp = r.value();
         if (jsonBoolField(resp, "auth")) {
             // Record for session replay on reconnect
-            mImpl->lastPassword    = password;
-            mImpl->hasPassword     = true;
-            mImpl->isAuthenticated = true;
+            mImpl->recordAuthentication(password);
 
             // Apply any capture setup that was deferred until after auth.
             if (!mImpl->applyStoredCaptureSetup("Authenticate", timeoutMs)) {
@@ -2687,9 +2718,7 @@ Future<void> ItscamClient::authenticateAsync(const std::string& password,
             if (!r) { pShared->set_value(r.error()); return; }
             auto& resp = r.value();
             if (jsonBoolField(resp, "auth")) {
-                impl->lastPassword    = password;
-                impl->hasPassword     = true;
-                impl->isAuthenticated = true;
+                impl->recordAuthentication(password);
                 if (!impl->applyStoredCaptureSetup("AuthenticateAsync", timeoutMs)) {
                     impl->log(LogLevel::Error,
                               "AuthenticateAsync: pending capture setup was not fully applied");
@@ -2719,8 +2748,11 @@ Result<EventSubscription> ItscamClient::subscribe(
         // Record for session replay on reconnect BEFORE the call.
         // This ensures the subscription is stored even if the call fails
         // due to disconnection, allowing replay when connection is established.
-        mImpl->lastSubscription = events;
-        mImpl->hasSubscription  = true;
+        {
+            LockGuard<Mutex> lk(mImpl->sessionMtx);
+            mImpl->session.lastSubscription = events;
+            mImpl->session.hasSubscription  = true;
+        }
 
         // Defer if auth is known to be required but not yet done this session.
         if (mImpl->pendingAuth()) {
@@ -2757,10 +2789,13 @@ Result<EventSubscription> ItscamClient::subscribeCaptures(
     // disconnected. This keeps replaySession() able to restore both parts
     // once the first connection or a later reconnect succeeds.
     mImpl->imgpkgActive = jpegConfig.usesImgpkg();
-    mImpl->lastJpegConfig = jpegConfig;
-    mImpl->hasJpegConfig = true;
-    mImpl->lastSubscription = events;
-    mImpl->hasSubscription = true;
+    {
+        LockGuard<Mutex> lk(mImpl->sessionMtx);
+        mImpl->session.lastJpegConfig = jpegConfig;
+        mImpl->session.hasJpegConfig = true;
+        mImpl->session.lastSubscription = events;
+        mImpl->session.hasSubscription = true;
+    }
 
     auto jpegResult = setJpegConfig(jpegConfig, timeoutMs);
     if (!jpegResult) {
@@ -2799,8 +2834,11 @@ Result<JpegConfig> ItscamClient::setJpegConfig(const JpegConfig& config,
         // Record for session replay on reconnect BEFORE the call.
         // This ensures the config is stored even if the call fails
         // due to disconnection, allowing replay when connection is established.
-        mImpl->lastJpegConfig = config;
-        mImpl->hasJpegConfig  = true;
+        {
+            LockGuard<Mutex> lk(mImpl->sessionMtx);
+            mImpl->session.lastJpegConfig = config;
+            mImpl->session.hasJpegConfig  = true;
+        }
 
         // Defer if auth is known to be required but not yet done this session.
         if (mImpl->pendingAuth()) {
@@ -3057,9 +3095,12 @@ Result<void> ItscamClient::setTriggerConfig(const TriggerConfig& config,
                                              uint32_t profileId,
                                              uint32_t timeoutMs) {
     // Store for session replay on reconnect BEFORE the call.
-    mImpl->lastTriggerConfig    = config;
-    mImpl->lastTriggerProfileId = profileId;
-    mImpl->hasTriggerConfig     = true;
+    {
+        LockGuard<Mutex> lk(mImpl->sessionMtx);
+        mImpl->session.lastTriggerConfig    = config;
+        mImpl->session.lastTriggerProfileId = profileId;
+        mImpl->session.hasTriggerConfig     = true;
+    }
 
     // Defer if auth is known to be required but not yet done this session.
     if (mImpl->pendingAuth()) {
