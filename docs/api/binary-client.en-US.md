@@ -240,7 +240,11 @@ camera.onConnectionStateChanged(
     [](ConnectionState s, const std::string& reason) { /* ... */ });
 ```
 
-All callbacks run on the SDK's worker thread; **do not block** inside them.
+Callbacks run on a small pool of SDK threads shared by every client (at most 4 by default, see `utils::setCallbackThreadCount()`), in order and one at a time per client. They never run on the thread that produced the event nor with an SDK lock held, so a callback may call any method of its client, and a slow one only delays the later callbacks of its client, never the connection. Still, **do not block** inside them: a blocked callback holds a pool thread. If callbacks fall behind, a client queues at most 256 events (32 MiB): newer events are dropped, connection state changes never are, and a log message reports how many were dropped once delivery catches up.
+
+A setter that replaces a callback returns once the replaced one is no longer running, unless called from a callback of the same client.
+
+When the client is destroyed, its queued callbacks are dropped and the destructor waits for the one running, with no time limit, unless it is called from that very callback. The caller may then free whatever its callbacks use. The SDK threads finish in the background.
 
 ## System
 
