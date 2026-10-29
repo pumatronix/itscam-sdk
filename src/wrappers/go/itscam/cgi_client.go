@@ -28,6 +28,7 @@ import (
 	"runtime"
 	"runtime/cgo"
 	"sync"
+	"sync/atomic"
 	"unsafe"
 )
 
@@ -67,13 +68,37 @@ type CgiStreamFrame struct {
 type StreamCallback func(CgiStreamFrame)
 
 // CgiClient wraps ItscamCgiClient.
+//
+// mu serializes the calls, but stopping the stream (StopMjpegStream, Close)
+// waits for the stream thread, which may be running the frame callback, and
+// the callback may call methods of this client: those native calls run
+// without mu.  The callback may also stop or restart the stream, or close
+// the client.
 type CgiClient struct {
 	handle *C.ITSCAM_CgiClient
 	mu     sync.Mutex
 	closed bool
 
-	streamCb     StreamCallback
-	streamHandle cgo.Handle
+	streamCb        atomic.Pointer[StreamCallback] // read by the stream thread
+	streamHandle    cgo.Handle
+	streamUserData  unsafe.Pointer // C memory holding streamHandle, see newStreamUserData
+	stopsInProgress int
+}
+
+// newStreamUserData stores a handle in C memory, passed to the native stream
+// as userData: converting the handle itself to a pointer is invalid (go vet,
+// checkptr under -race).
+func newStreamUserData(h cgo.Handle) unsafe.Pointer {
+	p := C.malloc(C.size_t(unsafe.Sizeof(C.uintptr_t(0))))
+	*(*C.uintptr_t)(p) = C.uintptr_t(h)
+	return p
+}
+
+// releaseStream frees what StartMjpegStream allocated, once the stream thread
+// has finished.
+func releaseStream(h cgo.Handle, userData unsafe.Pointer) {
+	h.Delete()
+	C.free(userData)
 }
 
 // NewCgiClient creates a new CGI client.
@@ -89,21 +114,31 @@ func NewCgiClient() (*CgiClient, error) {
 
 // Close releases the client.  Safe to call multiple times.
 func (c *CgiClient) Close() error {
-	c.mu.Lock(); defer c.mu.Unlock()
+	c.mu.Lock()
 	if c.closed {
+		c.mu.Unlock()
 		return nil
 	}
 	c.closed = true
-	if c.handle != nil {
-		C.ITSCAM_CgiClient_stopMjpegStream(c.handle)
-		C.ITSCAM_CgiClient_destroy(c.handle)
-		c.handle = nil
-	}
-	if c.streamHandle != 0 {
-		c.streamHandle.Delete()
-		c.streamHandle = 0
-	}
+	handle := c.handle
+	c.handle = nil
+	streamHandle, streamUserData := c.streamHandle, c.streamUserData
+	c.streamHandle, c.streamUserData = 0, nil
+	c.streamCb.Store(nil)
 	runtime.SetFinalizer(c, nil)
+	stopping := c.stopsInProgress > 0
+	c.mu.Unlock()
+
+	// Without mu: stopping joins the stream thread (see CgiClient).  The last
+	// StopMjpegStream in progress destroys the handle once its stop returns:
+	// it may be waiting for the frame callback calling Close.
+	if handle != nil && !stopping {
+		C.ITSCAM_CgiClient_stopMjpegStream(handle)
+		C.ITSCAM_CgiClient_destroy(handle)
+	}
+	if streamHandle != 0 {
+		releaseStream(streamHandle, streamUserData)
+	}
 	return nil
 }
 
@@ -317,39 +352,68 @@ func (c *CgiClient) StartMjpegStream(cb StreamCallback, timeoutMs uint32) error 
 	if c.streamHandle != 0 {
 		return errors.New("mjpeg stream already running")
 	}
-	c.streamCb = cb
+	// A stop in progress would stop the new stream
+	if c.stopsInProgress > 0 {
+		return errors.New("mjpeg stream still stopping")
+	}
+	c.streamCb.Store(&cb)
 	c.streamHandle = cgo.NewHandle(c)
+	c.streamUserData = newStreamUserData(c.streamHandle)
 	rc := C.ITSCAM_CgiClient_startMjpegStream(c.handle,
 		(C.ITSCAM_CgiStreamCallback)(C.itscamCgiGoCallback),
-		unsafe.Pointer(uintptr(c.streamHandle)),
+		c.streamUserData,
 		C.uint32_t(timeoutMs))
 	if err := errorFromCode(int(rc)); err != nil {
-		c.streamHandle.Delete()
-		c.streamHandle = 0
-		c.streamCb = nil
+		releaseStream(c.streamHandle, c.streamUserData)
+		c.streamHandle, c.streamUserData = 0, nil
+		c.streamCb.Store(nil)
 		return err
 	}
 	return nil
 }
 
-// StopMjpegStream cancels an active stream.  Safe to call when no
-// stream is running.
+// StopMjpegStream cancels an active stream and returns once its thread has
+// finished, as well as the ones of streams stopped from their own callback;
+// frames still arriving are dropped.  From the frame callback, it returns at
+// once.  Safe to call when no stream is running.  Concurrent calls all wait:
+// the native stop returns once no frame callback runs, whichever call ended
+// the stream.
 func (c *CgiClient) StopMjpegStream() {
-	c.mu.Lock(); defer c.mu.Unlock()
+	c.mu.Lock()
 	if c.handle == nil {
+		c.mu.Unlock()
 		return
 	}
-	C.ITSCAM_CgiClient_stopMjpegStream(c.handle)
-	if c.streamHandle != 0 {
-		c.streamHandle.Delete()
-		c.streamHandle = 0
+	handle := c.handle
+	streamHandle, streamUserData := c.streamHandle, c.streamUserData
+	c.streamHandle, c.streamUserData = 0, nil
+	c.stopsInProgress++
+	c.streamCb.Store(nil)
+	c.mu.Unlock()
+
+	// Without mu: this joins the stream thread (see CgiClient).  The frame
+	// callback may call Close meanwhile, which then leaves the handle to the
+	// last stop to destroy.
+	C.ITSCAM_CgiClient_stopMjpegStream(handle)
+	if streamHandle != 0 {
+		releaseStream(streamHandle, streamUserData)
 	}
-	c.streamCb = nil
+
+	c.mu.Lock()
+	c.stopsInProgress--
+	last := c.closed && c.stopsInProgress == 0
+	c.mu.Unlock()
+	if last {
+		C.ITSCAM_CgiClient_destroy(handle)
+	}
 }
 
 // IsMjpegStreamRunning reports whether a stream is active.
 func (c *CgiClient) IsMjpegStreamRunning() bool {
 	c.mu.Lock(); defer c.mu.Unlock()
+	if c.handle == nil || c.stopsInProgress > 0 {
+		return false
+	}
 	return C.ITSCAM_CgiClient_isMjpegStreamRunning(c.handle) != 0
 }
 
@@ -418,9 +482,13 @@ func itscamCgiGoCallback(frame *C.ITSCAM_CgiStreamFrame, userData unsafe.Pointer
 	if frame == nil || userData == nil {
 		return
 	}
-	h := cgo.Handle(uintptr(userData))
+	h := cgo.Handle(*(*C.uintptr_t)(userData))
 	client, ok := h.Value().(*CgiClient)
-	if !ok || client.streamCb == nil {
+	if !ok {
+		return
+	}
+	cb := client.streamCb.Load()
+	if cb == nil {
 		return
 	}
 	mime := ""
@@ -436,7 +504,7 @@ func itscamCgiGoCallback(frame *C.ITSCAM_CgiStreamFrame, userData unsafe.Pointer
 		// Never let a panic cross back into native code.
 		_ = recover()
 	}()
-	client.streamCb(CgiStreamFrame{
+	(*cb)(CgiStreamFrame{
 		Sequence: uint64(frame.sequence),
 		MimeType: mime,
 		Data:     data,
