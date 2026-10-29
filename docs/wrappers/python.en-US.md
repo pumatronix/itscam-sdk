@@ -67,7 +67,7 @@ from itscam import (
 )
 ```
 
-Each client is a context-manager-friendly Python class that mirrors its C++ counterpart 1:1. Errors are raised as exceptions instead of returned as `Result<T>`.
+Each client is a context-manager-friendly Python class that mirrors its C++ counterpart 1:1. Errors are raised as exceptions instead of returned as `Result<T>`. `close()` does not wait for calls running on other threads, or for the one whose callback calls it: they complete, and the native client is released after the last one.
 
 ## CGI usage (auth optional)
 

@@ -67,7 +67,7 @@ from itscam import (
 )
 ```
 
-Cada client é uma classe Python compatível com `with` (context manager) que espelha 1:1 a sua contraparte em C++. Erros são lançados como exceptions em vez de retornados como `Result<T>`.
+Cada client é uma classe Python compatível com `with` (context manager) que espelha 1:1 a sua contraparte em C++. Erros são lançados como exceptions em vez de retornados como `Result<T>`. `close()` não espera as chamadas rodando em outras threads, nem aquela cujo callback o chama: elas terminam, e o client nativo é liberado após a última.
 
 ## Uso do CGI (auth opcional)
 
