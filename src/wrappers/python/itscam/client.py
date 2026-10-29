@@ -6,9 +6,11 @@ High-level Pythonic wrapper for the ITSCAM camera client.
 
 from ctypes import byref, c_uint32, c_size_t, POINTER, c_ubyte, cast, c_char_p
 from typing import Optional, List, Callable, Any
+import threading
 import weakref
 
 from . import bindings as _b
+from ._native_handle import NativeHandle
 from .types import (
     Timestamp, FrameInfo, CaptureResult, ProfileInfo,
     AutoReconnectConfig, EventSubscription, CaptureSubscriptionConfig,
@@ -16,6 +18,10 @@ from .types import (
     ConnectionState, LogLevel, ErrorCode,
     _raise_for_error,
 )
+
+
+def _decode(text) -> str:
+    return text.decode("utf-8") if text else ""
 
 
 class ItscamClient:
@@ -46,12 +52,24 @@ class ItscamClient:
         auto_reconnect: Optional[AutoReconnectConfig] = None
     ):
         self._lib = _b.get_lib()
-        self._handle = self._lib.ITSCAM_Client_create()
-        if not self._handle:
+        handle = self._lib.ITSCAM_Client_create()
+        if not handle:
             raise MemoryError("Failed to create ITSCAM client")
         
-        # Store callbacks to prevent garbage collection
+        # Store callbacks to prevent garbage collection, until no callback
+        # can run any more
         self._callbacks: dict = {}
+        self._callbacks_lock = threading.Lock()
+        # The handler each native callback calls (see _set_handler())
+        self._handlers: dict = {}
+        lib, callbacks, handlers = self._lib, self._callbacks, self._handlers
+
+        def destroy(h):
+            lib.ITSCAM_Client_destroy(h)
+            callbacks.clear()
+            handlers.clear()
+
+        self._native = NativeHandle(handle, destroy)
         
         # Auto-connect if address provided
         if address:
@@ -67,18 +85,20 @@ class ItscamClient:
         self.close()
     
     def close(self) -> None:
-        """Close and clean up the client."""
-        if hasattr(self, "_handle") and self._handle:
-            self._lib.ITSCAM_Client_destroy(self._handle)
-            self._handle = None
-            self._callbacks.clear()
+        """Close and clean up the client.  Calls still running on other
+        threads, or the one whose callback calls this, end first: the last
+        of them releases the native client."""
+        native = getattr(self, "_native", None)
+        if native is not None:
+            native.close()
     
     @property
     def is_connected(self) -> bool:
         """Check if the client is connected."""
-        if not self._handle:
-            return False
-        return bool(self._lib.ITSCAM_Client_isConnected(self._handle))
+        with self._native.use() as h:
+            if h is None:
+                return False
+            return bool(self._lib.ITSCAM_Client_isConnected(h))
     
     # =========================================================================
     #  Connection
@@ -103,33 +123,35 @@ class ItscamClient:
         Raises:
             ItscamConnectionError: If connection fails.
         """
-        if not self._handle:
-            raise RuntimeError("Client has been closed")
+        with self._native.use() as h:
+            if h is None:
+                raise RuntimeError("Client has been closed")
         
-        reconnect_cfg = None
-        if auto_reconnect:
-            reconnect_cfg = _b.ITSCAM_AutoReconnectConfig(
-                enabled=1 if auto_reconnect.enabled else 0,
-                intervalMs=auto_reconnect.interval_ms,
-                maxRetries=auto_reconnect.max_retries
+            reconnect_cfg = None
+            if auto_reconnect:
+                reconnect_cfg = _b.ITSCAM_AutoReconnectConfig(
+                    enabled=1 if auto_reconnect.enabled else 0,
+                    intervalMs=auto_reconnect.interval_ms,
+                    maxRetries=auto_reconnect.max_retries
+                )
+        
+            result = self._lib.ITSCAM_Client_connect(
+                h,
+                address.encode("utf-8"),
+                port,
+                timeout_ms,
+                byref(reconnect_cfg) if reconnect_cfg else None
             )
         
-        result = self._lib.ITSCAM_Client_connect(
-            self._handle,
-            address.encode("utf-8"),
-            port,
-            timeout_ms,
-            byref(reconnect_cfg) if reconnect_cfg else None
-        )
-        
-        if result != ErrorCode.OK:
-            error_msg = self._lib.ITSCAM_getLastError()
-            _raise_for_error(result, error_msg.decode("utf-8") if error_msg else "")
+            if result != ErrorCode.OK:
+                error_msg = self._lib.ITSCAM_getLastError()
+                _raise_for_error(result, error_msg.decode("utf-8") if error_msg else "")
     
     def disconnect(self) -> None:
         """Disconnect from the camera."""
-        if self._handle:
-            self._lib.ITSCAM_Client_disconnect(self._handle)
+        with self._native.use() as h:
+            if h is not None:
+                self._lib.ITSCAM_Client_disconnect(h)
     
     # =========================================================================
     #  Authentication
@@ -146,18 +168,19 @@ class ItscamClient:
         Raises:
             ItscamAuthError: If authentication fails.
         """
-        if not self._handle:
-            raise RuntimeError("Client has been closed")
+        with self._native.use() as h:
+            if h is None:
+                raise RuntimeError("Client has been closed")
         
-        result = self._lib.ITSCAM_Client_authenticate(
-            self._handle,
-            password.encode("utf-8"),
-            timeout_ms
-        )
+            result = self._lib.ITSCAM_Client_authenticate(
+                h,
+                password.encode("utf-8"),
+                timeout_ms
+            )
         
-        if result != ErrorCode.OK:
-            error_msg = self._lib.ITSCAM_getLastError()
-            _raise_for_error(result, error_msg.decode("utf-8") if error_msg else "")
+            if result != ErrorCode.OK:
+                error_msg = self._lib.ITSCAM_getLastError()
+                _raise_for_error(result, error_msg.decode("utf-8") if error_msg else "")
     
     # =========================================================================
     #  Event Subscription
@@ -178,29 +201,30 @@ class ItscamClient:
         Raises:
             ItscamError: If subscription fails.
         """
-        if not self._handle:
-            raise RuntimeError("Client has been closed")
+        with self._native.use() as h:
+            if h is None:
+                raise RuntimeError("Client has been closed")
         
-        sub = _b.ITSCAM_EventSubscription(
-            pipeline=1 if (events.pipeline or events.pipeline_start) else 0,
-            triggerMetadata=1 if events.trigger_metadata else 0,
-            triggerImage=1 if events.trigger_image else 0,
-            snapshotMetadata=1 if events.snapshot_metadata else 0,
-            snapshotImage=1 if events.snapshot_image else 0,
-            previewMetadata=1 if events.preview_metadata else 0,
-            previewImage=1 if events.preview_image else 0,
-            gpio=1 if events.gpio else 0,
-            serial1=1 if (events.serial1 or events.serial) else 0,
-            serial2=1 if (events.serial2 or events.serial) else 0,
-        )
+            sub = _b.ITSCAM_EventSubscription(
+                pipeline=1 if (events.pipeline or events.pipeline_start) else 0,
+                triggerMetadata=1 if events.trigger_metadata else 0,
+                triggerImage=1 if events.trigger_image else 0,
+                snapshotMetadata=1 if events.snapshot_metadata else 0,
+                snapshotImage=1 if events.snapshot_image else 0,
+                previewMetadata=1 if events.preview_metadata else 0,
+                previewImage=1 if events.preview_image else 0,
+                gpio=1 if events.gpio else 0,
+                serial1=1 if (events.serial1 or events.serial) else 0,
+                serial2=1 if (events.serial2 or events.serial) else 0,
+            )
         
-        result = self._lib.ITSCAM_Client_subscribe(
-            self._handle, byref(sub), timeout_ms
-        )
+            result = self._lib.ITSCAM_Client_subscribe(
+                h, byref(sub), timeout_ms
+            )
         
-        if result != ErrorCode.OK:
-            error_msg = self._lib.ITSCAM_getLastError()
-            _raise_for_error(result, error_msg.decode("utf-8") if error_msg else "")
+            if result != ErrorCode.OK:
+                error_msg = self._lib.ITSCAM_getLastError()
+                _raise_for_error(result, error_msg.decode("utf-8") if error_msg else "")
 
     def subscribe_captures(
         self,
@@ -208,28 +232,29 @@ class ItscamClient:
         timeout_ms: int = 10000
     ) -> None:
         """Subscribe to capture events using the SDK high-level defaults."""
-        if not self._handle:
-            raise RuntimeError("Client has been closed")
+        with self._native.use() as h:
+            if h is None:
+                raise RuntimeError("Client has been closed")
 
-        capture_config = config or CaptureSubscriptionConfig()
-        c_config = _b.ITSCAM_CaptureSubscriptionConfig(
-            includeTrigger=1 if capture_config.include_trigger else 0,
-            includeSnapshot=1 if capture_config.include_snapshot else 0,
-            includeMetadata=1 if capture_config.include_metadata else 0,
-            embedComments=1 if capture_config.embed_comments else 0,
-            embedExif=1 if capture_config.embed_exif else 0,
-            embedSignature=1 if capture_config.embed_signature else 0,
-            triggerQuality=capture_config.trigger_quality,
-            snapshotQuality=capture_config.snapshot_quality,
-        )
+            capture_config = config or CaptureSubscriptionConfig()
+            c_config = _b.ITSCAM_CaptureSubscriptionConfig(
+                includeTrigger=1 if capture_config.include_trigger else 0,
+                includeSnapshot=1 if capture_config.include_snapshot else 0,
+                includeMetadata=1 if capture_config.include_metadata else 0,
+                embedComments=1 if capture_config.embed_comments else 0,
+                embedExif=1 if capture_config.embed_exif else 0,
+                embedSignature=1 if capture_config.embed_signature else 0,
+                triggerQuality=capture_config.trigger_quality,
+                snapshotQuality=capture_config.snapshot_quality,
+            )
 
-        result = self._lib.ITSCAM_Client_subscribeCaptures(
-            self._handle, byref(c_config), timeout_ms
-        )
+            result = self._lib.ITSCAM_Client_subscribeCaptures(
+                h, byref(c_config), timeout_ms
+            )
 
-        if result != ErrorCode.OK:
-            error_msg = self._lib.ITSCAM_getLastError()
-            _raise_for_error(result, error_msg.decode("utf-8") if error_msg else "")
+            if result != ErrorCode.OK:
+                error_msg = self._lib.ITSCAM_getLastError()
+                _raise_for_error(result, error_msg.decode("utf-8") if error_msg else "")
     
     # =========================================================================
     #  Capture
@@ -257,29 +282,30 @@ class ItscamClient:
         Raises:
             ItscamError: If capture fails.
         """
-        if not self._handle:
-            raise RuntimeError("Client has been closed")
+        with self._native.use() as h:
+            if h is None:
+                raise RuntimeError("Client has been closed")
         
-        request = _b.ITSCAM_SnapshotRequest(
-            scenario=scenario,
-            quality=quality,
-            forceCapture=1 if force_capture else 0
-        )
+            request = _b.ITSCAM_SnapshotRequest(
+                scenario=scenario,
+                quality=quality,
+                forceCapture=1 if force_capture else 0
+            )
         
-        result_array = _b.ITSCAM_CaptureResultArray()
+            result_array = _b.ITSCAM_CaptureResultArray()
         
-        result = self._lib.ITSCAM_Client_captureSnapshot(
-            self._handle, byref(request), timeout_ms, byref(result_array)
-        )
+            result = self._lib.ITSCAM_Client_captureSnapshot(
+                h, byref(request), timeout_ms, byref(result_array)
+            )
         
-        if result != ErrorCode.OK:
-            error_msg = self._lib.ITSCAM_getLastError()
-            _raise_for_error(result, error_msg.decode("utf-8") if error_msg else "")
+            if result != ErrorCode.OK:
+                error_msg = self._lib.ITSCAM_getLastError()
+                _raise_for_error(result, error_msg.decode("utf-8") if error_msg else "")
         
-        try:
-            return self._convert_capture_results(result_array)
-        finally:
-            self._lib.ITSCAM_CaptureResultArray_destroy(result_array)
+            try:
+                return self._convert_capture_results(result_array)
+            finally:
+                self._lib.ITSCAM_CaptureResultArray_destroy(result_array)
     
     def get_last_frame(
         self,
@@ -299,27 +325,28 @@ class ItscamClient:
         Raises:
             ItscamError: If request fails.
         """
-        if not self._handle:
-            raise RuntimeError("Client has been closed")
+        with self._native.use() as h:
+            if h is None:
+                raise RuntimeError("Client has been closed")
         
-        byte_array = _b.ITSCAM_ByteArray()
+            byte_array = _b.ITSCAM_ByteArray()
         
-        result = self._lib.ITSCAM_Client_getLastFrame(
-            self._handle, quality, timeout_ms, byref(byte_array)
-        )
+            result = self._lib.ITSCAM_Client_getLastFrame(
+                h, quality, timeout_ms, byref(byte_array)
+            )
         
-        if result != ErrorCode.OK:
-            error_msg = self._lib.ITSCAM_getLastError()
-            _raise_for_error(result, error_msg.decode("utf-8") if error_msg else "")
+            if result != ErrorCode.OK:
+                error_msg = self._lib.ITSCAM_getLastError()
+                _raise_for_error(result, error_msg.decode("utf-8") if error_msg else "")
         
-        try:
-            size = self._lib.ITSCAM_ByteArray_size(byte_array)
-            data_ptr = self._lib.ITSCAM_ByteArray_data(byte_array)
-            if data_ptr and size > 0:
-                return bytes(data_ptr[:size])
-            return b""
-        finally:
-            self._lib.ITSCAM_ByteArray_destroy(byte_array)
+            try:
+                size = self._lib.ITSCAM_ByteArray_size(byte_array)
+                data_ptr = self._lib.ITSCAM_ByteArray_data(byte_array)
+                if data_ptr and size > 0:
+                    return bytes(data_ptr[:size])
+                return b""
+            finally:
+                self._lib.ITSCAM_ByteArray_destroy(byte_array)
     
     # =========================================================================
     #  Profile Management
@@ -327,19 +354,20 @@ class ItscamClient:
     
     def get_active_profile_id(self, timeout_ms: int = 10000) -> int:
         """Get the active profile ID."""
-        if not self._handle:
-            raise RuntimeError("Client has been closed")
+        with self._native.use() as h:
+            if h is None:
+                raise RuntimeError("Client has been closed")
         
-        profile_id = c_uint32()
-        result = self._lib.ITSCAM_Client_getActiveProfileId(
-            self._handle, timeout_ms, byref(profile_id)
-        )
+            profile_id = c_uint32()
+            result = self._lib.ITSCAM_Client_getActiveProfileId(
+                h, timeout_ms, byref(profile_id)
+            )
         
-        if result != ErrorCode.OK:
-            error_msg = self._lib.ITSCAM_getLastError()
-            _raise_for_error(result, error_msg.decode("utf-8") if error_msg else "")
+            if result != ErrorCode.OK:
+                error_msg = self._lib.ITSCAM_getLastError()
+                _raise_for_error(result, error_msg.decode("utf-8") if error_msg else "")
         
-        return profile_id.value
+            return profile_id.value
     
     def set_active_profile(
         self,
@@ -347,46 +375,48 @@ class ItscamClient:
         timeout_ms: int = 10000
     ) -> None:
         """Set the active profile."""
-        if not self._handle:
-            raise RuntimeError("Client has been closed")
+        with self._native.use() as h:
+            if h is None:
+                raise RuntimeError("Client has been closed")
         
-        result = self._lib.ITSCAM_Client_setActiveProfile(
-            self._handle, profile_id, timeout_ms
-        )
+            result = self._lib.ITSCAM_Client_setActiveProfile(
+                h, profile_id, timeout_ms
+            )
         
-        if result != ErrorCode.OK:
-            error_msg = self._lib.ITSCAM_getLastError()
-            _raise_for_error(result, error_msg.decode("utf-8") if error_msg else "")
+            if result != ErrorCode.OK:
+                error_msg = self._lib.ITSCAM_getLastError()
+                _raise_for_error(result, error_msg.decode("utf-8") if error_msg else "")
     
     def list_profiles(self, timeout_ms: int = 10000) -> List[ProfileInfo]:
         """List all available profiles."""
-        if not self._handle:
-            raise RuntimeError("Client has been closed")
+        with self._native.use() as h:
+            if h is None:
+                raise RuntimeError("Client has been closed")
         
-        profile_array = _b.ITSCAM_ProfileArray()
-        result = self._lib.ITSCAM_Client_listProfiles(
-            self._handle, timeout_ms, byref(profile_array)
-        )
+            profile_array = _b.ITSCAM_ProfileArray()
+            result = self._lib.ITSCAM_Client_listProfiles(
+                h, timeout_ms, byref(profile_array)
+            )
         
-        if result != ErrorCode.OK:
-            error_msg = self._lib.ITSCAM_getLastError()
-            _raise_for_error(result, error_msg.decode("utf-8") if error_msg else "")
+            if result != ErrorCode.OK:
+                error_msg = self._lib.ITSCAM_getLastError()
+                _raise_for_error(result, error_msg.decode("utf-8") if error_msg else "")
         
-        try:
-            profiles = []
-            size = self._lib.ITSCAM_ProfileArray_size(profile_array)
-            for i in range(size):
-                info = _b.ITSCAM_ProfileInfo()
-                if self._lib.ITSCAM_ProfileArray_get(profile_array, i, byref(info)):
-                    profiles.append(ProfileInfo(
-                        id=info.id,
-                        name=info.name.decode("utf-8") if info.name else "",
-                        description=info.description.decode("utf-8") if info.description else "",
-                        is_active=bool(info.isActive)
-                    ))
-            return profiles
-        finally:
-            self._lib.ITSCAM_ProfileArray_destroy(profile_array)
+            try:
+                profiles = []
+                size = self._lib.ITSCAM_ProfileArray_size(profile_array)
+                for i in range(size):
+                    info = _b.ITSCAM_ProfileInfo()
+                    if self._lib.ITSCAM_ProfileArray_get(profile_array, i, byref(info)):
+                        profiles.append(ProfileInfo(
+                            id=info.id,
+                            name=info.name.decode("utf-8") if info.name else "",
+                            description=info.description.decode("utf-8") if info.description else "",
+                            is_active=bool(info.isActive)
+                        ))
+                return profiles
+            finally:
+                self._lib.ITSCAM_ProfileArray_destroy(profile_array)
     
     # =========================================================================
     #  System
@@ -394,14 +424,15 @@ class ItscamClient:
     
     def reboot(self, timeout_ms: int = 10000) -> None:
         """Reboot the camera."""
-        if not self._handle:
-            raise RuntimeError("Client has been closed")
+        with self._native.use() as h:
+            if h is None:
+                raise RuntimeError("Client has been closed")
         
-        result = self._lib.ITSCAM_Client_reboot(self._handle, timeout_ms)
+            result = self._lib.ITSCAM_Client_reboot(h, timeout_ms)
         
-        if result != ErrorCode.OK:
-            error_msg = self._lib.ITSCAM_getLastError()
-            _raise_for_error(result, error_msg.decode("utf-8") if error_msg else "")
+            if result != ErrorCode.OK:
+                error_msg = self._lib.ITSCAM_getLastError()
+                _raise_for_error(result, error_msg.decode("utf-8") if error_msg else "")
     
     # =========================================================================
     #  Callbacks
@@ -443,22 +474,10 @@ class ItscamClient:
         Args:
             callback: Callback function receiving reason string.
         """
-        if not self._handle:
-            return
-        
-        if callback:
-            @_b.ITSCAM_DisconnectCallback
-            def wrapper(reason, user_data):
-                try:
-                    callback(reason.decode("utf-8") if reason else "")
-                except Exception:
-                    pass  # Don't let exceptions escape to C
-            
-            self._callbacks["disconnect"] = wrapper
-            self._lib.ITSCAM_Client_onDisconnect(self._handle, wrapper, None)
-        else:
-            self._callbacks.pop("disconnect", None)
-            self._lib.ITSCAM_Client_onDisconnect(self._handle, None, None)
+        self._set_handler("disconnect", callback,
+                          _b.ITSCAM_DisconnectCallback,
+                          lambda reason: (_decode(reason),),
+                          self._lib.ITSCAM_Client_onDisconnect)
     
     def on_connection_state(
         self,
@@ -470,23 +489,11 @@ class ItscamClient:
         Args:
             callback: Callback function receiving state and reason.
         """
-        if not self._handle:
-            return
-        
-        if callback:
-            @_b.ITSCAM_ConnectionStateCallback
-            def wrapper(state, reason, user_data):
-                try:
-                    callback(ConnectionState(state),
-                            reason.decode("utf-8") if reason else "")
-                except Exception:
-                    pass
-            
-            self._callbacks["connection_state"] = wrapper
-            self._lib.ITSCAM_Client_onConnectionState(self._handle, wrapper, None)
-        else:
-            self._callbacks.pop("connection_state", None)
-            self._lib.ITSCAM_Client_onConnectionState(self._handle, None, None)
+        self._set_handler("connection_state", callback,
+                          _b.ITSCAM_ConnectionStateCallback,
+                          lambda state, reason: (ConnectionState(state),
+                                                 _decode(reason)),
+                          self._lib.ITSCAM_Client_onConnectionState)
     
     def on_log(
         self,
@@ -498,23 +505,10 @@ class ItscamClient:
         Args:
             callback: Callback function receiving log level and message.
         """
-        if not self._handle:
-            return
-        
-        if callback:
-            @_b.ITSCAM_LogCallback
-            def wrapper(level, message, user_data):
-                try:
-                    callback(LogLevel(level),
-                            message.decode("utf-8") if message else "")
-                except Exception:
-                    pass
-            
-            self._callbacks["log"] = wrapper
-            self._lib.ITSCAM_Client_onLog(self._handle, wrapper, None)
-        else:
-            self._callbacks.pop("log", None)
-            self._lib.ITSCAM_Client_onLog(self._handle, None, None)
+        self._set_handler("log", callback, _b.ITSCAM_LogCallback,
+                          lambda level, message: (LogLevel(level),
+                                                  _decode(message)),
+                          self._lib.ITSCAM_Client_onLog)
     
     # =========================================================================
     #  Private Helpers
@@ -527,23 +521,64 @@ class ItscamClient:
         native_setter: Any
     ) -> None:
         """Set a capture callback."""
-        if not self._handle:
-            return
-        
-        if callback:
-            @_b.ITSCAM_CaptureCallback
-            def wrapper(result_ptr, user_data):
+        # Weak: the native callback must not keep the client alive
+        client_ref = weakref.ref(self)
+
+        def convert(result_ptr):
+            return (client_ref()._convert_single_capture_result(result_ptr),)
+
+        self._set_handler(name, callback, _b.ITSCAM_CaptureCallback, convert,
+                          native_setter)
+    
+    def _set_handler(self, name: str, handler: Optional[Callable],
+                     callback_type: Any, convert: Callable,
+                     native_setter: Any) -> None:
+        """Set the handler of ``name``.  Each callback type has one native
+        callback, installed the first time and kept until the native client
+        is destroyed, which calls the current handler: installing another
+        one could free a callback that an SDK thread is about to call."""
+        with self._native.use() as h:
+            if h is None:
+                return
+            if handler is None:
+                self._handlers.pop(name, None)
+            else:
+                self._handlers[name] = handler
+            with self._callbacks_lock:
+                native_cb = self._callbacks.get(name)
+                if native_cb is None:
+                    if handler is None:
+                        return
+                    native_cb = self._native_callback(name, callback_type,
+                                                      convert)
+                    self._callbacks[name] = native_cb
+                    # The first callback of its type: the setter waits for
+                    # nothing
+                    native_setter(h, native_cb, None)
+                    return
+            # Setting the same callback again waits for the one in progress:
+            # once this returns, the replaced handler is not running (unless
+            # this is called from a callback of the client)
+            native_setter(h, native_cb, None)
+    
+    def _native_callback(self, name: str, callback_type: Any,
+                         convert: Callable) -> Any:
+        handlers, native = self._handlers, self._native
+
+        def call(*args):
+            # Holds the handle while the handler runs: a close() from it
+            # leaves the destroy to another thread, which waits for this
+            # callback before releasing it
+            with native.use() as h:
+                handler = handlers.get(name)
+                if h is None or handler is None:
+                    return
                 try:
-                    result = self._convert_single_capture_result(result_ptr)
-                    callback(result)
+                    handler(*convert(*args[:-1]))  # without user_data
                 except Exception:
-                    pass
-            
-            self._callbacks[name] = wrapper
-            native_setter(self._handle, wrapper, None)
-        else:
-            self._callbacks.pop(name, None)
-            native_setter(self._handle, None, None)
+                    pass  # Don't let exceptions escape to C
+
+        return callback_type(call)
     
     def _convert_capture_results(self, array) -> List[CaptureResult]:
         """Convert native capture result array to Python objects."""
