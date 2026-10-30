@@ -1563,12 +1563,12 @@ struct ItscamClient::Impl {
                     }
                 } else if (n == 0) {
                     log(LogLevel::Error, "Socket disconnected");
-                    state.store(STOPPING);
+                    markConnectionLost();
                 } else {
                     int err = os::socketErrno();
                     if (err != ITSCAM_SOCK_EWOULDBLOCK) {
                         log(LogLevel::Error, "Socket error %d: %s", err, os::socketStrerror(err));
-                        state.store(STOPPING);
+                        markConnectionLost();
                     }
                 }
             }
@@ -1663,7 +1663,7 @@ struct ItscamClient::Impl {
                 switch (wm.op) {
                 // --- JSON events ---
                 case OP_SHUTDOWN:
-                    state.store(STOPPING);
+                    markConnectionLost();
                     break;
 
                 case OP_EVT_TRIGGER:
@@ -1969,7 +1969,7 @@ struct ItscamClient::Impl {
                     "Ping timeout: %u consecutive unanswered pings "
                     "(limit %u), connection presumed dead",
                     consecutivePingFailures, limit);
-                state.store(STOPPING);
+                markConnectionLost();
                 return;
             }
             // Clean up the stale ping promise before sending a new one
