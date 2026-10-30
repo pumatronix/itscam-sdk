@@ -16,6 +16,7 @@
 #include "itscam_client.h"
 #include "itscam_jpeg_utils.h"
 #include "itscam_os.h"
+#include "impl/itscam_callback_queue.h"
 
 #include <algorithm>
 #include <atomic>
@@ -28,6 +29,9 @@
 #include <functional>
 #include <map>
 #include <stdarg.h>
+#include <string>
+#include <tuple>
+#include <utility>
 #include <vector>
 
 //=========================================================================
@@ -652,9 +656,115 @@ struct ItscamClient::Impl {
     socket_t sock = ITSCAM_OS_INVALID_SOCKET;
 
     // ---- Threading ----
-    Thread socketThread;
+    // The socket thread and the worker threads are detached and hold their
+    // own reference to the Impl (see spawnWorker()); the handler thread is
+    // joined by the socket thread.
     Thread handlerThread;
     MsgQueue inboundQueue;
+
+    // ---- Lifetime ----
+    // The client handle, every detached SDK thread and every queued callback
+    // each hold a reference; the last one to let go deletes the Impl, so a
+    // thread or callback that outlives the handle (e.g. stuck in a connect)
+    // never touches freed memory.
+    std::atomic<int> refs{1};
+
+    void releaseRef() {
+        if (refs.fetch_sub(1, std::memory_order_acq_rel) == 1) delete this;
+    }
+
+    // Runs fn on a detached thread that keeps the Impl alive until fn returns.
+    // Returns false if the thread could not be started: fn does not run, and
+    // the caller must complete whatever fn would have (e.g. its promise).
+    template<typename Fn>
+    bool spawnWorker(Fn&& fn) {
+        refs.fetch_add(1, std::memory_order_relaxed);
+        try {
+            Thread t([this, fn = std::forward<Fn>(fn)]() mutable {
+                try { fn(); } catch (...) {}  // nothing may skip the release
+                releaseRef();  // may delete the Impl: nothing after this
+            });
+            if (t.joinable()) {
+                t.detach();
+                return true;
+            }
+        } catch (...) {}
+        releaseRef();
+        return false;
+    }
+
+    static Error workerStartError() {
+        return Error{Error::Unknown, "failed to start a worker thread"};
+    }
+
+    // A request whose response nobody will wait for
+    void dropRequest(uint32_t id) {
+        LockGuard<Mutex> lk(promiseMtx);
+        promises.erase(id);
+    }
+
+    // Ask the socket thread to stop for good (no reconnect) and wake it.
+    // Returns true if a connection or connection attempt was active.
+    bool requestDisconnect() {
+        int st = state.load();
+        while (st == RUNNING || st == CONNECTING || st == STOPPING) {
+            if (state.compare_exchange_weak(st, DISCONNECTING)) {
+                shutdownSocket();
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // Session replay done: go live unless the user disconnected meanwhile
+    // (a plain store would overwrite DISCONNECTING and keep the session up).
+    bool goLive() {
+        int st = state.load();
+        while (st != DISCONNECTING) {
+            if (state.compare_exchange_weak(st, RUNNING)) return true;
+        }
+        return false;
+    }
+
+    // The handle is gone: stop every SDK thread without waiting for them (a
+    // binding may run callbacks on the thread destroying the client, so a
+    // thread blocked in one could never finish), then drop the handle's
+    // reference.
+    void closeAndRelease() {
+        requestDisconnect();
+        {
+            LockGuard<Mutex> lk(timeoutMtx);
+            timeoutStop = true;
+            timeoutCv.notifyAll();
+        }
+        failPendingRequests("client destroyed");
+        wakePendingCaptures();
+
+        // Drop the queued callbacks and admit no more, then wait for the one
+        // in progress, unless this runs inside it: the caller may then free
+        // whatever the callbacks use. The SDK threads never run callbacks,
+        // so they need no waiting for.
+        callbacks->close();
+
+        releaseRef();
+    }
+
+    // runSocketThread() threw: wind the session down like a normal exit (the
+    // handler thread runs while the state is RUNNING) before publishing
+    // STOPPED, which lets a new connectAsync() start, then report it.
+    void stopAfterSocketThreadError(const std::string& what) {
+        markConnectionLost();
+        closeSocket();
+        if (handlerThread.joinable()) handlerThread.join();
+        state.store(STOPPED);
+        try {
+            log(LogLevel::Error, "Socket thread %s", what.c_str());
+        } catch (...) {}  // user log handler: the session is already down
+    }
+
+    // Last reference gone: no thread uses the Impl any more. Close what an
+    // exceptional exit of the socket thread may have left open.
+    ~Impl() { closeSocket(); }
 
     // ---- Outbound serialisation ----
     Mutex sendMtx;
@@ -755,6 +865,14 @@ struct ItscamClient::Impl {
     }
 
     // ---- Callbacks ----
+    // No user callback runs on an SDK thread or with an SDK lock held:
+    // deliver() queues it on `callbacks`, which runs it on the shared
+    // callback pool (see CallbackQueue). It looks up its handler when it
+    // runs, so a handler replaced by a setter is not called afterwards.
+    // cbMtx guards the handlers and the event state above (trigger cache,
+    // exposure groups), and is only ever held briefly.
+    std::shared_ptr<detail::CallbackQueue> callbacks = detail::CallbackQueue::create();
+    std::atomic<bool> hasLogHandler{false};
     Mutex cbMtx;
     std::function<void(const FrameInfo&)>       cbTriggerMetadata;
     std::function<void(const FrameInfo&)>       cbSnapshotMetadata;
@@ -770,6 +888,66 @@ struct ItscamClient::Impl {
     std::function<void(const std::string&)>     cbDisconnect;
     std::function<void(ConnectionState, const std::string&)> cbConnectionState;
     std::function<void(LogLevel, const std::string&)> cbLog;
+
+    // A reference to the Impl, held by a queued callback
+    class Ref {
+    public:
+        explicit Ref(Impl* impl) : mImpl(impl) {
+            mImpl->refs.fetch_add(1, std::memory_order_relaxed);
+        }
+        Ref(const Ref& other) : Ref(other.mImpl) {}
+        Ref& operator=(const Ref&) = delete;
+        ~Ref() { mImpl->releaseRef(); }
+        Impl* get() const { return mImpl; }
+    private:
+        Impl* mImpl;
+    };
+
+    // Calls fn with the elements of args: std::apply, which the oldest
+    // toolchain we build with (GCC 5) lacks
+    template<typename Fn, typename Tuple, size_t... I>
+    static void callWith(const Fn& fn, const Tuple& args,
+                         std::index_sequence<I...>) {
+        fn(std::get<I>(args)...);
+    }
+
+    // Queues a call of the handler in `slot` with args, whose payload takes
+    // `bytes` (see CallbackQueue::Kind for what a full queue does)
+    template<typename Fn, typename... Args>
+    void deliver(Fn Impl::*slot, size_t bytes, detail::CallbackQueue::Kind kind,
+                 Args... args) {
+        using Indices = std::index_sequence_for<Args...>;
+        callbacks->post(
+            [self = Ref(this), slot, args = std::make_tuple(std::move(args)...)]() {
+                Fn handler;
+                {
+                    LockGuard<Mutex> lk(self.get()->cbMtx);
+                    handler = self.get()->*slot;
+                }
+                if (handler) callWith(handler, args, Indices{});
+            },
+            bytes, kind);
+    }
+
+    // Replaces a handler. Once this returns, the previous one is not running
+    // and will not be called, unless this runs in a callback of the client.
+    // Setting a first handler waits for nothing.
+    template<typename Fn>
+    void setHandler(Fn Impl::*slot, Fn handler) {
+        Fn previous;
+        {
+            LockGuard<Mutex> lk(cbMtx);
+            previous = std::move(this->*slot);
+            this->*slot = std::move(handler);
+        }
+        if (previous) callbacks->waitForCallback();
+    }
+
+    static size_t jpegBytes(const std::vector<CaptureResult>& frames) {
+        size_t n = 0;
+        for (const auto& f : frames) n += f.jpeg.size();
+        return n;
+    }
 
     // ---- Config ----
     std::atomic<uint32_t> pingInterval{5};
@@ -807,21 +985,21 @@ struct ItscamClient::Impl {
     // One managed thread sends the timeout and waits for its reply, so at most
     // one request is in flight and rapid setter calls collapse into one send of
     // the latest settings. The setters only flag the update: they never send,
-    // block or log (SDK callbacks run with cbMtx held, and log() takes it).
+    // block or log.
     // Not fatal: the camera still drops dead peers through TCP keepalive.
     Mutex timeoutMtx;
     ConditionVariable timeoutCv;
     bool timeoutDirty = false;      // settings changed since the last send
     uint32_t timeoutReplyId = 0;    // sent by replaySession(), reply not awaited yet
     bool timeoutStop = false;
-    Thread timeoutWorker;
+    bool timeoutWorkerStarted = false;
 
     // Called with timeoutMtx held. On failure the update stays pending and is
     // retried on the next request (the session setup always sends it anyway).
     void startTimeoutWorkerLocked() {
-        if (timeoutWorker.joinable() || timeoutStop) return;
+        if (timeoutWorkerStarted || timeoutStop) return;
         try {
-            timeoutWorker = Thread([this]() { runTimeoutWorker(); });
+            timeoutWorkerStarted = spawnWorker([this]() { runTimeoutWorker(); });
         } catch (...) {}
     }
 
@@ -916,38 +1094,54 @@ struct ItscamClient::Impl {
         }
     }
 
-    ~Impl() {
-        // Stop the timeout worker, wake it if it waits for a reply (disconnect
-        // normally already failed it) and join it before members go away.
-        {
-            LockGuard<Mutex> lk(timeoutMtx);
-            timeoutStop = true;
-            timeoutCv.notifyAll();
-        }
-        failPendingRequests("client destroyed");
-        if (timeoutWorker.joinable()) timeoutWorker.join();
-    }
-
     // ---- Imgpkg tracking for unified image callbacks ----
-    bool imgpkgActive = false; // updated whenever setJpegConfig is called
+    std::atomic<bool> imgpkgActive{false}; // updated whenever setJpegConfig is called
 
     // ---- Auto-reconnect ----
     AutoReconnectConfig reconnectCfg;
-    std::string lastPassword;
-    EventSubscription lastSubscription{};
-    JpegConfig lastJpegConfig{};
-    TriggerConfig lastTriggerConfig{};
-    uint32_t lastTriggerProfileId = 0;
-    bool hasPassword       = false;
-    bool isAuthenticated   = false;  // true after authenticate() succeeds; reset on disconnect
-    bool hasSubscription   = false;
-    bool hasJpegConfig     = false;
-    bool hasTriggerConfig  = false;
     bool hadSuccessfulSession = false;  // true once a session has been established
+
+    // Session replayed on reconnect. The user's calls write it and the socket
+    // thread reads it, so it is guarded by sessionMtx; nothing else is taken
+    // while holding it (no request, no log).
+    struct Session {
+        std::string lastPassword;
+        EventSubscription lastSubscription{};
+        JpegConfig lastJpegConfig{};
+        TriggerConfig lastTriggerConfig{};
+        uint32_t lastTriggerProfileId = 0;
+        bool hasPassword       = false;
+        bool isAuthenticated   = false;  // true after authenticate() succeeds; reset on disconnect
+        bool hasSubscription   = false;
+        bool hasJpegConfig     = false;
+        bool hasTriggerConfig  = false;
+    };
+    mutable Mutex sessionMtx;
+    Session session;
+
+    Session sessionCopy() const {
+        LockGuard<Mutex> lk(sessionMtx);
+        return session;
+    }
+
+    void setAuthenticated(bool authenticated) {
+        LockGuard<Mutex> lk(sessionMtx);
+        session.isAuthenticated = authenticated;
+    }
+
+    void recordAuthentication(const std::string& password) {
+        LockGuard<Mutex> lk(sessionMtx);
+        session.lastPassword    = password;
+        session.hasPassword     = true;
+        session.isAuthenticated = true;
+    }
 
     // Returns true when a command should be deferred because we know the server
     // requires authentication that hasn't been performed yet this session.
-    bool pendingAuth() const { return hasPassword && !isAuthenticated; }
+    bool pendingAuth() const {
+        LockGuard<Mutex> lk(sessionMtx);
+        return session.hasPassword && !session.isAuthenticated;
+    }
 
     bool canQueueForReplay() const {
         int st = state.load();
@@ -961,14 +1155,16 @@ struct ItscamClient::Impl {
     // Logging
     // -----------------------------------------------------------------------
     void log(LogLevel lvl, const char* fmt, ...) {
-        LockGuard<Mutex> lk(cbMtx);
-        if (!cbLog) return;
+        if (!hasLogHandler.load()) return;
         char buf[512];
         va_list args;
         va_start(args, fmt);
         vsnprintf(buf, sizeof(buf), fmt, args);
         va_end(args);
-        cbLog(lvl, buf);
+        std::string msg(buf);
+        size_t bytes = msg.size();
+        deliver(&Impl::cbLog, bytes, detail::CallbackQueue::Kind::Event,
+                lvl, std::move(msg));
     }
 
     // -----------------------------------------------------------------------
@@ -1093,6 +1289,10 @@ struct ItscamClient::Impl {
         uint64_t deadline = os::monotonicNow() + timeoutMs;
 
         while (os::monotonicNow() < deadline) {
+            // A socket created after disconnect() shut the old one down is
+            // never woken: give up between waits instead
+            if (state.load() == DISCONNECTING)
+                return Error{Error::ConnectionFailed, "disconnected"};
             uint64_t remaining = deadline - os::monotonicNow();
             int waitMs = static_cast<int>(std::min(remaining, (uint64_t)1000));
             int waitResult = os::socketWait(sock, waitMs, false);
@@ -1137,11 +1337,10 @@ struct ItscamClient::Impl {
         }
 
         // Spawn a detached waiter thread that will resolve the outer promise
-        auto* self = this;
         uint16_t expectedOp = op;
-        Thread([self, expectedOp, id, timeoutMs, outer]() {
+        bool started = spawnWorker([this, expectedOp, id, timeoutMs, outer]() {
             try {
-                outer->set_value(self->waitResponse(expectedOp, id, timeoutMs));
+                outer->set_value(waitResponse(expectedOp, id, timeoutMs));
             } catch (const std::exception& ex) {
                 try {
                     outer->set_value(Error{Error::Unknown, std::string("exception: ") + ex.what()});
@@ -1151,7 +1350,11 @@ struct ItscamClient::Impl {
                     outer->set_value(Error{Error::Unknown, "unknown exception"});
                 } catch (...) {}
             }
-        }).detach();
+        });
+        if (!started) {
+            dropRequest(id);
+            outer->set_value(workerStartError());
+        }
 
         return outerFut;
     }
@@ -1189,7 +1392,12 @@ struct ItscamClient::Impl {
                 return;
             }
 
-            state.store(RUNNING);
+            if (!goLive()) {
+                closeSocket();
+                abandonSessionAttempt();
+                state.store(STOPPED);
+                return;
+            }
             lastSentTime = os::monotonicNow();
             hadSuccessfulSession = true;
             wakeTimeoutWorker();
@@ -1256,7 +1464,11 @@ struct ItscamClient::Impl {
                 continue;
             }
 
-            state.store(RUNNING);
+            if (!goLive()) {
+                closeSocket();
+                abandonSessionAttempt();
+                break;
+            }
             lastSentTime = os::monotonicNow();
             wakeTimeoutWorker();
             log(LogLevel::Info, "Reconnected (TCP)");
@@ -1319,8 +1531,8 @@ struct ItscamClient::Impl {
     // Connection state callback helper
     // -----------------------------------------------------------------------
     void fireConnectionState(ConnectionState cs, const std::string& reason) {
-        LockGuard<Mutex> lk(cbMtx);
-        safeCallback("connectionState", cbConnectionState, cs, reason);
+        deliver(&Impl::cbConnectionState, 0,
+                detail::CallbackQueue::Kind::Essential, cs, reason);
     }
 
     // -----------------------------------------------------------------------
@@ -1328,6 +1540,7 @@ struct ItscamClient::Impl {
     // Returns true if TCP is up; sets sock and leaves it in blocking mode.
     // -----------------------------------------------------------------------
     bool tryConnect() {
+        if (state.load() == DISCONNECTING) return false;
         {
             LockGuard<Mutex> lk(sendMtx);
             LockGuard<Mutex> sl(sockMtx);
@@ -1350,9 +1563,17 @@ struct ItscamClient::Impl {
             return false;
         }
 
-        // Wait for connection to complete
+        // Wait up to 3 seconds for connection to complete, in slices so that
+        // disconnect() does not have to wait for it
         // socketWait returns: 1 = socket ready, 0 = timeout, -1 = error
-        int waitResult = os::socketWait(sock, 3000, true);  // 3 second timeout, check write
+        int waitResult = 0;
+        for (int waitedMs = 0; waitResult == 0 && waitedMs < 3000; waitedMs += 100) {
+            if (state.load() == DISCONNECTING) {
+                closeSocket();
+                return false;
+            }
+            waitResult = os::socketWait(sock, 100, true);  // check write
+        }
         if (waitResult <= 0) {
             log(LogLevel::Error, "Connect timed out or error");
             closeSocket();
@@ -1377,8 +1598,9 @@ struct ItscamClient::Impl {
 
     bool applyStoredCaptureSetup(const char* context, uint32_t timeout) {
         try {
-            if (hasJpegConfig) {
-                auto jpegJson = buildJpegJson(lastJpegConfig);
+            const Session ss = sessionCopy();
+            if (ss.hasJpegConfig) {
+                auto jpegJson = buildJpegJson(ss.lastJpegConfig);
                 log(LogLevel::Info, "%s: applying JPEG config %s", context, jpegJson.dump().c_str());
                 auto r = syncCall(OP_SET_JPEG_CFGS, jpegJson, timeout);
                 if (!r) {
@@ -1387,20 +1609,20 @@ struct ItscamClient::Impl {
                     return false;
                 }
             }
-            if (hasSubscription) {
+            if (ss.hasSubscription) {
                 log(LogLevel::Info, "%s: applying subscription (triggerImage=%d, imgpkgActive=%d)",
-                    context, lastSubscription.triggerImage, imgpkgActive);
-                auto r = syncCall(OP_SET_CALLBACKS, buildCallbacksJson(lastSubscription), timeout);
+                    context, ss.lastSubscription.triggerImage, imgpkgActive.load());
+                auto r = syncCall(OP_SET_CALLBACKS, buildCallbacksJson(ss.lastSubscription), timeout);
                 if (!r) {
                     log(LogLevel::Error, "%s: subscribe failed: %s",
                         context, r.error().message.c_str());
                     return false;
                 }
             }
-            if (hasTriggerConfig) {
+            if (ss.hasTriggerConfig) {
                 log(LogLevel::Info, "%s: applying trigger config", context);
                 auto r = syncCall(OP_SET_EQUIP_CFGS,
-                                  buildTriggerConfigJson(lastTriggerConfig, lastTriggerProfileId),
+                                  buildTriggerConfigJson(ss.lastTriggerConfig, ss.lastTriggerProfileId),
                                   timeout);
                 if (!r) {
                     log(LogLevel::Error, "%s: setTriggerConfig failed: %s",
@@ -1425,9 +1647,11 @@ struct ItscamClient::Impl {
     bool replaySession() {
         try {
             uint32_t timeout = defaultTimeout.load();
+            const Session ss = sessionCopy();
+            bool authenticated = ss.isAuthenticated;
 
             log(LogLevel::Info, "Replaying session (auth=%d, jpeg=%d, subscribe=%d, trigger=%d)",
-                hasPassword, hasJpegConfig, hasSubscription, hasTriggerConfig);
+                ss.hasPassword, ss.hasJpegConfig, ss.hasSubscription, ss.hasTriggerConfig);
 
             // Allowed before authentication
             if (!sendServerTimeoutForNewSession()) return false;
@@ -1441,9 +1665,9 @@ struct ItscamClient::Impl {
                 return true;
             };
 
-            if (hasPassword) {
+            if (ss.hasPassword) {
                 nlohmann::json params;
-                params["pass"] = lastPassword;
+                params["pass"] = ss.lastPassword;
                 auto r = syncCallDirect(OP_AUTHENTICATE, params, timeout);
                 if (!r) {
                     log(LogLevel::Error, "Reconnect: auth failed: %s", r.error().message.c_str());
@@ -1453,37 +1677,38 @@ struct ItscamClient::Impl {
                     log(LogLevel::Error, "Reconnect: auth rejected");
                     return false;
                 }
-                isAuthenticated = true;
+                authenticated = true;
+                setAuthenticated(true);
             }
 
-            if (hasJpegConfig) {
-                auto r = syncCallDirect(OP_SET_JPEG_CFGS, buildJpegJson(lastJpegConfig), timeout);
+            if (ss.hasJpegConfig) {
+                auto r = syncCallDirect(OP_SET_JPEG_CFGS, buildJpegJson(ss.lastJpegConfig), timeout);
                 if (lostTransport(r, "setJpegConfig")) return false;
                 if (!r)
-                    log(isAuthenticated ? LogLevel::Error : LogLevel::Info,
+                    log(authenticated ? LogLevel::Error : LogLevel::Info,
                         "Reconnect: setJpegConfig failed: %s%s",
                         r.error().message.c_str(),
-                        isAuthenticated ? "" : " (will be applied after authenticate())");
+                        authenticated ? "" : " (will be applied after authenticate())");
             }
-            if (hasSubscription) {
-                auto r = syncCallDirect(OP_SET_CALLBACKS, buildCallbacksJson(lastSubscription), timeout);
+            if (ss.hasSubscription) {
+                auto r = syncCallDirect(OP_SET_CALLBACKS, buildCallbacksJson(ss.lastSubscription), timeout);
                 if (lostTransport(r, "subscribe")) return false;
                 if (!r)
-                    log(isAuthenticated ? LogLevel::Error : LogLevel::Info,
+                    log(authenticated ? LogLevel::Error : LogLevel::Info,
                         "Reconnect: subscribe failed: %s%s",
                         r.error().message.c_str(),
-                        isAuthenticated ? "" : " (will be applied after authenticate())");
+                        authenticated ? "" : " (will be applied after authenticate())");
             }
-            if (hasTriggerConfig) {
+            if (ss.hasTriggerConfig) {
                 auto r = syncCallDirect(OP_SET_EQUIP_CFGS,
-                                        buildTriggerConfigJson(lastTriggerConfig, lastTriggerProfileId),
+                                        buildTriggerConfigJson(ss.lastTriggerConfig, ss.lastTriggerProfileId),
                                         timeout);
                 if (lostTransport(r, "setTriggerConfig")) return false;
                 if (!r)
-                    log(isAuthenticated ? LogLevel::Error : LogLevel::Info,
+                    log(authenticated ? LogLevel::Error : LogLevel::Info,
                         "Reconnect: setTriggerConfig failed: %s%s",
                         r.error().message.c_str(),
-                        isAuthenticated ? "" : " (will be applied after authenticate())");
+                        authenticated ? "" : " (will be applied after authenticate())");
             }
 
             return true;
@@ -1545,12 +1770,12 @@ struct ItscamClient::Impl {
                     }
                 } else if (n == 0) {
                     log(LogLevel::Error, "Socket disconnected");
-                    state.store(STOPPING);
+                    markConnectionLost();
                 } else {
                     int err = os::socketErrno();
                     if (err != ITSCAM_SOCK_EWOULDBLOCK) {
                         log(LogLevel::Error, "Socket error %d: %s", err, os::socketStrerror(err));
-                        state.store(STOPPING);
+                        markConnectionLost();
                     }
                 }
             }
@@ -1580,6 +1805,16 @@ struct ItscamClient::Impl {
         promises.clear();
     }
 
+    // Fail pending capture exposure groups (wake waiters with partial data)
+    void wakePendingCaptures() {
+        LockGuard<Mutex> lk(captureMtx);
+        for (auto& kv : pendingCaptures) {
+            kv.second->complete = true;  // wake with whatever we have
+            kv.second->cv.notifyAll();
+        }
+        pendingCaptures.clear();
+    }
+
     // -----------------------------------------------------------------------
     // cleanupAfterDisconnect()  --  fail pending promises, fire callbacks
     // -----------------------------------------------------------------------
@@ -1591,33 +1826,23 @@ struct ItscamClient::Impl {
         // Reset ping state and auth state so reconnection starts clean
         lastPingId.store(0);
         consecutivePingFailures = 0;
-        isAuthenticated = false;
+        setAuthenticated(false);
 
         log(LogLevel::Info, "Disconnected");
 
         // Fire disconnect callback
-        {
-            LockGuard<Mutex> lk(cbMtx);
-            safeCallback("disconnect", cbDisconnect, std::string("disconnected"));
-        }
+        deliver(&Impl::cbDisconnect, 0, detail::CallbackQueue::Kind::Essential,
+                std::string("disconnected"));
         fireConnectionState(ConnectionState::Disconnected, "disconnected");
 
         failPendingRequests("disconnected");
-        // Fail pending capture exposure groups (wake waiters with partial data)
-        {
-            LockGuard<Mutex> lk(captureMtx);
-            for (auto& kv : pendingCaptures) {
-                kv.second->complete = true;  // wake with whatever we have
-                kv.second->cv.notifyAll();
-            }
-            pendingCaptures.clear();
-        }
+        wakePendingCaptures();
 
         // Flush any partial exposure group accumulators for event callbacks
         {
             LockGuard<Mutex> lk(cbMtx);
-            fireExposureGroupCallback(cbTriggerExposureGroup, triggerExpGroupAcc);
-            fireExposureGroupCallback(cbSnapshotExposureGroup, snapshotExpGroupAcc);
+            fireExposureGroupCallback(&Impl::cbTriggerExposureGroup, triggerExpGroupAcc);
+            fireExposureGroupCallback(&Impl::cbSnapshotExposureGroup, snapshotExpGroupAcc);
         }
     }
 
@@ -1630,7 +1855,7 @@ struct ItscamClient::Impl {
             if (!inboundQueue.pop(wm, 100)) {
                 // No message received; check for stale exposure groups
                 try { checkExposureGroupTimeouts(); }
-                catch (...) {} // user callback in fireExposureGroupCallback
+                catch (...) {}
                 continue;
             }
 
@@ -1645,7 +1870,7 @@ struct ItscamClient::Impl {
                 switch (wm.op) {
                 // --- JSON events ---
                 case OP_SHUTDOWN:
-                    state.store(STOPPING);
+                    markConnectionLost();
                     break;
 
                 case OP_EVT_TRIGGER:
@@ -1653,15 +1878,15 @@ struct ItscamClient::Impl {
                     break;
 
                 case OP_EVT_SNAPSHOT:
-                    dispatchFrameInfo(wm, cbSnapshotMetadata);
+                    dispatchFrameInfo(wm, &Impl::cbSnapshotMetadata);
                     break;
 
                 case OP_EVT_PREVIEW:
-                    dispatchFrameInfo(wm, cbPreviewMetadata);
+                    dispatchFrameInfo(wm, &Impl::cbPreviewMetadata);
                     break;
 
                 case OP_EVT_PIPE_START:
-                    dispatchFrameInfo(wm, cbPipelineStart);
+                    dispatchFrameInfo(wm, &Impl::cbPipelineStart);
                     break;
 
                 case OP_EVT_GPIO:
@@ -1684,7 +1909,7 @@ struct ItscamClient::Impl {
                     break;
 
                 case OP_JPEG_PREVIEW:
-                    dispatchImage(wm, cbPreviewImage);
+                    dispatchImage(wm, &Impl::cbPreviewImage);
                     break;
 
                 // --- Responses ---
@@ -1705,58 +1930,48 @@ struct ItscamClient::Impl {
     // -----------------------------------------------------------------------
     // Dispatch helpers
     // -----------------------------------------------------------------------
-    /// Safe callback invocation helper -- catches exceptions from user code
-    /// so that a bad callback never kills the handler thread.
-    /// Note: callers typically hold cbMtx, so we cannot call log() here
-    /// (it would deadlock). The handler thread's outer try-catch provides
-    /// logging for any re-thrown exceptions.
-    template<typename Fn, typename... Args>
-    void safeCallback(const char* /*name*/, const Fn& fn, Args&&... args) {
-        if (!fn) return;
-        try {
-            fn(std::forward<Args>(args)...);
-        } catch (const std::exception&) {
-            // Swallowed: cannot log here (cbMtx held).
-            // The handler thread's outer catch will handle it if re-thrown.
-        } catch (...) {
-            // Swallowed: unknown callback exception.
-        }
+    // Whether the handler in `slot` is set: no need to parse an event for
+    // nobody (it may still be cleared before its callback runs)
+    template<typename Fn>
+    bool hasHandler(Fn Impl::*slot) {
+        LockGuard<Mutex> lk(cbMtx);
+        return static_cast<bool>(this->*slot);
     }
 
     void dispatchFrameInfo(const WireMsg& wm,
-                           const std::function<void(const FrameInfo&)>& cb) {
-        LockGuard<Mutex> lk(cbMtx);
-        if (!cb) return;
+                           std::function<void(const FrameInfo&)> Impl::*slot) {
+        if (!hasHandler(slot)) return;
         nlohmann::json j = bodyToJson(wm.body);
-        safeCallback("dispatchFrameInfo", cb, parseFrameInfo(j));
+        deliver(slot, 0, detail::CallbackQueue::Kind::Event, parseFrameInfo(j));
     }
 
     /// Specialized handler for OP_EVT_TRIGGER: parses the JSON, caches
     /// the detection metadata (plates/objects) by RID for later merging
     /// with IMGPKG events, then fires the user callback.
     void dispatchTriggerInfo(const WireMsg& wm) {
-        LockGuard<Mutex> lk(cbMtx);
         nlohmann::json j = bodyToJson(wm.body);
         FrameInfo fi = parseFrameInfo(j);
-        cacheTriggerInfo(fi);
-        safeCallback("triggerMetadata", cbTriggerMetadata, fi);
+        {
+            LockGuard<Mutex> lk(cbMtx);
+            cacheTriggerInfo(fi);
+        }
+        deliver(&Impl::cbTriggerMetadata, 0, detail::CallbackQueue::Kind::Event,
+                std::move(fi));
     }
 
     void dispatchGpio(const WireMsg& wm) {
-        LockGuard<Mutex> lk(cbMtx);
-        if (!cbGpio) return;
+        if (!hasHandler(&Impl::cbGpio)) return;
         nlohmann::json j = bodyToJson(wm.body);
         GpioEvent ev;
         ev.frameCount  = j.value("framecount", (uint64_t)0);
         ev.risingEdge  = j.value("rising",     (uint32_t)0);
         ev.fallingEdge = j.value("falling",    (uint32_t)0);
         ev.state       = j.value("state",      (uint32_t)0);
-        safeCallback("gpio", cbGpio, ev);
+        deliver(&Impl::cbGpio, 0, detail::CallbackQueue::Kind::Event, ev);
     }
 
     void dispatchSerial(const WireMsg& wm) {
-        LockGuard<Mutex> lk(cbMtx);
-        if (!cbSerial) return;
+        if (!hasHandler(&Impl::cbSerial)) return;
         if (wm.body.size() <= 4) return;
         uint32_t metaLen = os::netToHost32(*(const uint32_t*)wm.body.data());
         if (wm.body.size() < 4 + metaLen) return;
@@ -1776,14 +1991,17 @@ struct ItscamClient::Impl {
                 sd.uptimeMs = meta["uptimeMs"].get<uint64_t>();
             }
         }
-        safeCallback("serial", cbSerial, sd);
+        size_t bytes = sd.data.size();
+        deliver(&Impl::cbSerial, bytes, detail::CallbackQueue::Kind::Event,
+                std::move(sd));
     }
 
     void dispatchImage(const WireMsg& wm,
-                       const std::function<void(const CaptureResult&)>& cb) {
-        LockGuard<Mutex> lk(cbMtx);
-        if (!cb) return;
-        safeCallback("dispatchImage", cb, parseMixedBody(wm.body));
+                       std::function<void(const CaptureResult&)> Impl::*slot) {
+        if (!hasHandler(slot)) return;
+        CaptureResult cr = parseMixedBody(wm.body);
+        size_t bytes = cr.jpeg.size();
+        deliver(slot, bytes, detail::CallbackQueue::Kind::Event, std::move(cr));
     }
 
     // -----------------------------------------------------------------------
@@ -1809,11 +2027,14 @@ struct ItscamClient::Impl {
         return (int)acc.frames.size() >= acc.expectedCount;
     }
 
+    // Called with cbMtx held
     void fireExposureGroupCallback(
-            const std::function<void(const std::vector<CaptureResult>&)>& cb,
+            std::function<void(const std::vector<CaptureResult>&)> Impl::*slot,
             ExposureGroupAccumulator& acc) {
         if (!acc.frames.empty()) {
-            safeCallback("exposureGroup", cb, acc.frames);
+            size_t bytes = jpegBytes(acc.frames);
+            deliver(slot, bytes, detail::CallbackQueue::Kind::Event,
+                    std::move(acc.frames));
             acc.reset();
         }
     }
@@ -1838,12 +2059,8 @@ struct ItscamClient::Impl {
                 (unsigned long)cr.info.requestId, mergeDiag.c_str());
         }
 
-        // Fire the per-frame callback (isolated so an exception doesn't
-        // prevent exposure group accumulation)
-        {
-            LockGuard<Mutex> lk(cbMtx);
-            safeCallback("triggerImage", cbTriggerImage, cr);
-        }
+        deliver(&Impl::cbTriggerImage, cr.jpeg.size(),
+                detail::CallbackQueue::Kind::Event, cr);
 
         // Accumulate for exposure group callback
         {
@@ -1853,11 +2070,11 @@ struct ItscamClient::Impl {
             // If a new RID arrives, flush any pending partial group
             if (triggerExpGroupAcc.rid != 0 &&
                 triggerExpGroupAcc.rid != cr.info.requestId) {
-                fireExposureGroupCallback(cbTriggerExposureGroup, triggerExpGroupAcc);
+                fireExposureGroupCallback(&Impl::cbTriggerExposureGroup, triggerExpGroupAcc);
             }
 
             if (accumulateExposureGroup(triggerExpGroupAcc, cr)) {
-                fireExposureGroupCallback(cbTriggerExposureGroup, triggerExpGroupAcc);
+                fireExposureGroupCallback(&Impl::cbTriggerExposureGroup, triggerExpGroupAcc);
             }
         }
     }
@@ -1886,12 +2103,8 @@ struct ItscamClient::Impl {
             }
         }
 
-        // Fire the per-frame callback (isolated so an exception doesn't
-        // prevent exposure group accumulation)
-        {
-            LockGuard<Mutex> lk(cbMtx);
-            safeCallback("snapshotImage", cbSnapshotImage, cr);
-        }
+        deliver(&Impl::cbSnapshotImage, cr.jpeg.size(),
+                detail::CallbackQueue::Kind::Event, cr);
 
         // Accumulate for exposure group callback
         {
@@ -1901,11 +2114,11 @@ struct ItscamClient::Impl {
             // If a new RID arrives, flush any pending partial group
             if (snapshotExpGroupAcc.rid != 0 &&
                 snapshotExpGroupAcc.rid != cr.info.requestId) {
-                fireExposureGroupCallback(cbSnapshotExposureGroup, snapshotExpGroupAcc);
+                fireExposureGroupCallback(&Impl::cbSnapshotExposureGroup, snapshotExpGroupAcc);
             }
 
             if (accumulateExposureGroup(snapshotExpGroupAcc, cr)) {
-                fireExposureGroupCallback(cbSnapshotExposureGroup, snapshotExpGroupAcc);
+                fireExposureGroupCallback(&Impl::cbSnapshotExposureGroup, snapshotExpGroupAcc);
             }
         }
     }
@@ -1928,11 +2141,11 @@ struct ItscamClient::Impl {
 
         if (triggerExpGroupAcc.rid != 0 &&
             (now - triggerExpGroupAcc.firstFrameTimeMs) > timeout) {
-            fireExposureGroupCallback(cbTriggerExposureGroup, triggerExpGroupAcc);
+            fireExposureGroupCallback(&Impl::cbTriggerExposureGroup, triggerExpGroupAcc);
         }
         if (snapshotExpGroupAcc.rid != 0 &&
             (now - snapshotExpGroupAcc.firstFrameTimeMs) > timeout) {
-            fireExposureGroupCallback(cbSnapshotExposureGroup, snapshotExpGroupAcc);
+            fireExposureGroupCallback(&Impl::cbSnapshotExposureGroup, snapshotExpGroupAcc);
         }
     }
 
@@ -1951,7 +2164,7 @@ struct ItscamClient::Impl {
                     "Ping timeout: %u consecutive unanswered pings "
                     "(limit %u), connection presumed dead",
                     consecutivePingFailures, limit);
-                state.store(STOPPING);
+                markConnectionLost();
                 return;
             }
             // Clean up the stale ping promise before sending a new one
@@ -2318,14 +2531,39 @@ struct ItscamClient::Impl {
 // ItscamClient  --  public method implementations
 //=========================================================================
 
-ItscamClient::ItscamClient() : mImpl(new Impl) {}
+ItscamClient::ItscamClient() : mImpl(new Impl) {
+    // Runs on the callback pool, after the callbacks that were held up;
+    // `impl` stays valid: closing the queue cancels the report
+    Impl* impl = mImpl.get();
+    mImpl->callbacks->setDropReporter([impl](uint64_t dropped) {
+        std::function<void(LogLevel, const std::string&)> handler;
+        {
+            LockGuard<Mutex> lk(impl->cbMtx);
+            handler = impl->cbLog;
+        }
+        if (handler) {
+            handler(LogLevel::Error,
+                    "Callbacks fell behind: " + std::to_string(dropped) +
+                    " events dropped");
+        }
+    });
+}
 
+// The Impl is not deleted here: SDK threads may still be running on it, and
+// the last one to stop deletes it (see Impl::closeAndRelease()).
 ItscamClient::~ItscamClient() {
-    if (mImpl) disconnect();
+    if (mImpl) mImpl.release()->closeAndRelease();
 }
 
 ItscamClient::ItscamClient(ItscamClient&&) noexcept = default;
-ItscamClient& ItscamClient::operator=(ItscamClient&&) noexcept = default;
+
+ItscamClient& ItscamClient::operator=(ItscamClient&& other) noexcept {
+    if (this != &other) {
+        if (mImpl) mImpl.release()->closeAndRelease();
+        mImpl = std::move(other.mImpl);
+    }
+    return *this;
+}
 
 // ---- Connection -----------------------------------------------------------
 
@@ -2339,37 +2577,39 @@ Result<void> ItscamClient::connect(const std::string& address, uint16_t port,
 Future<void> ItscamClient::connectAsync(const std::string& address,
                                          uint16_t port, uint32_t timeoutMs,
                                          const AutoReconnectConfig& reconnect) {
-    if (mImpl->state.load() != Impl::IDLE && mImpl->state.load() != Impl::STOPPED) {
-        Promise<void> p;
-        p.set_value(Error{Error::InvalidParameter, "already connected or connecting"});
-        return p.get_future();
-    }
+    // Claim the connection before writing its settings: a concurrent
+    // connectAsync() must fail instead of starting another socket thread
+    int st = mImpl->state.load();
+    do {
+        if (st != Impl::IDLE && st != Impl::STOPPED) {
+            Promise<void> p;
+            p.set_value(Error{Error::InvalidParameter, "already connected or connecting"});
+            return p.get_future();
+        }
+    } while (!mImpl->state.compare_exchange_weak(st, Impl::CONNECTING));
 
     mImpl->address = address;
     mImpl->port = port;
     mImpl->reconnectCfg = reconnect;
-    mImpl->state.store(Impl::CONNECTING);
 
     auto impl = mImpl.get();
     auto pShared = std::make_shared<Promise<void>>();
     auto fut = pShared->get_future();
 
     // The socket thread runs the full read loop until disconnect.
-    mImpl->socketThread = Thread([impl]() {
+    bool started = mImpl->spawnWorker([impl]() {
         try {
             impl->runSocketThread();
         } catch (const std::exception& ex) {
-            impl->log(LogLevel::Error, "Socket thread exception: %s", ex.what());
-            impl->state.store(Impl::STOPPED);
+            impl->stopAfterSocketThreadError(std::string("exception: ") + ex.what());
         } catch (...) {
-            impl->log(LogLevel::Error, "Socket thread unknown exception");
-            impl->state.store(Impl::STOPPED);
+            impl->stopAfterSocketThreadError("unknown exception");
         }
     });
-    mImpl->socketThread.detach();
+    if (!started) mImpl->state.store(Impl::STOPPED);  // the poller reports it
 
     // Poll in a background thread for the connect state transition
-    Thread([impl, pShared, timeoutMs]() {
+    bool polling = mImpl->spawnWorker([impl, pShared, timeoutMs]() {
         try {
             auto start = os::monotonicNow();
             while (true) {
@@ -2382,9 +2622,15 @@ Future<void> ItscamClient::connectAsync(const std::string& address,
                     pShared->set_value(Error{Error::ConnectionFailed, "connection failed"});
                     return;
                 }
+                if (st == Impl::DISCONNECTING) {
+                    pShared->set_value(Error{Error::ConnectionFailed, "disconnected"});
+                    return;
+                }
                 auto elapsed = os::monotonicNow() - start;
                 if (elapsed >= timeoutMs) {
-                    impl->state.store(Impl::STOPPING);
+                    // Only a pending attempt: never undo a disconnect()
+                    int expected = Impl::CONNECTING;
+                    impl->state.compare_exchange_strong(expected, Impl::STOPPING);
                     pShared->set_value(Error{Error::Timeout, "connect timed out"});
                     return;
                 }
@@ -2394,21 +2640,21 @@ Future<void> ItscamClient::connectAsync(const std::string& address,
             try { pShared->set_value(Error{Error::Unknown, "exception in connect poll"}); }
             catch (...) {}
         }
-    }).detach();
+    });
+    if (!polling) {
+        // Nothing would report the outcome: stop the attempt and fail now
+        mImpl->requestDisconnect();
+        pShared->set_value(Impl::workerStartError());
+    }
 
     return fut;
 }
 
 void ItscamClient::disconnect() {
     if (!mImpl) return;
-    int st = mImpl->state.load();
-    if (st == Impl::RUNNING || st == Impl::CONNECTING ||
-        st == Impl::STOPPING) {
-        // DISCONNECTING tells the reconnect loop to stop
-        mImpl->state.store(Impl::DISCONNECTING);
-        // Wake the socket thread and any sender stalled on a full buffer
-        mImpl->shutdownSocket();
-    }
+    // DISCONNECTING tells the reconnect loop to stop; the socket shutdown
+    // wakes the socket thread and any sender stalled on a full buffer
+    mImpl->requestDisconnect();
     // Give threads some time to wind down
     for (int i = 0; i < 100 && mImpl->state.load() != Impl::STOPPED &&
                      mImpl->state.load() != Impl::IDLE; ++i) {
@@ -2424,8 +2670,9 @@ bool ItscamClient::isConnected() const {
 // ---- Authentication -------------------------------------------------------
 
 void ItscamClient::setPassword(const std::string& password) {
-    mImpl->lastPassword = password;
-    mImpl->hasPassword  = true;
+    LockGuard<Mutex> lk(mImpl->sessionMtx);
+    mImpl->session.lastPassword = password;
+    mImpl->session.hasPassword  = true;
 }
 
 Result<void> ItscamClient::authenticate(const std::string& password,
@@ -2438,9 +2685,7 @@ Result<void> ItscamClient::authenticate(const std::string& password,
         auto& resp = r.value();
         if (jsonBoolField(resp, "auth")) {
             // Record for session replay on reconnect
-            mImpl->lastPassword    = password;
-            mImpl->hasPassword     = true;
-            mImpl->isAuthenticated = true;
+            mImpl->recordAuthentication(password);
 
             // Apply any capture setup that was deferred until after auth.
             if (!mImpl->applyStoredCaptureSetup("Authenticate", timeoutMs)) {
@@ -2467,15 +2712,13 @@ Future<void> ItscamClient::authenticateAsync(const std::string& password,
     auto pShared = std::make_shared<Promise<void>>();
     auto fut = pShared->get_future();
     auto* impl = mImpl.get();
-    Thread([jf = std::move(jsonFut), pShared, impl, password, timeoutMs]() mutable {
+    bool started = impl->spawnWorker([jf = std::move(jsonFut), pShared, impl, password, timeoutMs]() mutable {
         try {
             auto r = jf.get();
             if (!r) { pShared->set_value(r.error()); return; }
             auto& resp = r.value();
             if (jsonBoolField(resp, "auth")) {
-                impl->lastPassword    = password;
-                impl->hasPassword     = true;
-                impl->isAuthenticated = true;
+                impl->recordAuthentication(password);
                 if (!impl->applyStoredCaptureSetup("AuthenticateAsync", timeoutMs)) {
                     impl->log(LogLevel::Error,
                               "AuthenticateAsync: pending capture setup was not fully applied");
@@ -2492,7 +2735,8 @@ Future<void> ItscamClient::authenticateAsync(const std::string& password,
             try { pShared->set_value(Error{Error::Unknown, "unknown exception"}); }
             catch (...) {}
         }
-    }).detach();
+    });
+    if (!started) pShared->set_value(Impl::workerStartError());
     return fut;
 }
 
@@ -2504,8 +2748,11 @@ Result<EventSubscription> ItscamClient::subscribe(
         // Record for session replay on reconnect BEFORE the call.
         // This ensures the subscription is stored even if the call fails
         // due to disconnection, allowing replay when connection is established.
-        mImpl->lastSubscription = events;
-        mImpl->hasSubscription  = true;
+        {
+            LockGuard<Mutex> lk(mImpl->sessionMtx);
+            mImpl->session.lastSubscription = events;
+            mImpl->session.hasSubscription  = true;
+        }
 
         // Defer if auth is known to be required but not yet done this session.
         if (mImpl->pendingAuth()) {
@@ -2542,10 +2789,13 @@ Result<EventSubscription> ItscamClient::subscribeCaptures(
     // disconnected. This keeps replaySession() able to restore both parts
     // once the first connection or a later reconnect succeeds.
     mImpl->imgpkgActive = jpegConfig.usesImgpkg();
-    mImpl->lastJpegConfig = jpegConfig;
-    mImpl->hasJpegConfig = true;
-    mImpl->lastSubscription = events;
-    mImpl->hasSubscription = true;
+    {
+        LockGuard<Mutex> lk(mImpl->sessionMtx);
+        mImpl->session.lastJpegConfig = jpegConfig;
+        mImpl->session.hasJpegConfig = true;
+        mImpl->session.lastSubscription = events;
+        mImpl->session.hasSubscription = true;
+    }
 
     auto jpegResult = setJpegConfig(jpegConfig, timeoutMs);
     if (!jpegResult) {
@@ -2584,8 +2834,11 @@ Result<JpegConfig> ItscamClient::setJpegConfig(const JpegConfig& config,
         // Record for session replay on reconnect BEFORE the call.
         // This ensures the config is stored even if the call fails
         // due to disconnection, allowing replay when connection is established.
-        mImpl->lastJpegConfig = config;
-        mImpl->hasJpegConfig  = true;
+        {
+            LockGuard<Mutex> lk(mImpl->sessionMtx);
+            mImpl->session.lastJpegConfig = config;
+            mImpl->session.hasJpegConfig  = true;
+        }
 
         // Defer if auth is known to be required but not yet done this session.
         if (mImpl->pendingAuth()) {
@@ -2638,7 +2891,7 @@ Future<std::vector<CaptureResult>> ItscamClient::captureSnapshotAsync(
     auto pShared = std::make_shared<Promise<std::vector<CaptureResult>>>();
     auto outerFut = pShared->get_future();
 
-    Thread([impl, msgId, timeoutMs, pShared]() mutable {
+    bool started = impl->spawnWorker([impl, msgId, timeoutMs, pShared]() mutable {
         try {
             auto respResult = impl->waitResponse(OP_TRIGGER_SNAPSHOT, msgId, timeoutMs);
             if (!respResult) {
@@ -2681,7 +2934,11 @@ Future<std::vector<CaptureResult>> ItscamClient::captureSnapshotAsync(
             try { pShared->set_value(Error{Error::Unknown, "unknown exception"}); }
             catch (...) {}
         }
-    }).detach();
+    });
+    if (!started) {
+        impl->dropRequest(msgId);
+        pShared->set_value(Impl::workerStartError());
+    }
 
     return outerFut;
 }
@@ -2705,7 +2962,7 @@ Future<std::vector<uint8_t>> ItscamClient::getLastFrameAsync(int quality,
     auto* impl = mImpl.get();
     auto pShared = std::make_shared<Promise<std::vector<uint8_t>>>();
     auto outerFut = pShared->get_future();
-    Thread([impl, id, timeoutMs, pShared]() mutable {
+    bool started = impl->spawnWorker([impl, id, timeoutMs, pShared]() mutable {
         try {
             // GET_LASTFRAME response body IS the JPEG data (no JSON wrapper)
             WireFuture<WireMsg> fut;
@@ -2743,7 +3000,11 @@ Future<std::vector<uint8_t>> ItscamClient::getLastFrameAsync(int quality,
             try { pShared->set_value(Error{Error::Unknown, "unknown exception"}); }
             catch (...) {}
         }
-    }).detach();
+    });
+    if (!started) {
+        impl->dropRequest(id);
+        pShared->set_value(Impl::workerStartError());
+    }
     return outerFut;
 }
 
@@ -2834,9 +3095,12 @@ Result<void> ItscamClient::setTriggerConfig(const TriggerConfig& config,
                                              uint32_t profileId,
                                              uint32_t timeoutMs) {
     // Store for session replay on reconnect BEFORE the call.
-    mImpl->lastTriggerConfig    = config;
-    mImpl->lastTriggerProfileId = profileId;
-    mImpl->hasTriggerConfig     = true;
+    {
+        LockGuard<Mutex> lk(mImpl->sessionMtx);
+        mImpl->session.lastTriggerConfig    = config;
+        mImpl->session.lastTriggerProfileId = profileId;
+        mImpl->session.hasTriggerConfig     = true;
+    }
 
     // Defer if auth is known to be required but not yet done this session.
     if (mImpl->pendingAuth()) {
@@ -3063,60 +3327,47 @@ Result<void> ItscamClient::reboot(uint32_t timeoutMs) {
 // ---- Event callbacks ------------------------------------------------------
 
 void ItscamClient::onTriggerMetadata(std::function<void(const FrameInfo&)> cb) {
-    LockGuard<Mutex> lk(mImpl->cbMtx);
-    mImpl->cbTriggerMetadata = std::move(cb);
+    mImpl->setHandler(&Impl::cbTriggerMetadata, std::move(cb));
 }
 void ItscamClient::onSnapshotMetadata(std::function<void(const FrameInfo&)> cb) {
-    LockGuard<Mutex> lk(mImpl->cbMtx);
-    mImpl->cbSnapshotMetadata = std::move(cb);
+    mImpl->setHandler(&Impl::cbSnapshotMetadata, std::move(cb));
 }
 void ItscamClient::onPreviewMetadata(std::function<void(const FrameInfo&)> cb) {
-    LockGuard<Mutex> lk(mImpl->cbMtx);
-    mImpl->cbPreviewMetadata = std::move(cb);
+    mImpl->setHandler(&Impl::cbPreviewMetadata, std::move(cb));
 }
 void ItscamClient::onTriggerImage(std::function<void(const CaptureResult&)> cb) {
-    LockGuard<Mutex> lk(mImpl->cbMtx);
-    mImpl->cbTriggerImage = std::move(cb);
+    mImpl->setHandler(&Impl::cbTriggerImage, std::move(cb));
 }
 void ItscamClient::onSnapshotImage(std::function<void(const CaptureResult&)> cb) {
-    LockGuard<Mutex> lk(mImpl->cbMtx);
-    mImpl->cbSnapshotImage = std::move(cb);
+    mImpl->setHandler(&Impl::cbSnapshotImage, std::move(cb));
 }
 void ItscamClient::onPreviewImage(std::function<void(const CaptureResult&)> cb) {
-    LockGuard<Mutex> lk(mImpl->cbMtx);
-    mImpl->cbPreviewImage = std::move(cb);
+    mImpl->setHandler(&Impl::cbPreviewImage, std::move(cb));
 }
 void ItscamClient::onPipelineStart(std::function<void(const FrameInfo&)> cb) {
-    LockGuard<Mutex> lk(mImpl->cbMtx);
-    mImpl->cbPipelineStart = std::move(cb);
+    mImpl->setHandler(&Impl::cbPipelineStart, std::move(cb));
 }
 void ItscamClient::onGpio(std::function<void(const GpioEvent&)> cb) {
-    LockGuard<Mutex> lk(mImpl->cbMtx);
-    mImpl->cbGpio = std::move(cb);
+    mImpl->setHandler(&Impl::cbGpio, std::move(cb));
 }
 void ItscamClient::onSerial(std::function<void(const SerialData&)> cb) {
-    LockGuard<Mutex> lk(mImpl->cbMtx);
-    mImpl->cbSerial = std::move(cb);
+    mImpl->setHandler(&Impl::cbSerial, std::move(cb));
 }
 void ItscamClient::onTriggerExposureGroup(
     std::function<void(const std::vector<CaptureResult>&)> cb) {
-    LockGuard<Mutex> lk(mImpl->cbMtx);
-    mImpl->cbTriggerExposureGroup = std::move(cb);
+    mImpl->setHandler(&Impl::cbTriggerExposureGroup, std::move(cb));
 }
 void ItscamClient::onSnapshotExposureGroup(
     std::function<void(const std::vector<CaptureResult>&)> cb) {
-    LockGuard<Mutex> lk(mImpl->cbMtx);
-    mImpl->cbSnapshotExposureGroup = std::move(cb);
+    mImpl->setHandler(&Impl::cbSnapshotExposureGroup, std::move(cb));
 }
 void ItscamClient::onDisconnect(std::function<void(const std::string&)> cb) {
-    LockGuard<Mutex> lk(mImpl->cbMtx);
-    mImpl->cbDisconnect = std::move(cb);
+    mImpl->setHandler(&Impl::cbDisconnect, std::move(cb));
 }
 
 void ItscamClient::onConnectionStateChanged(
     std::function<void(ConnectionState, const std::string&)> cb) {
-    LockGuard<Mutex> lk(mImpl->cbMtx);
-    mImpl->cbConnectionState = std::move(cb);
+    mImpl->setHandler(&Impl::cbConnectionState, std::move(cb));
 }
 
 // ---- Advanced -------------------------------------------------------------
@@ -3133,8 +3384,8 @@ void ItscamClient::setMaxPingFailures(uint32_t count) {
 
 void ItscamClient::setLogHandler(
     std::function<void(LogLevel, const std::string&)> cb) {
-    LockGuard<Mutex> lk(mImpl->cbMtx);
-    mImpl->cbLog = std::move(cb);
+    mImpl->hasLogHandler.store(static_cast<bool>(cb));
+    mImpl->setHandler(&Impl::cbLog, std::move(cb));
 }
 
 void ItscamClient::setDefaultTimeout(uint32_t milliseconds) {

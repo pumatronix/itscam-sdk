@@ -20,12 +20,6 @@
 
 struct ITSCAM_CgiClient {
     itscam::ItscamCgiClient impl;
-
-    ITSCAM_CgiStreamCallback streamCb = nullptr;
-    void*                    streamUd = nullptr;
-
-    ITSCAM_LogCallback       logCb = nullptr;
-    void*                    logUd = nullptr;
 };
 
 struct ITSCAM_CgiImage {
@@ -225,18 +219,15 @@ ITSCAM_ErrorCode ITSCAM_CgiClient_startMjpegStream(ITSCAM_CgiClient* c,
                                                    void* ud,
                                                    uint32_t timeoutMs) {
     if (!c || !cb) return ITSCAM_ERROR_NULL_HANDLE;
-    c->streamCb = cb;
-    c->streamUd = ud;
-    auto* holder = c;
+    // Captures cb and ud, not c: the callback may destroy the client
     auto r = c->impl.startMjpegStream(
-        [holder](const itscam::CgiStreamFrame& f) {
-            if (!holder->streamCb) return;
+        [cb, ud](const itscam::CgiStreamFrame& f) {
             ITSCAM_CgiStreamFrame frame;
             frame.sequence = f.sequence;
             frame.mimeType = f.mimeType.c_str();
             frame.data     = f.data.empty() ? nullptr : f.data.data();
             frame.dataLen  = f.data.size();
-            holder->streamCb(&frame, holder->streamUd);
+            cb(&frame, ud);
         }, timeoutMs);
     return r ? ITSCAM_OK : translateError(r.error());
 }
@@ -287,19 +278,13 @@ ITSCAM_ErrorCode ITSCAM_CgiClient_reboot(ITSCAM_CgiClient* c,
 void ITSCAM_CgiClient_onLog(ITSCAM_CgiClient* c, ITSCAM_LogCallback cb,
                             void* ud) {
     if (!c) return;
-    c->logCb = cb;
-    c->logUd = ud;
     if (!cb) {
         c->impl.setLogHandler(nullptr);
         return;
     }
-    auto* holder = c;
-    c->impl.setLogHandler([holder](itscam::LogLevel lvl,
+    c->impl.setLogHandler([cb, ud](itscam::LogLevel lvl,
                                    const std::string& msg) {
-        if (holder->logCb) {
-            holder->logCb(lvl == itscam::LogLevel::Error ? 1 : 0,
-                          msg.c_str(), holder->logUd);
-        }
+        cb(lvl == itscam::LogLevel::Error ? 1 : 0, msg.c_str(), ud);
     });
 }
 

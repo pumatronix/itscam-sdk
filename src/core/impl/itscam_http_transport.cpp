@@ -438,8 +438,10 @@ Result<HttpResponse> HttpTransport::streamGet(
     httplib::Result res = cli->Get(path, headers, cb);
 
     {
+        // A stream stopped from its own callback may end after the next
+        // one has started
         LockGuard<Mutex> lk(mImpl->clientMtx);
-        mImpl->activeClient = nullptr;
+        if (mImpl->activeClient == cli.get()) mImpl->activeClient = nullptr;
     }
 
     auto out = mImpl->processError(res, "GET", path);

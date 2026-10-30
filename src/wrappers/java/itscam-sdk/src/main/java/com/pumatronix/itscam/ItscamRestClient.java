@@ -6,6 +6,7 @@ package com.pumatronix.itscam;
 
 import com.pumatronix.itscam.internal.Async;
 import com.pumatronix.itscam.internal.ItscamLibrary;
+import com.pumatronix.itscam.internal.NativeHandle;
 import com.pumatronix.itscam.internal.NativeLibrary;
 import com.pumatronix.itscam.resttypes.AnalyticsConfig;
 import com.pumatronix.itscam.resttypes.AutoFocus;
@@ -83,75 +84,105 @@ import java.util.concurrent.Future;
 public final class ItscamRestClient implements AutoCloseable {
 
     private final ItscamLibrary lib;
-    private Pointer handle;
+    private final NativeHandle handle;
     private volatile String apiPrefix = "/api";
 
     public ItscamRestClient() {
         this.lib = NativeLibrary.get();
-        this.handle = lib.ITSCAM_RestClient_create();
-        if (handle == null || handle.equals(Pointer.NULL)) {
+        Pointer h = lib.ITSCAM_RestClient_create();
+        if (h == null || h.equals(Pointer.NULL)) {
             throw new ItscamException(ErrorCode.ALLOCATION_FAILED,
                     "ITSCAM_RestClient_create returned NULL");
         }
+        this.handle = new NativeHandle(h, "ItscamRestClient closed",
+                new NativeHandle.Destroyer() {
+                    @Override
+                    public void destroy(Pointer p) {
+                        lib.ITSCAM_RestClient_destroy(p);
+                    }
+                });
     }
 
+    /**
+     * Releases the client.  Calls still running on other threads end
+     * normally, and the native client is released after the last one.
+     */
     @Override
     public void close() {
-        if (handle != null) {
-            lib.ITSCAM_RestClient_destroy(handle);
-            handle = null;
-        }
-    }
-
-    private void requireOpen() {
-        if (handle == null) {
-            throw new IllegalStateException("ItscamRestClient closed");
-        }
+        handle.close(null);
     }
 
     public void setBaseUrl(String host, int port, String scheme) {
-        requireOpen();
-        int rc = lib.ITSCAM_RestClient_setBaseUrl(handle, host,
-                (short) port, scheme == null ? "http" : scheme);
-        ItscamException.throwIfFailed(rc, "setBaseUrl(" + host + ":" + port + ")");
+        Pointer h = handle.acquire();
+        try {
+            int rc = lib.ITSCAM_RestClient_setBaseUrl(h, host,
+                    (short) port, scheme == null ? "http" : scheme);
+            ItscamException.throwIfFailed(rc, "setBaseUrl(" + host + ":" + port + ")");
+        } finally {
+            handle.release();
+        }
     }
 
     public void setApiPrefix(String prefix) {
-        requireOpen();
-        lib.ITSCAM_RestClient_setApiPrefix(handle, prefix);
-        if (prefix != null) {
-            apiPrefix = prefix;
+        Pointer h = handle.acquire();
+        try {
+            lib.ITSCAM_RestClient_setApiPrefix(h, prefix);
+            if (prefix != null) {
+                apiPrefix = prefix;
+            }
+        } finally {
+            handle.release();
         }
     }
 
     public void setCaCertFile(String pemPath) {
-        requireOpen();
-        lib.ITSCAM_RestClient_setCaCertFile(handle, pemPath);
+        Pointer h = handle.acquire();
+        try {
+            lib.ITSCAM_RestClient_setCaCertFile(h, pemPath);
+        } finally {
+            handle.release();
+        }
     }
 
     public void setCaCertData(String pem) {
-        requireOpen();
-        lib.ITSCAM_RestClient_setCaCertData(handle, pem);
+        Pointer h = handle.acquire();
+        try {
+            lib.ITSCAM_RestClient_setCaCertData(h, pem);
+        } finally {
+            handle.release();
+        }
     }
 
     public void setVerifyServerCertificate(boolean verify) {
-        requireOpen();
-        lib.ITSCAM_RestClient_setVerifyServerCertificate(handle, verify ? 1 : 0);
+        Pointer h = handle.acquire();
+        try {
+            lib.ITSCAM_RestClient_setVerifyServerCertificate(h, verify ? 1 : 0);
+        } finally {
+            handle.release();
+        }
     }
 
     public void setClientCertificate(String certPem, String keyPem) {
-        requireOpen();
-        lib.ITSCAM_RestClient_setClientCertificate(handle, certPem, keyPem);
+        Pointer h = handle.acquire();
+        try {
+            lib.ITSCAM_RestClient_setClientCertificate(h, certPem, keyPem);
+        } finally {
+            handle.release();
+        }
     }
 
     public String login(String username, String password, int timeoutMs) {
-        requireOpen();
-        PointerByReference out = new PointerByReference();
-        int rc = lib.ITSCAM_RestClient_login(handle, username, password,
-                timeoutMs, out);
-        String body = takeString(out.getValue());
-        ItscamException.throwIfFailed(rc, "login");
-        return body;
+        Pointer h = handle.acquire();
+        try {
+            PointerByReference out = new PointerByReference();
+            int rc = lib.ITSCAM_RestClient_login(h, username, password,
+                    timeoutMs, out);
+            String body = takeString(out.getValue());
+            ItscamException.throwIfFailed(rc, "login");
+            return body;
+        } finally {
+            handle.release();
+        }
     }
 
     public Future<String> loginAsync(final String username, final String password,
@@ -165,51 +196,75 @@ public final class ItscamRestClient implements AutoCloseable {
     }
 
     public void setAuthToken(String token) {
-        requireOpen();
-        lib.ITSCAM_RestClient_setAuthToken(handle, token);
+        Pointer h = handle.acquire();
+        try {
+            lib.ITSCAM_RestClient_setAuthToken(h, token);
+        } finally {
+            handle.release();
+        }
     }
 
     public void clearAuthToken() {
-        requireOpen();
-        lib.ITSCAM_RestClient_clearAuthToken(handle);
+        Pointer h = handle.acquire();
+        try {
+            lib.ITSCAM_RestClient_clearAuthToken(h);
+        } finally {
+            handle.release();
+        }
     }
 
     public String httpGet(String path, int timeoutMs) {
-        requireOpen();
-        PointerByReference out = new PointerByReference();
-        int rc = lib.ITSCAM_RestClient_httpGet(handle, path, timeoutMs, out);
-        String body = takeString(out.getValue());
-        ItscamException.throwIfFailed(rc, "GET " + path);
-        return body;
+        Pointer h = handle.acquire();
+        try {
+            PointerByReference out = new PointerByReference();
+            int rc = lib.ITSCAM_RestClient_httpGet(h, path, timeoutMs, out);
+            String body = takeString(out.getValue());
+            ItscamException.throwIfFailed(rc, "GET " + path);
+            return body;
+        } finally {
+            handle.release();
+        }
     }
 
     public String httpPut(String path, String jsonBody, int timeoutMs) {
-        requireOpen();
-        PointerByReference out = new PointerByReference();
-        int rc = lib.ITSCAM_RestClient_httpPut(handle, path,
-                jsonBody == null ? "" : jsonBody, timeoutMs, out);
-        String body = takeString(out.getValue());
-        ItscamException.throwIfFailed(rc, "PUT " + path);
-        return body;
+        Pointer h = handle.acquire();
+        try {
+            PointerByReference out = new PointerByReference();
+            int rc = lib.ITSCAM_RestClient_httpPut(h, path,
+                    jsonBody == null ? "" : jsonBody, timeoutMs, out);
+            String body = takeString(out.getValue());
+            ItscamException.throwIfFailed(rc, "PUT " + path);
+            return body;
+        } finally {
+            handle.release();
+        }
     }
 
     public String httpPost(String path, String jsonBody, int timeoutMs) {
-        requireOpen();
-        PointerByReference out = new PointerByReference();
-        int rc = lib.ITSCAM_RestClient_httpPost(handle, path,
-                jsonBody == null ? "" : jsonBody, timeoutMs, out);
-        String body = takeString(out.getValue());
-        ItscamException.throwIfFailed(rc, "POST " + path);
-        return body;
+        Pointer h = handle.acquire();
+        try {
+            PointerByReference out = new PointerByReference();
+            int rc = lib.ITSCAM_RestClient_httpPost(h, path,
+                    jsonBody == null ? "" : jsonBody, timeoutMs, out);
+            String body = takeString(out.getValue());
+            ItscamException.throwIfFailed(rc, "POST " + path);
+            return body;
+        } finally {
+            handle.release();
+        }
     }
 
     public String httpDelete(String path, int timeoutMs) {
-        requireOpen();
-        PointerByReference out = new PointerByReference();
-        int rc = lib.ITSCAM_RestClient_httpDelete(handle, path, timeoutMs, out);
-        String body = takeString(out.getValue());
-        ItscamException.throwIfFailed(rc, "DELETE " + path);
-        return body;
+        Pointer h = handle.acquire();
+        try {
+            PointerByReference out = new PointerByReference();
+            int rc = lib.ITSCAM_RestClient_httpDelete(h, path, timeoutMs, out);
+            String body = takeString(out.getValue());
+            ItscamException.throwIfFailed(rc, "DELETE " + path);
+            return body;
+        } finally {
+            handle.release();
+        }
     }
 
     public String patchJson(String path, String partialJson, int timeoutMs) {

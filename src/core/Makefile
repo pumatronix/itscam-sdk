@@ -125,6 +125,7 @@ INCLUDES := -I. -Ic_api -I$(3RDPARTY_DIR) -I$(MBEDTLS_INC)
 
 SOURCES_COMMON := \
     itscam_client.cpp \
+    impl/itscam_callback_queue.cpp \
     c_api/itscam_sdk_c.cpp \
     c_api/itscam_rest_client_c.cpp \
     c_api/itscam_cgi_client_c.cpp

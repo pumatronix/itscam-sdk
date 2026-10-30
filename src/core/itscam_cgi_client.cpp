@@ -7,10 +7,12 @@
  */
 
 #include "itscam_cgi_client.h"
+#include "impl/itscam_callback_queue.h"
 #include "impl/itscam_http_transport.h"
 #include "impl/itscam_multipart.h"
 #include "itscam_os.h"
 
+#include <algorithm>
 #include <atomic>
 #include <cstring>
 #include <sstream>
@@ -24,6 +26,8 @@ using detail::extractMultipartBoundary;
 using detail::parseMultipart;
 using detail::StreamingMultipartParser;
 using Thread = os::Thread;
+using Mutex = os::Mutex;
+template<typename M> using LockGuard = os::LockGuard<M>;
 
 //=========================================================================
 // Local helpers
@@ -96,37 +100,48 @@ CgiImage toCgiImage(const HttpResponse& rsp) {
 
 namespace {
 
-class StreamWorker {
+/// One MJPEG stream and its thread.  The thread only reads and decodes: it
+/// queues every frame on the client's callback queue, so it never runs user
+/// code and any thread may join it, frame callbacks included.  The thread
+/// and each queued frame hold a reference to the worker, and the worker
+/// holds one to the transport.
+class StreamWorker : public std::enable_shared_from_this<StreamWorker> {
 public:
-    StreamWorker(Transport* transport, std::string path,
-                 uint32_t timeoutMs, std::string expectedBoundary,
-                 CgiStreamCallback userCallback)
-        : mTransport(transport)
+    StreamWorker(std::shared_ptr<Transport> transport,
+                 std::shared_ptr<detail::CallbackQueue> callbacks,
+                 std::string path, uint32_t timeoutMs,
+                 std::string expectedBoundary, CgiStreamCallback userCallback)
+        : mTransport(std::move(transport))
+        , mCallbacks(std::move(callbacks))
         , mPath(std::move(path))
         , mTimeoutMs(timeoutMs)
         , mExpectedBoundary(std::move(expectedBoundary))
         , mUserCallback(std::move(userCallback))
     {}
 
-    ~StreamWorker() {
-        stop();
-    }
-
     Result<void> start() {
-        if (mRunning.exchange(true)) {
-            return Error{Error::InvalidParameter, "stream already running"};
+        mRunning = true;
+        auto self = shared_from_this();
+        mThread = Thread([self]() { self->run(); });
+        if (!mThread.joinable()) {
+            mRunning = false;
+            return Error{Error::Unknown, "failed to start the stream thread"};
         }
-        mShouldStop = false;
-        mThread = Thread([this]() { run(); });
         return Result<void>::success();
     }
 
-    void stop() {
-        if (!mRunning.load()) return;
+    /// Ask the stream to end.  No frame is delivered afterwards, not even
+    /// one already queued.
+    void requestStop() {
         mShouldStop = true;
-        if (mTransport) mTransport->cancelStream();
-        if (mThread.joinable()) mThread.join();
         mRunning = false;
+        mTransport->cancelStream();
+    }
+
+    /// Wait for the stream thread to exit.  Several threads may wait at once.
+    void join() {
+        LockGuard<Mutex> lk(mJoinMtx);
+        if (mThread.joinable()) mThread.join();
     }
 
     bool isRunning() const { return mRunning.load(); }
@@ -140,7 +155,7 @@ private:
         std::string boundary = mExpectedBoundary;
 
         std::unique_ptr<StreamingMultipartParser> parser;
-        std::atomic<uint64_t> sequence{0};
+        uint64_t sequence = 0;
 
         auto receiver = [&](const uint8_t* data, size_t length) -> bool {
             if (mShouldStop.load()) return false;
@@ -151,15 +166,7 @@ private:
                 // Result), we fall back to the expected default.
                 parser.reset(new StreamingMultipartParser(
                     boundary,
-                    [&](const CgiImage& part) {
-                        if (mShouldStop.load()) return;
-                        CgiStreamFrame frame;
-                        frame.sequence = ++sequence;
-                        frame.mimeType = part.mimeType;
-                        frame.data     = part.data;
-                        frame.headers  = part.headers;
-                        if (mUserCallback) mUserCallback(frame);
-                    }));
+                    [&](const CgiImage& part) { queueFrame(part, ++sequence); }));
             }
             parser->push(data, length);
             return !mShouldStop.load();
@@ -174,12 +181,33 @@ private:
         mRunning = false;
     }
 
-    Transport*          mTransport;
+    // A consumer that falls behind gets the latest frames: the queue drops
+    // its oldest pending one
+    void queueFrame(const CgiImage& part, uint64_t sequence) {
+        if (mShouldStop.load()) return;
+        CgiStreamFrame frame;
+        frame.sequence = sequence;
+        frame.mimeType = part.mimeType;
+        frame.data     = part.data;
+        frame.headers  = part.headers;
+        size_t bytes = frame.data.size();
+        mCallbacks->post(
+            [self = shared_from_this(), frame = std::move(frame)]() {
+                if (!self->mShouldStop.load() && self->mUserCallback) {
+                    self->mUserCallback(frame);
+                }
+            },
+            bytes, detail::CallbackQueue::Kind::Frame);
+    }
+
+    std::shared_ptr<Transport>             mTransport;
+    std::shared_ptr<detail::CallbackQueue> mCallbacks;
     std::string         mPath;
     uint32_t            mTimeoutMs;
     std::string         mExpectedBoundary;
     CgiStreamCallback   mUserCallback;
     Thread              mThread;
+    Mutex               mJoinMtx;  // a second join() waits for the first
     std::atomic<bool>   mRunning{false};
     std::atomic<bool>   mShouldStop{false};
 };
@@ -192,18 +220,114 @@ private:
 
 struct ItscamCgiClient::Impl {
 
-    Transport   transport;
+    std::shared_ptr<Transport> transport = std::make_shared<Transport>();
     std::string apiPrefix = "/api";
 
-    std::unique_ptr<StreamWorker> mjpegWorker;
+    // Frame and log callbacks run on the shared callback pool (see
+    // CallbackQueue), never on the stream thread nor on a request's thread.
+    std::shared_ptr<detail::CallbackQueue> callbacks =
+        detail::CallbackQueue::create();
+
+    // The user's log handler, called through `callbacks` by the transport's
+    // handler, which may outlive the client (see getSnapshotAsync())
+    struct LogSlot {
+        Mutex mtx;
+        std::function<void(LogLevel, const std::string&)> handler;
+    };
+    std::shared_ptr<LogSlot> logSlot = std::make_shared<LogSlot>();
+
+    // A frame callback may start or stop the stream while another thread
+    // uses the client.
+    Mutex                         streamMtx;
+    std::shared_ptr<StreamWorker> mjpegWorker;
+
+    Impl() {
+        std::weak_ptr<detail::CallbackQueue> queue = callbacks;
+        std::shared_ptr<LogSlot> slot = logSlot;
+        transport->setLogHandler([queue, slot](LogLevel lvl, const std::string& msg) {
+            {
+                LockGuard<Mutex> lk(slot->mtx);
+                if (!slot->handler) return;
+            }
+            auto q = queue.lock();
+            if (!q) return;
+            q->post([slot, lvl, msg]() {
+                std::function<void(LogLevel, const std::string&)> handler;
+                {
+                    LockGuard<Mutex> lk(slot->mtx);
+                    handler = slot->handler;
+                }
+                if (handler) handler(lvl, msg);
+            }, msg.size(), detail::CallbackQueue::Kind::Event);
+        });
+        callbacks->setDropReporter([slot](uint64_t dropped) {
+            std::function<void(LogLevel, const std::string&)> handler;
+            {
+                LockGuard<Mutex> lk(slot->mtx);
+                handler = slot->handler;
+            }
+            if (handler) {
+                handler(LogLevel::Error,
+                        "Callbacks fell behind: " + std::to_string(dropped) +
+                        " events dropped");
+            }
+        });
+    }
+
+    ~Impl() {
+        stopStream();
+        transport->setLogHandler(nullptr);
+        // Destroyed from a callback, that one runs on: the queue only drops
+        // the others
+        callbacks->close();
+    }
+
+    // Stops the stream.  Once this returns no frame callback runs, unless
+    // it is called from one, which then runs on.
+    void stopStream() {
+        std::shared_ptr<StreamWorker> worker;
+        {
+            LockGuard<Mutex> lk(streamMtx);
+            worker = std::move(mjpegWorker);
+            // Under streamMtx: a concurrent stop that finds no worker must
+            // find this one's frames already cancelled
+            if (worker) worker->requestStop();
+        }
+        if (worker) worker->join();
+        callbacks->waitForCallback();
+    }
 
     // ----- HTTP helpers ----------------------------------------------------
 
-    Result<HttpResponse> get(const std::string& path, uint32_t timeoutMs) {
+    static Result<HttpResponse> get(Transport& transport,
+                                    const std::string& path,
+                                    uint32_t timeoutMs) {
         HttpRequest req;
         req.method = "GET";
         req.path   = path;
         return transport.request(req, timeoutMs);
+    }
+
+    Result<HttpResponse> get(const std::string& path, uint32_t timeoutMs) {
+        return get(*transport, path, timeoutMs);
+    }
+
+    // Uses only the transport: getSnapshotAsync runs it on a thread that
+    // may outlive the client.
+    static Result<std::vector<CgiImage>> fetchSnapshot(
+        Transport& transport, const std::string& path, uint32_t timeoutMs) {
+        auto res = get(transport, path, timeoutMs);
+        if (!res) return res.error();
+        const auto& rsp = res.value();
+        if (rsp.status < 200 || rsp.status >= 300) {
+            return detail::mapHttpStatusToError(rsp.status, {}, "GET", path);
+        }
+        auto images = decodeSnapshot(rsp);
+        if (images.empty()) {
+            return Error{Error::ServerError,
+                         "snapshot.cgi returned empty body"};
+        }
+        return images;
     }
 
     // ----- Snapshot URL ----------------------------------------------------
@@ -264,11 +388,7 @@ struct ItscamCgiClient::Impl {
 
 ItscamCgiClient::ItscamCgiClient() : mImpl(new Impl()) {}
 
-ItscamCgiClient::~ItscamCgiClient() {
-    if (mImpl) {
-        if (mImpl->mjpegWorker) mImpl->mjpegWorker->stop();
-    }
-}
+ItscamCgiClient::~ItscamCgiClient() = default;
 
 ItscamCgiClient::ItscamCgiClient(ItscamCgiClient&&) noexcept = default;
 ItscamCgiClient& ItscamCgiClient::operator=(ItscamCgiClient&&) noexcept
@@ -280,7 +400,7 @@ ItscamCgiClient& ItscamCgiClient::operator=(ItscamCgiClient&&) noexcept
 
 void ItscamCgiClient::setBaseUrl(const std::string& host, uint16_t port,
                                  const std::string& scheme) {
-    mImpl->transport.setBaseUrl(host, port, scheme);
+    mImpl->transport->setBaseUrl(host, port, scheme);
 }
 
 void ItscamCgiClient::setApiPrefix(const std::string& prefix) {
@@ -292,20 +412,20 @@ void ItscamCgiClient::setApiPrefix(const std::string& prefix) {
 //=========================================================================
 
 void ItscamCgiClient::setCaCertFile(const std::string& pemPath) {
-    mImpl->transport.setCaCertFile(pemPath);
+    mImpl->transport->setCaCertFile(pemPath);
 }
 
 void ItscamCgiClient::setCaCertData(const std::string& pem) {
-    mImpl->transport.setCaCertData(pem);
+    mImpl->transport->setCaCertData(pem);
 }
 
 void ItscamCgiClient::setVerifyServerCertificate(bool verify) {
-    mImpl->transport.setVerifyServerCertificate(verify);
+    mImpl->transport->setVerifyServerCertificate(verify);
 }
 
 void ItscamCgiClient::setClientCertificate(const std::string& certPem,
                                            const std::string& keyPem) {
-    mImpl->transport.setClientCertificate(certPem, keyPem);
+    mImpl->transport->setClientCertificate(certPem, keyPem);
 }
 
 //=========================================================================
@@ -326,7 +446,7 @@ Result<void> ItscamCgiClient::login(const std::string& username,
     req.body        = std::move(body);
     req.contentType = "application/json";
 
-    auto res = mImpl->transport.request(req, timeoutMs);
+    auto res = mImpl->transport->request(req, timeoutMs);
     if (!res) return res.error();
     const auto& rsp = res.value();
     if (rsp.status < 200 || rsp.status >= 300) {
@@ -346,7 +466,7 @@ Result<void> ItscamCgiClient::login(const std::string& username,
                 ++valStart;
                 auto valEnd = body_s.find('"', valStart);
                 if (valEnd != std::string::npos) {
-                    mImpl->transport.setBearerToken(
+                    mImpl->transport->setBearerToken(
                         body_s.substr(valStart, valEnd - valStart));
                 }
             }
@@ -356,20 +476,20 @@ Result<void> ItscamCgiClient::login(const std::string& username,
 }
 
 void ItscamCgiClient::setAuthToken(const std::string& token) {
-    mImpl->transport.setBearerToken(token);
+    mImpl->transport->setBearerToken(token);
 }
 
 void ItscamCgiClient::clearAuthToken() {
-    mImpl->transport.clearBearerToken();
+    mImpl->transport->clearBearerToken();
 }
 
 void ItscamCgiClient::setBasicAuth(const std::string& user,
                                    const std::string& password) {
-    mImpl->transport.setBasicAuth(user, password);
+    mImpl->transport->setBasicAuth(user, password);
 }
 
 void ItscamCgiClient::clearBasicAuth() {
-    mImpl->transport.clearBasicAuth();
+    mImpl->transport->clearBasicAuth();
 }
 
 //=========================================================================
@@ -393,29 +513,26 @@ Result<CgiImage> ItscamCgiClient::getLastFrame(uint32_t timeoutMs) {
 
 Result<std::vector<CgiImage>> ItscamCgiClient::getSnapshot(
     const SnapshotCgiRequest& request, uint32_t timeoutMs) {
-    std::string path = mImpl->snapshotPath(request);
-    auto res = mImpl->get(path, timeoutMs);
-    if (!res) return res.error();
-    const auto& rsp = res.value();
-    if (rsp.status < 200 || rsp.status >= 300) {
-        return detail::mapHttpStatusToError(rsp.status, {}, "GET", path);
-    }
-    auto images = Impl::decodeSnapshot(rsp);
-    if (images.empty()) {
-        return Error{Error::ServerError,
-                     "snapshot.cgi returned empty body"};
-    }
-    return images;
+    return Impl::fetchSnapshot(*mImpl->transport,
+                               mImpl->snapshotPath(request), timeoutMs);
 }
 
 Future<std::vector<CgiImage>> ItscamCgiClient::getSnapshotAsync(
     const SnapshotCgiRequest& request, uint32_t timeoutMs) {
-    Promise<std::vector<CgiImage>> promise;
-    auto future = promise.get_future();
-    Thread([this, request, timeoutMs,
-            promise = std::move(promise)]() mutable {
-        promise.set_value(this->getSnapshot(request, timeoutMs));
-    }).detach();
+    // The thread holds the transport, not the client: the client may be
+    // destroyed before the snapshot arrives.
+    auto promise = std::make_shared<Promise<std::vector<CgiImage>>>();
+    auto future = promise->get_future();
+    Thread thread([transport = mImpl->transport,
+                   path = mImpl->snapshotPath(request), timeoutMs,
+                   promise]() {
+        promise->set_value(Impl::fetchSnapshot(*transport, path, timeoutMs));
+    });
+    if (!thread.joinable()) {
+        promise->set_value(Error{Error::Unknown,
+                                 "failed to start the snapshot thread"});
+    }
+    thread.detach();
     return future;
 }
 
@@ -425,27 +542,41 @@ Future<std::vector<CgiImage>> ItscamCgiClient::getSnapshotAsync(
 
 Result<void> ItscamCgiClient::startMjpegStream(CgiStreamCallback callback,
                                                uint32_t timeoutMs) {
-    if (mImpl->mjpegWorker && mImpl->mjpegWorker->isRunning()) {
-        return Error{Error::InvalidParameter,
-                     "mjpeg stream already running"};
+    // Never waits for a frame callback: the caller may hold a lock that
+    // they need.
+    std::shared_ptr<StreamWorker> ended;
+    Result<void> started;
+    {
+        LockGuard<Mutex> lk(mImpl->streamMtx);
+        if (mImpl->mjpegWorker) {
+            if (mImpl->mjpegWorker->isRunning()) {
+                return Error{Error::InvalidParameter,
+                             "mjpeg stream already running"};
+            }
+            ended = std::move(mImpl->mjpegWorker);
+            ended->requestStop();
+        }
+        auto worker = std::make_shared<StreamWorker>(
+            mImpl->transport,
+            mImpl->callbacks,
+            mImpl->apiPrefix + "/mjpegvideo.cgi",
+            timeoutMs,
+            "MjpegBoundary",        // server-side default in mjpeg_encoder.h
+            std::move(callback));
+        started = worker->start();
+        if (started) mImpl->mjpegWorker = std::move(worker);
     }
-    mImpl->mjpegWorker.reset(new StreamWorker(
-        &mImpl->transport,
-        mImpl->apiPrefix + "/mjpegvideo.cgi",
-        timeoutMs,
-        "MjpegBoundary",        // server-side default in mjpeg_encoder.h
-        std::move(callback)));
-    return mImpl->mjpegWorker->start();
+    // The stream had ended by itself: its thread is exiting
+    if (ended) ended->join();
+    return started;
 }
 
 void ItscamCgiClient::stopMjpegStream() {
-    if (mImpl->mjpegWorker) {
-        mImpl->mjpegWorker->stop();
-        mImpl->mjpegWorker.reset();
-    }
+    mImpl->stopStream();
 }
 
 bool ItscamCgiClient::isMjpegStreamRunning() const {
+    LockGuard<Mutex> lk(mImpl->streamMtx);
     return mImpl->mjpegWorker && mImpl->mjpegWorker->isRunning();
 }
 
@@ -491,7 +622,7 @@ Result<CgiResponse> ItscamCgiClient::httpGetRaw(
     req.method  = "GET";
     req.path    = path;
     req.headers = extraHeaders;
-    auto res = mImpl->transport.request(req, timeoutMs);
+    auto res = mImpl->transport->request(req, timeoutMs);
     if (!res) return res.error();
     const auto& rsp = res.value();
     CgiResponse out;
@@ -508,7 +639,15 @@ Result<CgiResponse> ItscamCgiClient::httpGetRaw(
 
 void ItscamCgiClient::setLogHandler(
     std::function<void(LogLevel, const std::string&)> cb) {
-    mImpl->transport.setLogHandler(std::move(cb));
+    // Once this returns, the previous handler is not running and will not
+    // be called, unless this runs in a callback of the client
+    std::function<void(LogLevel, const std::string&)> previous;
+    {
+        LockGuard<Mutex> lk(mImpl->logSlot->mtx);
+        previous = std::move(mImpl->logSlot->handler);
+        mImpl->logSlot->handler = std::move(cb);
+    }
+    if (previous) mImpl->callbacks->waitForCallback();
 }
 
 }  // namespace itscam

@@ -252,5 +252,21 @@ ITSCAM_UTILS_API char getPathSeparator();
  */
 ITSCAM_UTILS_API const char* getLastUtilError();
 
+//=========================================================================
+// Callback threads
+//=========================================================================
+
+/**
+ * @brief Set how many threads run client callbacks.
+ *
+ * Callbacks of every client run on a pool of SDK threads shared by all
+ * clients, in order and one at a time per client, never on the SDK thread
+ * that produced the event.  Threads start on demand and exit when idle.
+ *
+ * @param count Maximum number of threads; 0 restores the default (the
+ *              number of CPU cores, at most 4).
+ */
+ITSCAM_UTILS_API void setCallbackThreadCount(unsigned count);
+
 } // namespace utils
 } // namespace itscam

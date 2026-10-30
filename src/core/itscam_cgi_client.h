@@ -112,7 +112,8 @@ public:
         uint32_t timeoutMs = 15000);
 
     /// Async variant.  The returned Future resolves once all exposures
-    /// have been received (or the timeout elapses).
+    /// have been received (or the timeout elapses).  The client may be
+    /// destroyed before then: the request still completes or times out.
     Future<std::vector<CgiImage>> getSnapshotAsync(
         const SnapshotCgiRequest& request,
         uint32_t timeoutMs = 15000);
@@ -121,10 +122,12 @@ public:
     // /api/mjpegvideo.cgi
     //=========================================================================
 
-    /// Begin streaming MJPEG frames in a worker thread.  @p callback is
-    /// invoked on the worker thread for each decoded frame; do not block
-    /// in the callback.  Use @ref stopMjpegStream() to stop and join the
-    /// worker.
+    /// Begin streaming MJPEG frames in a worker thread.  @p callback runs
+    /// for each decoded frame on the SDK's callback pool, never on that
+    /// worker (see itscam::utils::setCallbackThreadCount()); do not block
+    /// in it.  A callback that falls behind gets the latest frames: older
+    /// queued ones are dropped.  The callback may stop or restart the
+    /// stream, or destroy the client.
     ///
     /// @param callback    Frame consumer.
     /// @param timeoutMs   I/O timeout per HTTP read; controls how quickly
@@ -132,7 +135,10 @@ public:
     Result<void> startMjpegStream(CgiStreamCallback callback,
                                   uint32_t timeoutMs = 10000);
 
-    /// Stop the MJPEG worker thread.  Blocks until the worker has exited.
+    /// Stop the MJPEG worker thread.  Returns once no frame callback runs:
+    /// no frame follows, not even one already queued.  Called from a frame
+    /// callback, it does not wait for that callback, which runs on.  The
+    /// destructor stops the stream the same way.
     void stopMjpegStream();
 
     /// True iff a stream is currently active.

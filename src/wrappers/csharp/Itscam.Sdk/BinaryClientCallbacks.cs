@@ -28,9 +28,8 @@ namespace Pumatronix.Itscam
             ConnectionStateThunk = OnConnectionState;
         private static readonly NativeMethods.NativeLogCallback LogThunk = OnLog;
 
-        internal static void Attach(ItscamClient client)
+        internal static void Attach(ItscamClient client, IntPtr handle)
         {
-            var handle = client.NativeHandle;
             lock (RegistryLock)
                 Registry[handle] = client;
 

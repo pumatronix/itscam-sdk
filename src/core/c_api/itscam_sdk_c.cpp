@@ -11,6 +11,7 @@
 #include "../itscam_client.h"
 #include "../itscam_sdk_utils.h"
 #include "../itscam_jpeg_utils.h"
+#include "../itscam_os.h"
 #include "impl/itscam_c_internal.h"
 
 #include <cstdarg>
@@ -53,21 +54,11 @@ static ITSCAM_ErrorCode translateError(const itscam::Error& err) {
 // Opaque Structure Definitions
 //=========================================================================
 
+// The callback adapters below copy the C callback and its user data instead
+// of reading them from this struct, which their queued calls may outlive.
 struct ITSCAM_Client {
     std::unique_ptr<itscam::ItscamClient> impl;
-    
-    // Callback storage (prevent GC in bound languages)
-    ITSCAM_CaptureCallback           triggerImageCb = nullptr;
-    void*                            triggerImageUserData = nullptr;
-    ITSCAM_CaptureCallback           snapshotImageCb = nullptr;
-    void*                            snapshotImageUserData = nullptr;
-    ITSCAM_DisconnectCallback        disconnectCb = nullptr;
-    void*                            disconnectUserData = nullptr;
-    ITSCAM_ConnectionStateCallback   connectionStateCb = nullptr;
-    void*                            connectionStateUserData = nullptr;
-    ITSCAM_LogCallback               logCb = nullptr;
-    void*                            logUserData = nullptr;
-    
+
     ITSCAM_Client() : impl(std::make_unique<itscam::ItscamClient>()) {}
 };
 
@@ -107,6 +98,7 @@ ITSCAM_Client* ITSCAM_Client_create(void) {
 }
 
 void ITSCAM_Client_destroy(ITSCAM_Client* client) {
+    // ~ItscamClient waits for the callback in progress (see the header)
     delete client;
 }
 
@@ -436,16 +428,11 @@ void ITSCAM_Client_onTriggerImage(
 {
     if (!client || !client->impl) return;
     
-    client->triggerImageCb = callback;
-    client->triggerImageUserData = userData;
-    
     if (callback) {
-        client->impl->onTriggerImage([client](const itscam::CaptureResult& cr) {
-            if (client->triggerImageCb) {
-                ITSCAM_CaptureResult wrapped;
-                wrapped.data = cr;
-                client->triggerImageCb(&wrapped, client->triggerImageUserData);
-            }
+        client->impl->onTriggerImage([callback, userData](const itscam::CaptureResult& cr) {
+            ITSCAM_CaptureResult wrapped;
+            wrapped.data = cr;
+            callback(&wrapped, userData);
         });
     } else {
         client->impl->onTriggerImage(nullptr);
@@ -459,16 +446,11 @@ void ITSCAM_Client_onSnapshotImage(
 {
     if (!client || !client->impl) return;
     
-    client->snapshotImageCb = callback;
-    client->snapshotImageUserData = userData;
-    
     if (callback) {
-        client->impl->onSnapshotImage([client](const itscam::CaptureResult& cr) {
-            if (client->snapshotImageCb) {
-                ITSCAM_CaptureResult wrapped;
-                wrapped.data = cr;
-                client->snapshotImageCb(&wrapped, client->snapshotImageUserData);
-            }
+        client->impl->onSnapshotImage([callback, userData](const itscam::CaptureResult& cr) {
+            ITSCAM_CaptureResult wrapped;
+            wrapped.data = cr;
+            callback(&wrapped, userData);
         });
     } else {
         client->impl->onSnapshotImage(nullptr);
@@ -482,14 +464,9 @@ void ITSCAM_Client_onDisconnect(
 {
     if (!client || !client->impl) return;
     
-    client->disconnectCb = callback;
-    client->disconnectUserData = userData;
-    
     if (callback) {
-        client->impl->onDisconnect([client](const std::string& reason) {
-            if (client->disconnectCb) {
-                client->disconnectCb(reason.c_str(), client->disconnectUserData);
-            }
+        client->impl->onDisconnect([callback, userData](const std::string& reason) {
+            callback(reason.c_str(), userData);
         });
     } else {
         client->impl->onDisconnect(nullptr);
@@ -503,16 +480,10 @@ void ITSCAM_Client_onConnectionState(
 {
     if (!client || !client->impl) return;
     
-    client->connectionStateCb = callback;
-    client->connectionStateUserData = userData;
-    
     if (callback) {
         client->impl->onConnectionStateChanged(
-            [client](itscam::ConnectionState state, const std::string& reason) {
-                if (client->connectionStateCb) {
-                    client->connectionStateCb(static_cast<int>(state), reason.c_str(),
-                                              client->connectionStateUserData);
-                }
+            [callback, userData](itscam::ConnectionState state, const std::string& reason) {
+                callback(static_cast<int>(state), reason.c_str(), userData);
             });
     } else {
         client->impl->onConnectionStateChanged(nullptr);
@@ -526,16 +497,10 @@ void ITSCAM_Client_onLog(
 {
     if (!client || !client->impl) return;
     
-    client->logCb = callback;
-    client->logUserData = userData;
-    
     if (callback) {
-        client->impl->setLogHandler([client](itscam::LogLevel level,
-                                              const std::string& msg) {
-            if (client->logCb) {
-                client->logCb(static_cast<int>(level), msg.c_str(),
-                              client->logUserData);
-            }
+        client->impl->setLogHandler([callback, userData](itscam::LogLevel level,
+                                                         const std::string& msg) {
+            callback(static_cast<int>(level), msg.c_str(), userData);
         });
     } else {
         client->impl->setLogHandler(nullptr);
@@ -740,6 +705,10 @@ int ITSCAM_folderExists(const char* path) {
 
 const char* ITSCAM_getLastError(void) {
     return s_lastError;
+}
+
+void ITSCAM_setCallbackThreads(uint32_t count) {
+    itscam::utils::setCallbackThreadCount(count);
 }
 
 const char* ITSCAM_getVersion(void) {

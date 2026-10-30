@@ -67,4 +67,18 @@ public final class Sdk {
         String e = NativeLibrary.get().ITSCAM_getLastError();
         return e == null ? "" : e;
     }
+
+    /**
+     * Set how many threads run client callbacks.  Callbacks of every
+     * client run on a pool of SDK threads shared by all clients, in order
+     * and one at a time per client.
+     *
+     * @param count maximum number of threads; 0 restores the default (the number of CPU cores, at most 4)
+     */
+    public static void setCallbackThreads(int count) {
+        if (count < 0) {
+            throw new IllegalArgumentException("count must not be negative");
+        }
+        NativeLibrary.get().ITSCAM_setCallbackThreads(count);
+    }
 }

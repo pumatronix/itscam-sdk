@@ -21,17 +21,7 @@ namespace Pumatronix.Itscam
     /// </summary>
     public sealed class ItscamClient : IDisposable
     {
-        private IntPtr _handle;
-        private bool _disposed;
-
-        internal IntPtr NativeHandle
-        {
-            get
-            {
-                ThrowIfDisposed();
-                return _handle;
-            }
-        }
+        private readonly ClientHandle _native;
 
         /// <summary>Raised when a trigger capture arrives.  Do not block.</summary>
         public event EventHandler<CaptureResult> TriggerImage;
@@ -50,11 +40,13 @@ namespace Pumatronix.Itscam
 
         public ItscamClient()
         {
-            _handle = NativeMethods.ItscamClient_create();
-            if (_handle == IntPtr.Zero)
+            var handle = NativeMethods.ItscamClient_create();
+            if (handle == IntPtr.Zero)
                 throw new ItscamException(ItscamErrorCode.AllocationFailed,
                     "Failed to allocate native ITSCAM client.");
-            BinaryClientCallbacks.Attach(this);
+            _native = new ClientHandle(handle, nameof(ItscamClient),
+                                       NativeMethods.ItscamClient_destroy);
+            BinaryClientCallbacks.Attach(this, handle);
         }
 
         /// <summary>True iff a TCP connection is currently established.</summary>
@@ -62,8 +54,8 @@ namespace Pumatronix.Itscam
         {
             get
             {
-                ThrowIfDisposed();
-                return NativeMethods.ItscamClient_isConnected(_handle) != 0;
+                return _native.Use(h =>
+                    NativeMethods.ItscamClient_isConnected(h) != 0);
             }
         }
 
@@ -75,16 +67,15 @@ namespace Pumatronix.Itscam
                                  uint timeoutMs = 5000,
                                  AutoReconnectConfig reconnect = null)
         {
-            ThrowIfDisposed();
             if (host == null) throw new ArgumentNullException(nameof(host));
 
-            return Task.Run(() =>
+            return _native.UseAsync(h =>
             {
                 NativeErrorCode rc;
                 if (reconnect == null)
                 {
                     rc = NativeMethods.ItscamClient_connect(
-                        _handle, host, port, timeoutMs, IntPtr.Zero);
+                        h, host, port, timeoutMs, IntPtr.Zero);
                 }
                 else
                 {
@@ -94,16 +85,16 @@ namespace Pumatronix.Itscam
                         IntervalMs = reconnect.IntervalMs,
                         MaxRetries = reconnect.MaxRetries,
                     };
-                    var h = GCHandle.Alloc(cfg, GCHandleType.Pinned);
+                    var pin = GCHandle.Alloc(cfg, GCHandleType.Pinned);
                     try
                     {
                         rc = NativeMethods.ItscamClient_connect(
-                            _handle, host, port, timeoutMs,
-                            h.AddrOfPinnedObject());
+                            h, host, port, timeoutMs,
+                            pin.AddrOfPinnedObject());
                     }
                     finally
                     {
-                        h.Free();
+                        pin.Free();
                     }
                 }
 
@@ -114,18 +105,16 @@ namespace Pumatronix.Itscam
 
         public void Disconnect()
         {
-            if (_disposed) return;
-            NativeMethods.ItscamClient_disconnect(_handle);
+            _native.UseIfOpen(h => NativeMethods.ItscamClient_disconnect(h));
         }
 
         public Task AuthenticateAsync(string password, uint timeoutMs = 5000)
         {
-            ThrowIfDisposed();
             if (password == null) throw new ArgumentNullException(nameof(password));
-            return Task.Run(() =>
+            return _native.UseAsync(h =>
             {
                 var rc = NativeMethods.ItscamClient_authenticate(
-                    _handle, password, timeoutMs);
+                    h, password, timeoutMs);
                 ItscamException.ThrowIfFailed(rc, "authenticate");
             });
         }
@@ -133,13 +122,12 @@ namespace Pumatronix.Itscam
         public Task SubscribeAsync(EventSubscription events,
                                    uint timeoutMs = 5000)
         {
-            ThrowIfDisposed();
             if (events == null) throw new ArgumentNullException(nameof(events));
-            return Task.Run(() =>
+            return _native.UseAsync(h =>
             {
                 var native = ToNative(events);
                 var rc = NativeMethods.ItscamClient_subscribe(
-                    _handle, ref native, timeoutMs);
+                    h, ref native, timeoutMs);
                 ItscamException.ThrowIfFailed(rc, "subscribe");
             });
         }
@@ -148,13 +136,12 @@ namespace Pumatronix.Itscam
             CaptureSubscriptionConfig config = null,
             uint timeoutMs = 5000)
         {
-            ThrowIfDisposed();
             if (config == null) config = CaptureSubscriptionConfig.Default;
-            return Task.Run(() =>
+            return _native.UseAsync(h =>
             {
                 var native = ToNative(config);
                 var rc = NativeMethods.ItscamClient_subscribeCaptures(
-                    _handle, ref native, timeoutMs);
+                    h, ref native, timeoutMs);
                 ItscamException.ThrowIfFailed(rc, "subscribeCaptures");
             });
         }
@@ -166,12 +153,11 @@ namespace Pumatronix.Itscam
         public Task<IReadOnlyList<CaptureResult>> CaptureSnapshotAsync(
             uint timeoutMs = 5000)
         {
-            ThrowIfDisposed();
-            return Task.Run(() =>
+            return _native.UseAsync(h =>
             {
                 var request = new NativeMethods.NativeBinarySnapshotRequest();
                 var rc = NativeMethods.ItscamClient_captureSnapshot(
-                    _handle, ref request, timeoutMs, out var arrayPtr);
+                    h, ref request, timeoutMs, out var arrayPtr);
                 ItscamException.ThrowIfFailed(rc, "captureSnapshot");
                 return NativeMethods.TakeCaptureResults(arrayPtr);
             });
@@ -181,11 +167,10 @@ namespace Pumatronix.Itscam
         public Task<byte[]> GetLastFrameAsync(int quality = -1,
                                               uint timeoutMs = 5000)
         {
-            ThrowIfDisposed();
-            return Task.Run(() =>
+            return _native.UseAsync(h =>
             {
                 var rc = NativeMethods.ItscamClient_getLastFrame(
-                    _handle, quality, timeoutMs, out var arrayPtr);
+                    h, quality, timeoutMs, out var arrayPtr);
                 ItscamException.ThrowIfFailed(rc, "getLastFrame");
                 return NativeMethods.TakeByteArray(arrayPtr);
             });
@@ -193,11 +178,10 @@ namespace Pumatronix.Itscam
 
         public Task<uint> GetActiveProfileIdAsync(uint timeoutMs = 5000)
         {
-            ThrowIfDisposed();
-            return Task.Run(() =>
+            return _native.UseAsync(h =>
             {
                 var rc = NativeMethods.ItscamClient_getActiveProfileId(
-                    _handle, timeoutMs, out var id);
+                    h, timeoutMs, out var id);
                 ItscamException.ThrowIfFailed(rc, "getActiveProfileId");
                 return id;
             });
@@ -205,11 +189,10 @@ namespace Pumatronix.Itscam
 
         public Task SetActiveProfileAsync(uint profileId, uint timeoutMs = 5000)
         {
-            ThrowIfDisposed();
-            return Task.Run(() =>
+            return _native.UseAsync(h =>
             {
                 var rc = NativeMethods.ItscamClient_setActiveProfile(
-                    _handle, profileId, timeoutMs);
+                    h, profileId, timeoutMs);
                 ItscamException.ThrowIfFailed(rc, "setActiveProfile");
             });
         }
@@ -217,11 +200,10 @@ namespace Pumatronix.Itscam
         public Task<IReadOnlyList<ProfileInfo>> ListProfilesAsync(
             uint timeoutMs = 5000)
         {
-            ThrowIfDisposed();
-            return Task.Run(() =>
+            return _native.UseAsync(h =>
             {
                 var rc = NativeMethods.ItscamClient_listProfiles(
-                    _handle, timeoutMs, out var arrayPtr);
+                    h, timeoutMs, out var arrayPtr);
                 ItscamException.ThrowIfFailed(rc, "listProfiles");
                 return NativeMethods.TakeProfiles(arrayPtr);
             });
@@ -229,26 +211,28 @@ namespace Pumatronix.Itscam
 
         public Task RebootAsync(uint timeoutMs = 5000)
         {
-            ThrowIfDisposed();
-            return Task.Run(() =>
+            return _native.UseAsync(h =>
             {
-                var rc = NativeMethods.ItscamClient_reboot(_handle, timeoutMs);
+                var rc = NativeMethods.ItscamClient_reboot(h, timeoutMs);
                 ItscamException.ThrowIfFailed(rc, "reboot");
             });
         }
 
+        /// <summary>
+        /// Disconnect and release the client.  No event is raised once this
+        /// returns, except by a handler already running.  Calls still
+        /// running end, and the native client is released after the last
+        /// one.
+        /// </summary>
         public void Dispose()
         {
-            if (_disposed) return;
-            _disposed = true;
-
-            if (_handle != IntPtr.Zero)
-            {
-                BinaryClientCallbacks.Detach(_handle);
-                NativeMethods.ItscamClient_disconnect(_handle);
-                NativeMethods.ItscamClient_destroy(_handle);
-                _handle = IntPtr.Zero;
-            }
+            // Null if the constructor failed
+            if (_native == null || !_native.Close(h =>
+                {
+                    BinaryClientCallbacks.Detach(h);
+                    NativeMethods.ItscamClient_disconnect(h);
+                }))
+                return;
 
             GC.SuppressFinalize(this);
         }
@@ -280,12 +264,6 @@ namespace Pumatronix.Itscam
         internal void RaiseLog(LogLevel level, string message)
         {
             Log?.Invoke(this, new LogEventArgs(level, message));
-        }
-
-        private void ThrowIfDisposed()
-        {
-            if (_disposed)
-                throw new ObjectDisposedException(nameof(ItscamClient));
         }
 
         private static NativeMethods.NativeEventSubscription ToNative(
