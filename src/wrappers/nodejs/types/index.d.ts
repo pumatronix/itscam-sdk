@@ -326,6 +326,11 @@ declare module '@pumatronix/itscam-sdk' {
     export function getEpochTime(): number;
     export function getEpochTimeMs(): number;
     export function getLastError(): string;
+    /**
+     * Set how many threads run client callbacks, shared by every client;
+     * 0 restores the default (the number of CPU cores, at most 4).
+     */
+    export function setCallbackThreads(count: number): void;
     export const VERSION: string;
     export const VERSION_FULL: string;
 }

@@ -94,7 +94,7 @@ Use the Java/Node.js wrappers as the reference. Every item is mandatory or expli
 - [ ] **REST typed helpers:** at minimum `getProfiles`, `getOcrConfig`/`setOcrConfig`, `getAnalyticsConfig`/`setAnalyticsConfig`, `getClassifierConfig`/`setClassifierConfig`, `getLanesConfig`/`setLanesConfig`, `getItscamproConfig`/`setItscamproConfig`, `getVolatileInfo`. Decide whether to return typed structs (preferred when the language has POCOs with codegen, see Section 6.6) or raw JSON.
 - [ ] **CGI:** `getLastFrame`, `getSnapshot`, `startMjpegStream`/`stopMjpegStream`, `forceTrigger`, `reboot`.
 - [ ] **TLS configuration:** `setBaseUrl(host, port, scheme)`, `setCaCertFile`, `setCaCertData`, `setVerifyServerCertificate`, `setClientCertificate` (on REST and CGI).
-- [ ] **System utilities:** `getVersion`, `getSystemLocalTime`, `getSystemUtcTime`, `getEpochTime`, `getEpochTimeMs`, `getLastError`.
+- [ ] **System utilities:** `getVersion`, `getSystemLocalTime`, `getSystemUtcTime`, `getEpochTime`, `getEpochTimeMs`, `getLastError`, `setCallbackThreads`.
 
 ### 6.2 Errors
 

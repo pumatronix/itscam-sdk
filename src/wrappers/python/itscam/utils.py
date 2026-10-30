@@ -113,3 +113,16 @@ def get_version() -> str:
     lib = _b.get_lib()
     version = lib.ITSCAM_getVersion()
     return version.decode("utf-8") if version else ""
+
+
+def set_callback_threads(count: int) -> None:
+    """
+    Set how many threads run client callbacks.
+
+    Callbacks of every client run on a pool of SDK threads shared by all
+    clients, in order and one at a time per client.
+
+    Args:
+        count: Maximum number of threads; 0 restores the default (the number of CPU cores, at most 4).
+    """
+    _b.get_lib().ITSCAM_setCallbackThreads(count)

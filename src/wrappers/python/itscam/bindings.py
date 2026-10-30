@@ -435,6 +435,9 @@ def _setup_prototypes(lib: ctypes.CDLL) -> None:
     lib.ITSCAM_getVersion.argtypes = []
     lib.ITSCAM_getVersion.restype = c_char_p
 
+    lib.ITSCAM_setCallbackThreads.argtypes = [c_uint32]
+    lib.ITSCAM_setCallbackThreads.restype = None
+
     # ========================================================================
     #  REST client
     # ========================================================================

@@ -54,6 +54,17 @@ function getLastError() {
     return native.fns.getLastError() || '';
 }
 
+/**
+ * Set how many threads run client callbacks.  Callbacks of every client run
+ * on a pool of SDK threads shared by all clients, in order and one at a time
+ * per client.
+ *
+ * @param {number} count Maximum number of threads; 0 restores the default (the number of CPU cores, at most 4).
+ */
+function setCallbackThreads(count) {
+    native.fns.setCallbackThreads(count);
+}
+
 module.exports = {
     // Clients
     ItscamClient,
@@ -89,6 +100,7 @@ module.exports = {
     getSystemUtcTime,
     getEpochTime,
     getEpochTimeMs,
+    setCallbackThreads,
     getLastError,
     VERSION: versionInfo.VERSION,
     VERSION_FULL: versionInfo.VERSION_FULL,
