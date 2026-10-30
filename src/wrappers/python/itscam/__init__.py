@@ -91,6 +91,7 @@ from .utils import (
     file_exists,
     folder_exists,
     get_version,
+    set_callback_threads,
 )
 
 try:
@@ -177,4 +178,5 @@ __all__ = [
     "file_exists",
     "folder_exists",
     "get_version",
+    "set_callback_threads",
 ]
