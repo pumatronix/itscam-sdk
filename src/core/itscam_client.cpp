@@ -949,6 +949,17 @@ struct ItscamClient::Impl {
     // requires authentication that hasn't been performed yet this session.
     bool pendingAuth() const { return hasPassword && !isAuthenticated; }
 
+    // Enters RUNNING unless disconnect() was requested meanwhile; a plain
+    // store would overwrite DISCONNECTING and keep the socket thread alive
+    // after disconnect() has returned.
+    bool enterRunning() {
+        int current = state.load();
+        while (current != DISCONNECTING) {
+            if (state.compare_exchange_weak(current, RUNNING)) return true;
+        }
+        return false;
+    }
+
     bool canQueueForReplay() const {
         int st = state.load();
         return reconnectCfg.enabled &&
@@ -1189,7 +1200,11 @@ struct ItscamClient::Impl {
                 return;
             }
 
-            state.store(RUNNING);
+            if (!enterRunning()) {
+                closeSocket();
+                state.store(STOPPED);
+                return;
+            }
             lastSentTime = os::monotonicNow();
             hadSuccessfulSession = true;
             wakeTimeoutWorker();
@@ -1256,7 +1271,10 @@ struct ItscamClient::Impl {
                 continue;
             }
 
-            state.store(RUNNING);
+            if (!enterRunning()) {
+                closeSocket();
+                break;
+            }
             lastSentTime = os::monotonicNow();
             wakeTimeoutWorker();
             log(LogLevel::Info, "Reconnected (TCP)");
@@ -1545,12 +1563,12 @@ struct ItscamClient::Impl {
                     }
                 } else if (n == 0) {
                     log(LogLevel::Error, "Socket disconnected");
-                    state.store(STOPPING);
+                    markConnectionLost();
                 } else {
                     int err = os::socketErrno();
                     if (err != ITSCAM_SOCK_EWOULDBLOCK) {
                         log(LogLevel::Error, "Socket error %d: %s", err, os::socketStrerror(err));
-                        state.store(STOPPING);
+                        markConnectionLost();
                     }
                 }
             }
@@ -1645,7 +1663,7 @@ struct ItscamClient::Impl {
                 switch (wm.op) {
                 // --- JSON events ---
                 case OP_SHUTDOWN:
-                    state.store(STOPPING);
+                    markConnectionLost();
                     break;
 
                 case OP_EVT_TRIGGER:
@@ -1951,7 +1969,7 @@ struct ItscamClient::Impl {
                     "Ping timeout: %u consecutive unanswered pings "
                     "(limit %u), connection presumed dead",
                     consecutivePingFailures, limit);
-                state.store(STOPPING);
+                markConnectionLost();
                 return;
             }
             // Clean up the stale ping promise before sending a new one
@@ -2415,6 +2433,12 @@ void ItscamClient::disconnect() {
         os::sleepForMs(20);
     }
     mImpl->closeSocket();
+    // Closing the socket unblocks a pending read or session replay; wait for
+    // the socket thread to finish so the client is not released under it.
+    for (int i = 0; i < 500 && mImpl->state.load() != Impl::STOPPED &&
+                     mImpl->state.load() != Impl::IDLE; ++i) {
+        os::sleepForMs(20);
+    }
 }
 
 bool ItscamClient::isConnected() const {

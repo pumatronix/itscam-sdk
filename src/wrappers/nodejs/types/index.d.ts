@@ -143,6 +143,7 @@ declare module '@pumatronix/itscam-sdk' {
     export class ItscamClient {
         constructor();
         close(): void;
+        closeAsync(): Promise<void>;
 
         connect(address: string, port?: number, timeoutMs?: number,
                 reconnect?: AutoReconnectConfig | null): void;

@@ -69,7 +69,7 @@ make docker-nodejs              # mesma coisa dentro do Docker
 | Aspecto | O que você ganha |
 | ------- | ---------------- |
 | Async | Toda blocking call tem `*Async` retornando `Promise<T>`. |
-| Lifetime | Todos os clients têm `close()` (e `Symbol.dispose` para `using` em Node 22+ ou TS 5.2+). |
+| Lifetime | Todos os clients têm `close()` (e `Symbol.dispose` para `using` em Node 22+ ou TS 5.2+). Com callbacks registrados no `ItscamClient`, use `await closeAsync()`: as threads do SDK entregam os callbacks pela thread do JavaScript, então um `disconnect()`/`close()` síncrono as bloqueia e pode liberar o client enquanto elas ainda executam. |
 | Streaming | `startMjpegStream(callback)` invoca o callback na worker thread do SDK. |
 | Errors | Hierarquia `Error` rooted em `ItscamError` (`ItscamTimeoutError`, `ItscamAuthError`, ...). |
 | TS | Declarations completas em `types/index.d.ts` — IntelliSense funciona em JS e TS. |
