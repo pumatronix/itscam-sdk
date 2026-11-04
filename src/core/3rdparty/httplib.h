@@ -15992,7 +15992,9 @@ inline int mbedtls_net_send_cb(void *ctx, const unsigned char *buf,
     return MBEDTLS_ERR_NET_SEND_FAILED;
   }
 #else
-  auto ret = send(sock, buf, len, 0);
+  // Local patch: the same flags as plain sockets (MSG_NOSIGNAL in the SDK),
+  // so that a TLS write to a closed socket does not raise SIGPIPE
+  auto ret = send(sock, buf, len, CPPHTTPLIB_SEND_FLAGS);
   if (ret < 0) {
     if (errno == EAGAIN || errno == EWOULDBLOCK) {
       return MBEDTLS_ERR_SSL_WANT_WRITE;

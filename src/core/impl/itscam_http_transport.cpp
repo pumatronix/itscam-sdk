@@ -27,6 +27,16 @@
 
 #include <atomic>
 
+// A request must not raise SIGPIPE in the host process when the server, or
+// a stream stop, has closed the socket: httplib passes these flags to every
+// send(), mbedTLS included (a local patch in httplib.h)
+#ifndef _WIN32
+#include <sys/socket.h>
+#ifdef MSG_NOSIGNAL
+#define CPPHTTPLIB_SEND_FLAGS MSG_NOSIGNAL
+#endif
+#endif
+
 // cpp-httplib (header-only).  When the SDK is compiled with TLS support,
 // CPPHTTPLIB_MBEDTLS_SUPPORT is defined externally by the build system so
 // that httplib pulls in the mbedTLS backend.
