@@ -277,6 +277,8 @@ const fns = {
         'ITSCAM_Timestamp ITSCAM_getSystemUtcTime()'),
     getEpochTime: lib.func('uint64 ITSCAM_getEpochTime()'),
     getEpochTimeMs: lib.func('uint64 ITSCAM_getEpochTimeMs()'),
+    setCallbackThreads: lib.func(
+        'void ITSCAM_setCallbackThreads(uint32 count)'),
     storeFile: lib.func(
         'int ITSCAM_storeFile(const char *path, const uint8 *data, '
         + 'size_t size, int overwrite)'),

@@ -45,6 +45,7 @@ import json
 from typing import Any, List, Optional, Union
 
 from . import bindings, rest_types as _rt
+from ._native_handle import NativeHandle
 from .types import _raise_for_error
 
 
@@ -81,9 +82,12 @@ class ItscamRestClient:
 
     def __init__(self) -> None:
         self._lib = bindings.get_lib()
-        self._handle = self._lib.ITSCAM_RestClient_create()
-        if not self._handle:
+        handle = self._lib.ITSCAM_RestClient_create()
+        if not handle:
             raise MemoryError("ITSCAM_RestClient_create returned NULL")
+        lib = self._lib
+        self._native = NativeHandle(
+            handle, lambda h: lib.ITSCAM_RestClient_destroy(h))
 
     # ----- context manager ---------------------------------------------------
 
@@ -94,9 +98,11 @@ class ItscamRestClient:
         self.close()
 
     def close(self) -> None:
-        if getattr(self, "_handle", None):
-            self._lib.ITSCAM_RestClient_destroy(self._handle)
-            self._handle = None
+        """Close the client.  Calls still running on other threads end
+        first: the last of them releases the native client."""
+        native = getattr(self, "_native", None)
+        if native is not None:
+            native.close()
 
     def __del__(self) -> None:
         try:
@@ -108,57 +114,67 @@ class ItscamRestClient:
 
     def set_base_url(self, host: str, port: int = 80,
                      scheme: str = "http") -> None:
-        rc = self._lib.ITSCAM_RestClient_setBaseUrl(
-            self._handle, _c_str(host), port, _c_str(scheme))
-        _raise_for_error(rc, f"set_base_url({host}:{port})")
+        with self._native.use() as h:
+            rc = self._lib.ITSCAM_RestClient_setBaseUrl(
+                h, _c_str(host), port, _c_str(scheme))
+            _raise_for_error(rc, f"set_base_url({host}:{port})")
 
     def set_api_prefix(self, prefix: str) -> None:
-        self._lib.ITSCAM_RestClient_setApiPrefix(
-            self._handle, _c_str(prefix))
+        with self._native.use() as h:
+            self._lib.ITSCAM_RestClient_setApiPrefix(
+                h, _c_str(prefix))
 
     def set_ca_cert_file(self, pem_path: str) -> None:
-        self._lib.ITSCAM_RestClient_setCaCertFile(
-            self._handle, _c_str(pem_path))
+        with self._native.use() as h:
+            self._lib.ITSCAM_RestClient_setCaCertFile(
+                h, _c_str(pem_path))
 
     def set_ca_cert_data(self, pem: str) -> None:
-        self._lib.ITSCAM_RestClient_setCaCertData(
-            self._handle, _c_str(pem))
+        with self._native.use() as h:
+            self._lib.ITSCAM_RestClient_setCaCertData(
+                h, _c_str(pem))
 
     def set_verify_server_certificate(self, verify: bool) -> None:
-        self._lib.ITSCAM_RestClient_setVerifyServerCertificate(
-            self._handle, 1 if verify else 0)
+        with self._native.use() as h:
+            self._lib.ITSCAM_RestClient_setVerifyServerCertificate(
+                h, 1 if verify else 0)
 
     def set_client_certificate(self, cert_pem: str, key_pem: str) -> None:
-        self._lib.ITSCAM_RestClient_setClientCertificate(
-            self._handle, _c_str(cert_pem), _c_str(key_pem))
+        with self._native.use() as h:
+            self._lib.ITSCAM_RestClient_setClientCertificate(
+                h, _c_str(cert_pem), _c_str(key_pem))
 
     # ----- authentication ----------------------------------------------------
 
     def login(self, username: str, password: str,
               timeout_ms: int = 10000) -> JsonValue:
-        out = bindings.ITSCAM_String()
-        rc = self._lib.ITSCAM_RestClient_login(
-            self._handle, _c_str(username), _c_str(password),
-            timeout_ms, bindings.byref(out))
-        body = _take_string(out)
-        _raise_for_error(rc, "login")
-        return _decode(body)
+        with self._native.use() as h:
+            out = bindings.ITSCAM_String()
+            rc = self._lib.ITSCAM_RestClient_login(
+                h, _c_str(username), _c_str(password),
+                timeout_ms, bindings.byref(out))
+            body = _take_string(out)
+            _raise_for_error(rc, "login")
+            return _decode(body)
 
     def set_auth_token(self, token: str) -> None:
-        self._lib.ITSCAM_RestClient_setAuthToken(self._handle, _c_str(token))
+        with self._native.use() as h:
+            self._lib.ITSCAM_RestClient_setAuthToken(h, _c_str(token))
 
     def clear_auth_token(self) -> None:
-        self._lib.ITSCAM_RestClient_clearAuthToken(self._handle)
+        with self._native.use() as h:
+            self._lib.ITSCAM_RestClient_clearAuthToken(h)
 
     # ----- HTTP verbs --------------------------------------------------------
 
     def get(self, path: str, timeout_ms: int = 10000) -> JsonValue:
-        out = bindings.ITSCAM_String()
-        rc = self._lib.ITSCAM_RestClient_httpGet(
-            self._handle, _c_str(path), timeout_ms, bindings.byref(out))
-        body = _take_string(out)
-        _raise_for_error(rc, f"GET {path}")
-        return _decode(body)
+        with self._native.use() as h:
+            out = bindings.ITSCAM_String()
+            rc = self._lib.ITSCAM_RestClient_httpGet(
+                h, _c_str(path), timeout_ms, bindings.byref(out))
+            body = _take_string(out)
+            _raise_for_error(rc, f"GET {path}")
+            return _decode(body)
 
     def put(self, path: str, body: Any,
             timeout_ms: int = 10000) -> JsonValue:
@@ -179,28 +195,30 @@ class ItscamRestClient:
         return self._with_body("Post", path, body, timeout_ms)
 
     def delete(self, path: str, timeout_ms: int = 10000) -> JsonValue:
-        out = bindings.ITSCAM_String()
-        rc = self._lib.ITSCAM_RestClient_httpDelete(
-            self._handle, _c_str(path), timeout_ms, bindings.byref(out))
-        body = _take_string(out)
-        _raise_for_error(rc, f"DELETE {path}")
-        return _decode(body)
+        with self._native.use() as h:
+            out = bindings.ITSCAM_String()
+            rc = self._lib.ITSCAM_RestClient_httpDelete(
+                h, _c_str(path), timeout_ms, bindings.byref(out))
+            body = _take_string(out)
+            _raise_for_error(rc, f"DELETE {path}")
+            return _decode(body)
 
     def _with_body(self, verb: str, path: str, body: Any,
                    timeout_ms: int) -> JsonValue:
-        fn = getattr(self._lib, "ITSCAM_RestClient_http" + verb)
-        if isinstance(body, (dict, list)):
-            body_str = json.dumps(body)
-        elif body is None:
-            body_str = ""
-        else:
-            body_str = str(body)
-        out = bindings.ITSCAM_String()
-        rc = fn(self._handle, _c_str(path), _c_str(body_str),
-                timeout_ms, bindings.byref(out))
-        resp = _take_string(out)
-        _raise_for_error(rc, f"{verb.upper()} {path}")
-        return _decode(resp)
+        with self._native.use() as h:
+            fn = getattr(self._lib, "ITSCAM_RestClient_http" + verb)
+            if isinstance(body, (dict, list)):
+                body_str = json.dumps(body)
+            elif body is None:
+                body_str = ""
+            else:
+                body_str = str(body)
+            out = bindings.ITSCAM_String()
+            rc = fn(h, _c_str(path), _c_str(body_str),
+                    timeout_ms, bindings.byref(out))
+            resp = _take_string(out)
+            _raise_for_error(rc, f"{verb.upper()} {path}")
+            return _decode(resp)
 
     # ----- Typed helpers (auto-generated POCOs) ------------------------------
     #

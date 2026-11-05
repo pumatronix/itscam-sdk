@@ -27,6 +27,16 @@
 
 #include <atomic>
 
+// A request must not raise SIGPIPE in the host process when the server, or
+// a stream stop, has closed the socket: httplib passes these flags to every
+// send(), mbedTLS included (a local patch in httplib.h)
+#ifndef _WIN32
+#include <sys/socket.h>
+#ifdef MSG_NOSIGNAL
+#define CPPHTTPLIB_SEND_FLAGS MSG_NOSIGNAL
+#endif
+#endif
+
 // cpp-httplib (header-only).  When the SDK is compiled with TLS support,
 // CPPHTTPLIB_MBEDTLS_SUPPORT is defined externally by the build system so
 // that httplib pulls in the mbedTLS backend.
@@ -92,12 +102,6 @@ struct HttpTransport::Impl {
 
     std::function<void(LogLevel, const std::string&)> logHandler;
     mutable Mutex logMtx;
-
-    // --- Active client (for streaming cancel) ------------------------------
-
-    Mutex               clientMtx;
-    httplib::Client*    activeClient = nullptr;
-    std::atomic<bool>   cancelRequested{false};
 
     // --- Helpers ------------------------------------------------------------
 
@@ -395,11 +399,33 @@ Result<HttpResponse> HttpTransport::request(const HttpRequest& req,
 // Streaming request
 //=========================================================================
 
+struct HttpTransport::StreamCancel::State {
+    Mutex             mtx;
+    std::atomic<bool> cancelled{false};
+    // The stream's client while its streamGet() runs
+    httplib::Client*  client = nullptr;
+};
+
+HttpTransport::StreamCancel::StreamCancel() : mState(new State) {}
+
+HttpTransport::StreamCancel::~StreamCancel() = default;
+
+void HttpTransport::StreamCancel::cancel() {
+    LockGuard<Mutex> lk(mState->mtx);
+    mState->cancelled = true;
+    if (mState->client) {
+        // cpp-httplib does not have a public Cancel() on Client, but stopping
+        // the underlying socket via stop() unblocks any in-flight Get().
+        mState->client->stop();
+    }
+}
+
 Result<HttpResponse> HttpTransport::streamGet(
     const std::string& path,
     const std::map<std::string, std::string>& extraHeaders,
     uint32_t timeoutMs,
-    ContentReceiver receiver) {
+    ContentReceiver receiver,
+    StreamCancel& cancel) {
 
     if (!mImpl->configured) {
         return Error{Error::ConnectionFailed,
@@ -411,12 +437,16 @@ Result<HttpResponse> HttpTransport::streamGet(
     }
 
     auto cli = mImpl->makeClient(timeoutMs);
+    StreamCancel::State& state = *cancel.mState;
 
-    // Register as the active client so cancelStream() can find it.
+    // Under the cancel's lock: a cancel either finds this client or is seen
+    // here
     {
-        LockGuard<Mutex> lk(mImpl->clientMtx);
-        mImpl->activeClient = cli.get();
-        mImpl->cancelRequested = false;
+        LockGuard<Mutex> lk(state.mtx);
+        if (state.cancelled) {
+            return Error{Error::Disconnected, "GET " + path + ": cancelled"};
+        }
+        state.client = cli.get();
     }
 
     httplib::Headers headers;
@@ -426,7 +456,7 @@ Result<HttpResponse> HttpTransport::streamGet(
 
     // Capture the receiver and the cancel flag.  We do NOT capture the impl
     // pointer because the body callback may run after we have returned.
-    std::atomic<bool>* cancelFlag = &mImpl->cancelRequested;
+    std::atomic<bool>* cancelFlag = &state.cancelled;
     auto cb = [receiver, cancelFlag](const char* data,
                                      size_t length) -> bool {
         if (cancelFlag->load(std::memory_order_relaxed)) {
@@ -438,8 +468,8 @@ Result<HttpResponse> HttpTransport::streamGet(
     httplib::Result res = cli->Get(path, headers, cb);
 
     {
-        LockGuard<Mutex> lk(mImpl->clientMtx);
-        mImpl->activeClient = nullptr;
+        LockGuard<Mutex> lk(state.mtx);
+        state.client = nullptr;
     }
 
     auto out = mImpl->processError(res, "GET", path);
@@ -451,16 +481,6 @@ Result<HttpResponse> HttpTransport::streamGet(
                        out.value().status);
     }
     return out;
-}
-
-void HttpTransport::cancelStream() {
-    LockGuard<Mutex> lk(mImpl->clientMtx);
-    mImpl->cancelRequested = true;
-    if (mImpl->activeClient) {
-        // cpp-httplib does not have a public Cancel() on Client, but stopping
-        // the underlying socket via stop() unblocks any in-flight Get().
-        mImpl->activeClient->stop();
-    }
 }
 
 //=========================================================================

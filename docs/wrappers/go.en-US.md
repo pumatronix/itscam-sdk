@@ -76,6 +76,8 @@ rest,   _ := itscam.NewRestClient()
 cgi,    _ := itscam.NewCgiClient()
 ```
 
+`Client` callbacks run on SDK threads and may call methods of the same client, including the callback setters and `Close()`. Methods of one client may run concurrently from several goroutines. `Close()` does not wait for the calls in progress: the last of them releases the native client. The `CgiClient` frame callback may call methods of its client too; `StopMjpegStream()` and `Close()` return once the stream thread has finished, and frames arriving meanwhile are dropped. The frame callback may also stop or restart the stream, or close the client; from the callback, `StopMjpegStream()` returns at once.
+
 Errors are returned as Go `error` values. The underlying type carries the SDK's `Error::Code`, so callers can map specific failure modes:
 
 ```go

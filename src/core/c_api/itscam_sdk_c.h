@@ -192,6 +192,15 @@ ITSCAM_C_API ITSCAM_Client* ITSCAM_Client_create(void);
 
 /**
  * @brief Destroy a client instance and free resources.
+ *
+ * Returns only once no callback of this client is running or can still
+ * start, so the caller may free whatever its callbacks use right after. It
+ * waits for a callback in progress without a time limit: no callback may wait
+ * for the thread calling this function (a binding that runs callbacks on
+ * another thread, like Node.js on its event loop, calls it from a worker
+ * thread). Called from one of this client's own callbacks, it returns while
+ * that one still runs.
+ *
  * @param client Handle to destroy (may be NULL).
  */
 ITSCAM_C_API void ITSCAM_Client_destroy(ITSCAM_Client* client);
@@ -364,6 +373,20 @@ ITSCAM_C_API ITSCAM_ErrorCode ITSCAM_Client_reboot(
 
 /* ============================================================================
  *  Callbacks
+ *
+ *  Callbacks run on a pool of SDK threads shared by all clients (see
+ *  ITSCAM_setCallbackThreads()), in order and one at a time per client,
+ *  never on the thread that produced the event nor with an SDK lock held: a
+ *  callback may call any function of its client.  A slow callback delays the
+ *  later callbacks of its client, not the connection; if they pile up,
+ *  events are dropped (never connection state changes) and a log message
+ *  reports how many.
+ *
+ *  Once a setter below returns, the callback it replaced is not running and
+ *  will not be called again, unless the setter is called from a callback of
+ *  the same client.  For that it waits for the callback in progress, which
+ *  must not wait for the thread calling the setter; setting a callback where
+ *  there was none waits for nothing.
  * ============================================================================ */
 
 /**
@@ -618,6 +641,18 @@ ITSCAM_C_API const char* ITSCAM_getLastError(void);
  * @brief Get the SDK version string.
  */
 ITSCAM_C_API const char* ITSCAM_getVersion(void);
+
+/**
+ * @brief Set how many threads run client callbacks.
+ *
+ * Callbacks of every client (binary and CGI) run on a pool of SDK threads
+ * shared by all clients, in order and one at a time per client.  Threads
+ * start on demand and exit when idle.
+ *
+ * @param count Maximum number of threads; 0 restores the default (the
+ *              number of CPU cores, at most 4).
+ */
+ITSCAM_C_API void ITSCAM_setCallbackThreads(uint32_t count);
 
 #ifdef __cplusplus
 }

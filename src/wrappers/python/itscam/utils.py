@@ -4,6 +4,7 @@ ITSCAM SDK - Utility Functions
 Cross-platform utility functions for file operations and time.
 """
 
+import operator
 from ctypes import byref, c_size_t, POINTER, c_ubyte, create_string_buffer
 from typing import Union
 
@@ -113,3 +114,24 @@ def get_version() -> str:
     lib = _b.get_lib()
     version = lib.ITSCAM_getVersion()
     return version.decode("utf-8") if version else ""
+
+
+def set_callback_threads(count: int) -> None:
+    """
+    Set how many threads run client callbacks.
+
+    Callbacks of every client run on a pool of SDK threads shared by all
+    clients, in order and one at a time per client.
+
+    Args:
+        count: Maximum number of threads; 0 restores the default (the number of CPU cores, at most 4).
+
+    Raises:
+        TypeError: count is not an integer.
+        ValueError: count is negative or above 4294967295.
+    """
+    # ctypes would wrap it: -1 would lift the limit, 2**32 restore the default
+    count = operator.index(count)
+    if not 0 <= count <= 0xFFFFFFFF:
+        raise ValueError(f"count must be from 0 to 4294967295, got {count}")
+    _b.get_lib().ITSCAM_setCallbackThreads(count)

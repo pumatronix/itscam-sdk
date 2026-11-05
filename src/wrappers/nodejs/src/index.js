@@ -54,6 +54,27 @@ function getLastError() {
     return native.fns.getLastError() || '';
 }
 
+/**
+ * Set how many threads run client callbacks.  Callbacks of every client run
+ * on a pool of SDK threads shared by all clients, in order and one at a time
+ * per client.
+ *
+ * @param {number} count Maximum number of threads; 0 restores the default (the number of CPU cores, at most 4).
+ * @throws {TypeError} If count is not a number.
+ * @throws {RangeError} If count is not an integer from 0 to 4294967295.
+ */
+function setCallbackThreads(count) {
+    if (typeof count !== 'number') {
+        throw new TypeError('count must be a number');
+    }
+    // Koffi would wrap or truncate it: -1 would lift the limit, NaN restore
+    // the default
+    if (!Number.isInteger(count) || count < 0 || count > 0xFFFFFFFF) {
+        throw new RangeError(`count must be an integer from 0 to 4294967295, got ${count}`);
+    }
+    native.fns.setCallbackThreads(count);
+}
+
 module.exports = {
     // Clients
     ItscamClient,
@@ -89,6 +110,7 @@ module.exports = {
     getSystemUtcTime,
     getEpochTime,
     getEpochTimeMs,
+    setCallbackThreads,
     getLastError,
     VERSION: versionInfo.VERSION,
     VERSION_FULL: versionInfo.VERSION_FULL,

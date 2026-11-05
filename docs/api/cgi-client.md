@@ -62,7 +62,7 @@ Os quatro example programs (C++, Python, Go, C#) rodam anonymously por default e
 | `getSnapshot(SnapshotCgiRequest&, timeoutMs)`     | `GET /api/snapshot.cgi` | Trigger + capture. Multipart em multi-exposure.                 |
 | `getSnapshotAsync(SnapshotCgiRequest&, timeoutMs)`| `GET /api/snapshot.cgi` | Igual, mas devolve um `Future`.                                 |
 | `startMjpegStream(callback, timeoutMs)`           | `GET /api/mjpegvideo.cgi`| Stream contínuo `multipart/x-mixed-replace`.                    |
-| `stopMjpegStream()`                               | (cancela worker)        | Junta a worker thread.                                          |
+| `stopMjpegStream()`                               | (cancela worker)        | Retorna quando nenhum callback de frame roda.                   |
 | `isMjpegStreamRunning()`                          | --                      |                                                                |
 | `forceTrigger(timeoutMs = 10000)`                 | `GET /api/trigger.cgi?force=1` | Trigger one-shot.                                       |
 | `reboot(timeoutMs = 10000)`                       | `GET /api/reboot.cgi`   | Reinicia o processo do camera-daemon.                           |
@@ -101,7 +101,9 @@ O return type é **sempre** `std::vector<CgiImage>`:
 
 ## Streaming MJPEG
 
-`startMjpegStream` sobe uma worker thread que decodifica o body `multipart/x-mixed-replace; boundary=MjpegBoundary` frame por frame e invoca o callback para cada `CgiStreamFrame`. Pare com `stopMjpegStream()`, que cancela a request em andamento e junta a worker.
+`startMjpegStream` sobe uma worker thread que decodifica o body `multipart/x-mixed-replace; boundary=MjpegBoundary` frame por frame; o callback roda para cada `CgiStreamFrame` no pool de callbacks do SDK (veja os callbacks do client binário), nunca nessa worker. Um callback que fica para trás recebe os frames mais recentes: os mais antigos na fila são descartados. Pare com `stopMjpegStream()`, que cancela a request em andamento, junta a worker e retorna quando nenhum callback de frame roda: nenhum frame vem depois, nem um que já estava na fila.
+
+O callback pode parar ou reiniciar o stream, ou destruir o client. Chamados de um callback de frame, `stopMjpegStream()` e o destrutor não esperam esse callback, que continua rodando.
 
 ```cpp
 cgi.startMjpegStream(
@@ -114,7 +116,7 @@ cgi.startMjpegStream(
     /*timeoutMs=*/ 10000);
 ```
 
-O callback roda na worker thread do SDK; jogue trabalho pesado (decoding, disk I/O) para a sua própria queue.
+Jogue trabalho pesado (decoding, disk I/O) para a sua própria queue: um callback lento segura uma thread do pool e faz frames serem descartados.
 
 ## Logging
 

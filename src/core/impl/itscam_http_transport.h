@@ -163,9 +163,30 @@ public:
 
     // ----- Streaming request ----------------------------------------------
 
+    /// Cancels one streamGet() from another thread.  Each stream has its
+    /// own, so that a stream still ending never cancels the next one.
+    class StreamCancel {
+    public:
+        StreamCancel();
+        ~StreamCancel();
+        StreamCancel(const StreamCancel&) = delete;
+        StreamCancel& operator=(const StreamCancel&) = delete;
+
+        /// A streamGet() that has not started yet then returns at once.
+        /// One in progress returns as soon as its connection notices; this
+        /// waits for a connection attempt in progress to end first.
+        void cancel();
+
+    private:
+        friend class HttpTransport;
+        struct State;
+        std::unique_ptr<State> mState;
+    };
+
     /// Execute a streaming GET.  Body chunks are pushed to @p receiver as
     /// they arrive.  Returns the final HTTP status / Content-Type via
-    /// HttpResponse (with empty body).
+    /// HttpResponse (with empty body).  @p cancel ends it from another
+    /// thread.
     ///
     /// Useful for long-running responses such as snapshot.cgi multipart
     /// bodies, mjpegvideo.cgi multipart/x-mixed-replace, or trigger.cgi
@@ -174,12 +195,8 @@ public:
                                    const std::map<std::string, std::string>&
                                        extraHeaders,
                                    uint32_t timeoutMs,
-                                   ContentReceiver receiver);
-
-    /// Cancel any in-flight streamGet on this transport.  Safe to call
-    /// from another thread.  After cancelling, streamGet will return as
-    /// soon as the underlying connection notices the cancellation.
-    void cancelStream();
+                                   ContentReceiver receiver,
+                                   StreamCancel& cancel);
 
 private:
     struct Impl;

@@ -722,6 +722,14 @@ namespace Pumatronix.Itscam.Native
         }
 
         // ====================================================================
+        //  Callback threads
+        // ====================================================================
+
+        [DllImport(Lib, EntryPoint = "ITSCAM_setCallbackThreads",
+                   CallingConvention = CallingConvention.Cdecl)]
+        internal static extern void SetCallbackThreads(uint count);
+
+        // ====================================================================
         //  Marshalling helpers
         // ====================================================================
 

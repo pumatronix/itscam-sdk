@@ -281,6 +281,7 @@ public interface ItscamLibrary extends Library {
     int    ITSCAM_folderExists(String path);
     String ITSCAM_getLastError();
     String ITSCAM_getVersion();
+    void   ITSCAM_setCallbackThreads(int count);
 
     // ====================================================================
     //  REST client (ITSCAM_RestClient)
