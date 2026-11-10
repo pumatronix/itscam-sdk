@@ -42,11 +42,14 @@ Copyright (c) 2026 Pumatronix
 from __future__ import annotations
 
 import json
-from typing import Any, List, Optional, Union
+import threading
+import weakref
+from dataclasses import dataclass, field
+from typing import Any, Callable, List, Optional, Union
 
 from . import bindings, rest_types as _rt
 from ._native_handle import NativeHandle
-from .types import _raise_for_error
+from .types import ErrorCode, _raise_for_error
 
 
 JsonValue = Union[dict, list, str, int, float, bool, None]
@@ -77,6 +80,27 @@ def _c_str(s: Optional[str]) -> Optional[bytes]:
     return s.encode("utf-8") if s is not None else None
 
 
+@dataclass
+class TelemetryUpdate:
+    """One telemetry document pushed by the camera
+    (see :meth:`ItscamRestClient.start_telemetry_stream`)."""
+
+    #: 1 for the stream's first document, then one more for each, across
+    #: reconnections.
+    sequence: int
+    #: When it arrived, in Unix milliseconds.
+    received_at_ms: int
+    #: The document, as ``GET /api/system/telemetry`` returns it.
+    document: dict = field(default_factory=dict)
+
+    def telemetry(self) -> _rt.SystemTelemetry:
+        """The document as the typed :class:`itscam.rest_types.SystemTelemetry`."""
+        return _rt.SystemTelemetry.from_dict(self.document)
+
+
+TelemetryCallback = Callable[[TelemetryUpdate], None]
+
+
 class ItscamRestClient:
     """Pythonic wrapper for the ITSCAM REST API."""
 
@@ -85,9 +109,37 @@ class ItscamRestClient:
         handle = self._lib.ITSCAM_RestClient_create()
         if not handle:
             raise MemoryError("ITSCAM_RestClient_create returned NULL")
-        lib = self._lib
-        self._native = NativeHandle(
-            handle, lambda h: lib.ITSCAM_RestClient_destroy(h))
+        self._telemetry_user_cb: Optional[TelemetryCallback] = None
+        # Guards the two above and below.  Never held across a native stop,
+        # which waits for the telemetry callback, which may call this client.
+        self._stream_lock = threading.Lock()
+        self._stops_in_progress = 0
+        # One ctypes callback for the client's whole life: a telemetry
+        # callback may stop the stream or close the client while it runs.  It
+        # refers to the client weakly, so that it does not keep it alive.
+        client_ref = weakref.ref(self)
+
+        def _trampoline(update_ptr, _user_data):
+            client = client_ref()
+            if client is None or not update_ptr:
+                return
+            # Holds the handle while the callback runs, and while it drops the
+            # client: a close() from either leaves the destroy to another
+            # thread, which waits for this callback before releasing it
+            with client._native.use() as h:
+                if h is not None:
+                    client._on_telemetry(update_ptr.contents)
+                del client
+
+        self._telemetry_native_cb = bindings.ITSCAM_TelemetryCallback(
+            _trampoline)
+
+        # Keeps the stream callback until no telemetry callback can run any
+        # more
+        def destroy(h, lib=self._lib, stream_cb=self._telemetry_native_cb):
+            lib.ITSCAM_RestClient_destroy(h)
+
+        self._native = NativeHandle(handle, destroy)
 
     # ----- context manager ---------------------------------------------------
 
@@ -98,11 +150,12 @@ class ItscamRestClient:
         self.close()
 
     def close(self) -> None:
-        """Close the client.  Calls still running on other threads end
-        first: the last of them releases the native client."""
+        """Stop the telemetry stream and close the client.  Calls still
+        running on other threads end first: the last of them releases the
+        native client."""
         native = getattr(self, "_native", None)
         if native is not None:
-            native.close()
+            native.close(self._stop_telemetry)
 
     def __del__(self) -> None:
         try:
@@ -568,3 +621,129 @@ class ItscamRestClient:
     def get_licenses(self, timeout_ms: int = 10000) -> _rt.Licenses:
         return _rt.Licenses.from_dict(
             self.get("/api/system/licenses", timeout_ms))
+
+    # --- System telemetry ------------------------------------------------------
+    #
+    # One document with the state of the whole camera: health summary,
+    # resources, services, camera, connections, integrations, network,
+    # plates and objects of the last 10, 30 and 60 minutes, flash test.
+    # GET /api/system/telemetry reads it once; the stream receives it as the
+    # camera pushes it (WebSocket /api/statusws?format=telemetry).
+
+    def get_system_telemetry(
+        self, timeout_ms: int = 10000
+    ) -> _rt.SystemTelemetry:
+        """``GET /api/system/telemetry``.  The camera reads it at most every
+        2 s: polling faster returns the same document."""
+        with self._native.use() as h:
+            out = bindings.ITSCAM_String()
+            rc = self._lib.ITSCAM_RestClient_getSystemTelemetry(
+                h, timeout_ms, bindings.byref(out))
+            body = _take_string(out)
+            _raise_for_error(rc, "get_system_telemetry")
+        return _rt.SystemTelemetry.from_dict(_decode(body))
+
+    def start_telemetry_stream(self,
+                               callback: Optional[TelemetryCallback] = None,
+                               timeout_ms: int = 15000) -> None:
+        """Receive the telemetry the camera pushes: one document at once,
+        then one every 5 s.  The stream runs on its own thread and
+        reconnects by itself (1 s, doubling up to 30 s) with the client's
+        current authentication: log in again if the token expires.
+
+        ``callback`` runs on an SDK thread for each document; do not block
+        in it.  One that falls behind gets the latest documents.  It may stop
+        or restart the stream, or close the client.  Without a callback the
+        stream only keeps the latest document (:meth:`latest_telemetry`).
+
+        ``timeout_ms`` is the silence after which the connection is dropped
+        and reopened."""
+        # The lock before the handle, as in ItscamCgiClient.start_mjpeg_stream
+        with self._stream_lock, self._native.use() as h:
+            if self._telemetry_user_cb is not None:
+                raise RuntimeError("telemetry stream already running")
+            # A stop in progress would stop the new stream
+            if self._stops_in_progress:
+                raise RuntimeError("telemetry stream still stopping")
+            self._telemetry_user_cb = callback or _keep_latest_only
+            # Never waits for a telemetry callback
+            rc = self._lib.ITSCAM_RestClient_startTelemetryStream(
+                h, self._telemetry_native_cb if callback else
+                bindings.ITSCAM_TelemetryCallback(), None, timeout_ms)
+            if rc != 0:
+                self._telemetry_user_cb = None
+                _raise_for_error(rc, "start_telemetry_stream")
+
+    def _on_telemetry(self, update) -> None:
+        callback = self._telemetry_user_cb
+        if callback is None or callback is _keep_latest_only:
+            return
+        try:
+            text = update.json[:update.jsonLen].decode("utf-8") \
+                if update.json else "{}"
+            callback(TelemetryUpdate(
+                sequence=update.sequence,
+                received_at_ms=update.receivedAtMs,
+                document=json.loads(text)))
+        except Exception:
+            # Never let a Python exception cross into native code.
+            import traceback
+            traceback.print_exc()
+
+    def stop_telemetry_stream(self) -> None:
+        """Stop the stream.  From another thread, this waits for the
+        telemetry callback in progress; from the callback, it returns at
+        once."""
+        with self._native.use() as h:
+            if not h:
+                return
+            self._stop_telemetry(h)
+
+    def _stop_telemetry(self, h) -> None:
+        with self._stream_lock:
+            callback, self._telemetry_user_cb = self._telemetry_user_cb, None
+            self._stops_in_progress += 1
+        # Dropped without the lock: dropping the last reference to its owner
+        # runs the owner's finalizer at once, which may call this client
+        del callback
+        try:
+            self._lib.ITSCAM_RestClient_stopTelemetryStream(h)
+        finally:
+            with self._stream_lock:
+                self._stops_in_progress -= 1
+
+    def is_telemetry_stream_running(self) -> bool:
+        """True from :meth:`start_telemetry_stream` until
+        :meth:`stop_telemetry_stream`."""
+        with self._native.use() as h:
+            return bool(
+                self._lib.ITSCAM_RestClient_isTelemetryStreamRunning(h))
+
+    def is_telemetry_stream_connected(self) -> bool:
+        """True while the stream is connected to the camera."""
+        with self._native.use() as h:
+            return bool(
+                self._lib.ITSCAM_RestClient_isTelemetryStreamConnected(h))
+
+    def latest_telemetry(self) -> Optional[TelemetryUpdate]:
+        """The last document the stream received, also after it stopped
+        (check ``received_at_ms`` to tell how old it is); ``None`` before the
+        first one."""
+        with self._native.use() as h:
+            sequence = bindings.c_uint64()
+            received = bindings.c_int64()
+            out = bindings.ITSCAM_String()
+            rc = self._lib.ITSCAM_RestClient_latestTelemetry(
+                h, bindings.byref(sequence), bindings.byref(received),
+                bindings.byref(out))
+            body = _take_string(out)
+            if rc == ErrorCode.DISCONNECTED:
+                return None
+            _raise_for_error(rc, "latest_telemetry")
+        return TelemetryUpdate(sequence=sequence.value,
+                               received_at_ms=received.value,
+                               document=json.loads(body) if body else {})
+
+
+def _keep_latest_only(_update: TelemetryUpdate) -> None:
+    """Marks a stream started without a callback."""

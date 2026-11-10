@@ -19,7 +19,7 @@ Copyright (c) 2026 Pumatronix
 """
 
 from .client import ItscamClient
-from .rest_client import ItscamRestClient
+from .rest_client import ItscamRestClient, TelemetryUpdate
 from .cgi_client import (
     ItscamCgiClient,
     SnapshotCgiRequest,
@@ -54,6 +54,7 @@ from .rest_types import (
     RESTAPIClientConfig,
     RESTAPIClientStatus,
     Licenses,
+    SystemTelemetry,
 )
 from .types import (
     Timestamp,
@@ -114,6 +115,8 @@ __all__ = [
     "ItscamClient",
     "ItscamRestClient",
     "ItscamCgiClient",
+    # REST types
+    "TelemetryUpdate",
     # CGI types
     "SnapshotCgiRequest",
     "CgiImage",
@@ -159,6 +162,7 @@ __all__ = [
     "RESTAPIClientConfig",
     "RESTAPIClientStatus",
     "Licenses",
+    "SystemTelemetry",
     # JPEG metadata
     "extract_jpeg_comment",
     "parse_jpeg_comment_tags",
