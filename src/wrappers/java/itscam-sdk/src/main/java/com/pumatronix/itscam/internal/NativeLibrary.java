@@ -7,6 +7,7 @@
  */
 package com.pumatronix.itscam.internal;
 
+import com.sun.jna.Library;
 import com.sun.jna.Native;
 import com.sun.jna.Platform;
 
@@ -15,6 +16,8 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.util.Collections;
+import java.util.Map;
 
 /**
  * Loads the ITSCAM native shared library and exposes the JNA bindings.
@@ -33,6 +36,11 @@ public final class NativeLibrary {
 
     private static final Object LOCK = new Object();
     private static volatile ItscamLibrary INSTANCE;
+
+    // JNA otherwise uses the JVM's default charset, not always UTF-8
+    private static final Map<String, Object> OPTIONS =
+            Collections.<String, Object>singletonMap(
+                    Library.OPTION_STRING_ENCODING, "UTF-8");
 
     private NativeLibrary() {}
 
@@ -53,17 +61,17 @@ public final class NativeLibrary {
     private static ItscamLibrary load() {
         String override = System.getProperty("itscam.sdk.library");
         if (override != null && !override.isEmpty()) {
-            return Native.load(override, ItscamLibrary.class);
+            return Native.load(override, ItscamLibrary.class, OPTIONS);
         }
         try {
-            return Native.load("itscam_sdk", ItscamLibrary.class);
+            return Native.load("itscam_sdk", ItscamLibrary.class, OPTIONS);
         } catch (UnsatisfiedLinkError firstAttempt) {
             Path extracted = extractFromJar();
             if (extracted == null) {
                 throw firstAttempt;
             }
             return Native.load(extracted.toAbsolutePath().toString(),
-                    ItscamLibrary.class);
+                    ItscamLibrary.class, OPTIONS);
         }
     }
 
