@@ -38,7 +38,12 @@
 
 #pragma once
 
+#undef optional_CONFIG_SELECT_OPTIONAL
+#define optional_CONFIG_SELECT_OPTIONAL optional_OPTIONAL_NONSTD
 #include <nonstd/optional.hpp>
+#if optional_USES_STD_OPTIONAL
+#error "Include itscam_sdk.h before anything that selects the standard optional in optional-lite"
+#endif
 #include <nlohmann/json.hpp>
 
 #ifndef NLOHMANN_OPT_HELPER

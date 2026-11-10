@@ -170,10 +170,23 @@ function fixCppOptionalInit(text) {
 
 /// quicktype emits C++17 std::optional, but the SDK still supports old
 /// libstdc++ targets such as GCC 5.4 on Ubuntu 16.04 where <optional> is
-/// absent. Use the vendored nonstd::optional shim instead.
+/// absent. Use the vendored nonstd::optional shim instead, always its own
+/// implementation: under C++17 it would otherwise select std::optional, whose
+/// layout differs from a library built without C++17 (same size, so a C++17
+/// application reads wrong values from it).
 function useVendoredCppOptional(text) {
   return text
-    .replace(/#include <optional>/g, "#include <nonstd/optional.hpp>")
+    .replace(
+      /#include <optional>/g,
+      [
+        "#undef optional_CONFIG_SELECT_OPTIONAL",
+        "#define optional_CONFIG_SELECT_OPTIONAL optional_OPTIONAL_NONSTD",
+        "#include <nonstd/optional.hpp>",
+        "#if optional_USES_STD_OPTIONAL",
+        '#error "Include itscam_sdk.h before anything that selects the standard optional in optional-lite"',
+        "#endif",
+      ].join("\n")
+    )
     .replace(/std::optional/g, "nonstd::optional")
     .replace(/std::nullopt/g, "nonstd::nullopt")
     .replace(/std::make_optional/g, "nonstd::make_optional")
