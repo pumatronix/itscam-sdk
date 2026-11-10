@@ -15,6 +15,7 @@ import com.sun.jna.Library;
 import com.sun.jna.Pointer;
 import com.sun.jna.Structure;
 import com.sun.jna.ptr.IntByReference;
+import com.sun.jna.ptr.LongByReference;
 import com.sun.jna.ptr.PointerByReference;
 
 import java.util.Arrays;
@@ -165,6 +166,20 @@ public interface ItscamLibrary extends Library {
         public ITSCAMCgiStreamFrame(Pointer p) { super(p); read(); }
     }
 
+    /**
+     * ITSCAM_TelemetryUpdate, only ever read.  Its last field, jsonLen, is
+     * left out: json is NUL-terminated and size_t varies with the platform.
+     */
+    @Structure.FieldOrder({"sequence", "receivedAtMs", "json"})
+    class ITSCAMTelemetryUpdate extends Structure {
+        public long    sequence;
+        public long    receivedAtMs;
+        public Pointer json;
+
+        public ITSCAMTelemetryUpdate() {}
+        public ITSCAMTelemetryUpdate(Pointer p) { super(p); read(); }
+    }
+
     // ====================================================================
     //  Callbacks
     // ====================================================================
@@ -187,6 +202,10 @@ public interface ItscamLibrary extends Library {
 
     interface CgiStreamCallback extends Callback {
         void invoke(ITSCAMCgiStreamFrame frame, Pointer userData);
+    }
+
+    interface TelemetryCallback extends Callback {
+        void invoke(ITSCAMTelemetryUpdate update, Pointer userData);
     }
 
     // ====================================================================
@@ -306,6 +325,20 @@ public interface ItscamLibrary extends Library {
                                  PointerByReference outResponse);
     void ITSCAM_RestClient_setAuthToken(Pointer client, String token);
     void ITSCAM_RestClient_clearAuthToken(Pointer client);
+
+    int  ITSCAM_RestClient_getSystemTelemetry(Pointer client, int timeoutMs,
+                                              PointerByReference outResponse);
+    int  ITSCAM_RestClient_startTelemetryStream(Pointer client,
+                                                TelemetryCallback cb,
+                                                Pointer userData,
+                                                int timeoutMs);
+    void ITSCAM_RestClient_stopTelemetryStream(Pointer client);
+    int  ITSCAM_RestClient_isTelemetryStreamRunning(Pointer client);
+    int  ITSCAM_RestClient_isTelemetryStreamConnected(Pointer client);
+    int  ITSCAM_RestClient_latestTelemetry(Pointer client,
+                                           LongByReference outSequence,
+                                           LongByReference outReceivedAtMs,
+                                           PointerByReference outJson);
 
     int ITSCAM_RestClient_httpGet(Pointer client, String path,
                                   int timeoutMs,
