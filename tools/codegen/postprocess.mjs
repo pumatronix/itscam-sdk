@@ -10,7 +10,9 @@
 //   1. Rewrite any $ref pointing at daemon files (api_common.yaml#/..., etc.)
 //      to local definitions inlined from spec/daemon-fixtures/.
 //   2. Inject LanesConfig / LaneRegion schemas if the input does not define
-//      them (the webapp documents the endpoint but not the schema).
+//      them (the webapp documents the endpoint but not the schema), and the
+//      system telemetry schemas (SystemTelemetry and the ones it uses) into
+//      snapshots older than them.
 //   3. Auto-fix known upstream JSDoc-induced glitches (e.g. `type: int` typos)
 //      so the spec parses cleanly.
 //   4. Resolve $refs with swagger-parser; abort with a precise error on
@@ -180,6 +182,29 @@ async function injectLanesConfigIfMissing(doc) {
   return doc
 }
 
+// Pull in SystemTelemetry and the schemas it uses (GET /api/system/telemetry)
+// when the snapshot predates them.  Only missing schemas are added, so a
+// snapshot that has them -- or newer versions of some -- wins.
+async function injectSystemTelemetryIfMissing(doc) {
+  const schemas = doc.components?.schemas ?? {}
+  const fixture = await loadFixture("webapp_system_telemetry.yaml")
+  const fixtureSchemas = fixture.components?.schemas ?? {}
+  if (!fixtureSchemas.SystemTelemetry) {
+    die("Fixture webapp_system_telemetry.yaml is missing schema 'SystemTelemetry'")
+  }
+  const missing = Object.keys(fixtureSchemas).filter((n) => !schemas[n])
+  if (missing.length === 0) {
+    info("System telemetry schemas already defined; skipping injection.")
+    return doc
+  }
+  for (const name of missing) {
+    schemas[name] = fixtureSchemas[name]
+  }
+  info(`Injected ${missing.length} system telemetry schema(s): ${missing.join(", ")}`)
+  doc.components.schemas = schemas
+  return doc
+}
+
 // Walk every type-bearing node and rewrite well-known typos.
 function autoFixTypoes(doc) {
   let fixes = 0
@@ -336,6 +361,7 @@ async function main() {
 
   await inlineDaemonRefs(doc)
   await injectLanesConfigIfMissing(doc)
+  await injectSystemTelemetryIfMissing(doc)
   autoFixTypoes(doc)
   applyUpstreamPatches(doc)
   fixMultipleExposuresNaming(doc)

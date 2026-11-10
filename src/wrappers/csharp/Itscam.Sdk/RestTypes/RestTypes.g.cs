@@ -35,6 +35,7 @@
 //    var restApiClientConfig = RestApiClientConfig.FromJson(jsonString);
 //    var restApiClientStatus = RestApiClientStatus.FromJson(jsonString);
 //    var licenses = Licenses.FromJson(jsonString);
+//    var systemTelemetry = SystemTelemetry.FromJson(jsonString);
 #nullable enable
 #pragma warning disable CS8618
 #pragma warning disable CS8601
@@ -1906,6 +1907,889 @@ namespace Pumatronix.Itscam.RestTypes
         public string Serial { get; set; }
     }
 
+    /// <summary>
+    /// State of the whole equipment. A part that can't be read in time is null. Times are unix
+    /// seconds unless stated otherwise.
+    /// </summary>
+    public partial class SystemTelemetry
+    {
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("camera")]
+        public TelemetryCamera Camera { get; set; }
+
+        /// <summary>
+        /// Clients connected now: to the Cougar and ITSCAM (pumatronix) protocols, local ones
+        /// included (absent when the camera service doesn't answer), and to the CGI endpoints
+        /// (trigger, mjpegvideo, snapshot, lastframe), those of this web interface excluded.
+        /// </summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("connections")]
+        public Dictionary<string, TelemetryConnections> Connections { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("device")]
+        public TelemetryDevice Device { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("flashTest")]
+        public FlashTestStatus FlashTest { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("health")]
+        public TelemetryHealth Health { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("integrations")]
+        public TelemetryIntegrations Integrations { get; set; }
+
+        /// <summary>
+        /// Status of the wired interfaces (by name, eth1...), the wireless and the mobile network,
+        /// as in the network status websocket. Read every 10 s at most.
+        /// </summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("network")]
+        public TelemetryNetwork Network { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("processing")]
+        public ProcessingStatistics Processing { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("resources")]
+        public TelemetryResources Resources { get; set; }
+
+        /// <summary>
+        /// systemd units by name (camera-daemon, webapp, records, redis, media-server), those
+        /// present on the model
+        /// </summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("services")]
+        public Dictionary<string, TelemetryService> Services { get; set; }
+
+        /// <summary>
+        /// When it was read, ISO 8601 UTC
+        /// </summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("timestamp")]
+        public string Timestamp { get; set; }
+
+        /// <summary>
+        /// Format version; fields are only added within a version
+        /// </summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("version")]
+        public long? Version { get; set; }
+    }
+
+    public partial class TelemetryCamera
+    {
+        /// <summary>
+        /// Camera service initialization failures, by error type
+        /// </summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("failureCounts")]
+        public Dictionary<string, long> FailureCounts { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("fps")]
+        public TelemetryCameraFps Fps { get; set; }
+
+        /// <summary>
+        /// Whether the camera delivers images
+        /// </summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("pipelineReady")]
+        public bool? PipelineReady { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("profile")]
+        public TelemetryCameraProfile Profile { get; set; }
+
+        /// <summary>
+        /// Whether the camera service answered
+        /// </summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("reachable")]
+        public bool? Reachable { get; set; }
+    }
+
+    public partial class TelemetryCameraFps
+    {
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("mjpeg")]
+        public double? Mjpeg { get; set; }
+    }
+
+    public partial class TelemetryCameraProfile
+    {
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("id")]
+        public long? Id { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("name")]
+        public string Name { get; set; }
+    }
+
+    public partial class TelemetryConnections
+    {
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("clients")]
+        public List<TelemetryClient> Clients { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("count")]
+        public long? Count { get; set; }
+    }
+
+    public partial class TelemetryClient
+    {
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("ip")]
+        public string Ip { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("port")]
+        public long? Port { get; set; }
+
+        /// <summary>
+        /// Unix time it connected, in seconds
+        /// </summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("since")]
+        public long? Since { get; set; }
+    }
+
+    public partial class TelemetryDevice
+    {
+        /// <summary>
+        /// itscam450, itscam600, itscam
+        /// </summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("family")]
+        public string Family { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("firmwareVersion")]
+        public string FirmwareVersion { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("model")]
+        public string Model { get; set; }
+    }
+
+    /// <summary>
+    /// Every intervalMinutes, while no triggers come in (or after five intervals skipped in a
+    /// row, as on constant trigger), the camera takes three diagnostic captures (without, with
+    /// and without flash) that no client receives, and measures the light one flash output of
+    /// the current profile adds. Each output's status comes from its recent conclusive runs, and
+    /// its confidence (0 to 1) grows with agreeing runs and fades a day after the last one.
+    /// </summary>
+    public partial class FlashTestStatus
+    {
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("confidence")]
+        public double? Confidence { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("enabled")]
+        public bool? Enabled { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("intervalMinutes")]
+        public long? IntervalMinutes { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("lastAttempt")]
+        public FlashTestAttempt LastAttempt { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("outputs")]
+        public List<FlashTestOutput> Outputs { get; set; }
+
+        /// <summary>
+        /// Worst status of the outputs tested (ok, degraded, failed, unknown)
+        /// </summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("status")]
+        public string Status { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("warnings")]
+        public List<FlashTestWarning> Warnings { get; set; }
+    }
+
+    /// <summary>
+    /// Last test, or why the last scheduled one was skipped (FlashTestRun fields when it ran)
+    /// </summary>
+    public partial class FlashTestAttempt
+    {
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("delta")]
+        public double? Delta { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("out")]
+        public long? Out { get; set; }
+
+        /// <summary>
+        /// pass, weak, fail, inconclusive
+        /// </summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("outcome")]
+        public string Outcome { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("reason")]
+        public string Reason { get; set; }
+
+        /// <summary>
+        /// pipelineNotReady, busy, noFlashInProfile or irFilterClosed
+        /// </summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("skipped")]
+        public string Skipped { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("time")]
+        public long? Time { get; set; }
+    }
+
+    public partial class FlashTestOutput
+    {
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("baseline")]
+        public FlashTestBaseline Baseline { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("confidence")]
+        public double? Confidence { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("lastConclusiveRun")]
+        public FlashTestRun LastConclusiveRun { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("lastRun")]
+        public FlashTestRun LastRun { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("out")]
+        public long? Out { get; set; }
+
+        /// <summary>
+        /// ok, degraded, failed, unknown
+        /// </summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("status")]
+        public string Status { get; set; }
+    }
+
+    /// <summary>
+    /// Light the output adds at one exposure, learned from its passing runs
+    /// </summary>
+    public partial class FlashTestBaseline
+    {
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("delta")]
+        public double? Delta { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("gain")]
+        public long? Gain { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("power")]
+        public long? Power { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("runs")]
+        public long? Runs { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("shutter")]
+        public long? Shutter { get; set; }
+    }
+
+    /// <summary>
+    /// One test of a flash output
+    /// </summary>
+    public partial class FlashTestRun
+    {
+        /// <summary>
+        /// Mean luma without flash
+        /// </summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("ambient")]
+        public double? Ambient { get; set; }
+
+        /// <summary>
+        /// Luma (0-255) the flash added
+        /// </summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("delta")]
+        public double? Delta { get; set; }
+
+        /// <summary>
+        /// Gain, in millibels
+        /// </summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("gain")]
+        public long? Gain { get; set; }
+
+        /// <summary>
+        /// Luma difference between the captures without flash
+        /// </summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("noise")]
+        public double? Noise { get; set; }
+
+        /// <summary>
+        /// Flash output, as in the profiles
+        /// </summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("out")]
+        public long? Out { get; set; }
+
+        /// <summary>
+        /// pass, weak, fail, inconclusive
+        /// </summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("outcome")]
+        public string Outcome { get; set; }
+
+        /// <summary>
+        /// Flash power, in percent
+        /// </summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("power")]
+        public long? Power { get; set; }
+
+        /// <summary>
+        /// Why it was inconclusive (motion, saturated, ambient, noise, weakSignal, capture,
+        /// flashNotApplied)
+        /// </summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("reason")]
+        public string Reason { get; set; }
+
+        /// <summary>
+        /// Shutter, in microseconds
+        /// </summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("shutter")]
+        public long? Shutter { get; set; }
+
+        /// <summary>
+        /// Unix time, in seconds
+        /// </summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("time")]
+        public long? Time { get; set; }
+
+        /// <summary>
+        /// Part of the image that neither moved nor saturated
+        /// </summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("usableFraction")]
+        public double? UsableFraction { get; set; }
+    }
+
+    /// <summary>
+    /// Flash configuration that looks wrong (not a failure)
+    /// </summary>
+    public partial class FlashTestWarning
+    {
+        /// <summary>
+        /// noFlashConfigured, flashWithIrFilterClosed, flashOutputCannotFlash, flashOutputNotFlash,
+        /// irPassWithoutFlash
+        /// </summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("id")]
+        public string Id { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("out")]
+        public long? Out { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("profile")]
+        public long? Profile { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("profileName")]
+        public string ProfileName { get; set; }
+
+        /// <summary>
+        /// warning, info
+        /// </summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("severity")]
+        public string Severity { get; set; }
+    }
+
+    public partial class TelemetryHealth
+    {
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("issues")]
+        public List<TelemetryHealthIssue> Issues { get; set; }
+
+        /// <summary>
+        /// Most severe issue; info issues leave it ok (ok, warning, critical)
+        /// </summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("status")]
+        public string Status { get; set; }
+    }
+
+    /// <summary>
+    /// Something that needs attention: id, severity and message, plus the details of its kind.
+    /// </summary>
+    public partial class TelemetryHealthIssue
+    {
+        /// <summary>
+        /// restApiClientError
+        /// </summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("clientId")]
+        public long? ClientId { get; set; }
+
+        /// <summary>
+        /// restApiClientError
+        /// </summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("code")]
+        public long? Code { get; set; }
+
+        /// <summary>
+        /// flashFailed, flashDegraded
+        /// </summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("confidence")]
+        public double? Confidence { get; set; }
+
+        /// <summary>
+        /// storageFull (disk or sdCard)
+        /// </summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("device")]
+        public string Device { get; set; }
+
+        /// <summary>
+        /// cameraServiceDown, cameraServiceUnreachable, cameraServiceInitError, pipelineNotReady,
+        /// serviceDown, storageFull, memoryHigh, flashFailed, flashDegraded, itscamproDisconnected,
+        /// linceLoginFailed, restApiClientError, or a flash configuration warning
+        /// (noFlashConfigured, flashWithIrFilterClosed, flashOutputCannotFlash, flashOutputNotFlash,
+        /// irPassWithoutFlash)
+        /// </summary>
+        [JsonPropertyName("id")]
+        public string Id { get; set; }
+
+        /// <summary>
+        /// English text, for logs; use id to show it
+        /// </summary>
+        [JsonPropertyName("message")]
+        public string Message { get; set; }
+
+        /// <summary>
+        /// Flash output (flash issues and warnings)
+        /// </summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("out")]
+        public long? Out { get; set; }
+
+        /// <summary>
+        /// Flash configuration warnings
+        /// </summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("profile")]
+        public long? Profile { get; set; }
+
+        /// <summary>
+        /// Flash configuration warnings
+        /// </summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("profileName")]
+        public string ProfileName { get; set; }
+
+        /// <summary>
+        /// serviceDown
+        /// </summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("service")]
+        public string Service { get; set; }
+
+        /// <summary>
+        /// info, warning, critical
+        /// </summary>
+        [JsonPropertyName("severity")]
+        public string Severity { get; set; }
+
+        /// <summary>
+        /// itscamproDisconnected, linceLoginFailed
+        /// </summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("status")]
+        public string Status { get; set; }
+
+        /// <summary>
+        /// storageFull, memoryHigh
+        /// </summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("usedPct")]
+        public double? UsedPct { get; set; }
+    }
+
+    public partial class TelemetryIntegrations
+    {
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("itscampro")]
+        public TelemetryIntegration Itscampro { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("lince")]
+        public TelemetryIntegration Lince { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("restApiClients")]
+        public List<TelemetryRestApiClient> RestApiClients { get; set; }
+    }
+
+    /// <summary>
+    /// Null when the service doesn't run on this camera
+    /// </summary>
+    public partial class TelemetryIntegration
+    {
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("enabled")]
+        public bool? Enabled { get; set; }
+
+        /// <summary>
+        /// ITSCAM PRO: CONNECTED, CONNECT_START, DISCONNECTED, DISCONNECT_START, DISABLED or
+        /// UNKNOWN. Lince: loginSuccess, notInitialized, loginError, discoveryError or
+        /// undefinedError.
+        /// </summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("status")]
+        public string Status { get; set; }
+    }
+
+    public partial class TelemetryRestApiClient
+    {
+        /// <summary>
+        /// 0 when fine, 1 template error, 2 request error
+        /// </summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("code")]
+        public long? Code { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("diskUsage")]
+        public long? DiskUsage { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("enabled")]
+        public bool? Enabled { get; set; }
+
+        /// <summary>
+        /// Requests saved to disk, waiting to be sent again
+        /// </summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("fileCount")]
+        public long? FileCount { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("id")]
+        public long? Id { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("message")]
+        public string Message { get; set; }
+    }
+
+    /// <summary>
+    /// Status of the wired interfaces (by name, eth1...), the wireless and the mobile network,
+    /// as in the network status websocket. Read every 10 s at most.
+    /// </summary>
+    public partial class TelemetryNetwork
+    {
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("mobile")]
+        public Dictionary<string, object> Mobile { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("wifi")]
+        public Dictionary<string, object> Wifi { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("wired")]
+        public Dictionary<string, object> Wired { get; set; }
+    }
+
+    /// <summary>
+    /// Captures processed in the last 10, 30 and 60 minutes. A capture is one trigger or
+    /// snapshot request, counted once: its plates are the distinct texts OCR read across its
+    /// exposures, its objects the classifier detections of the exposure with most of them.
+    /// </summary>
+    public partial class ProcessingStatistics
+    {
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("last10Minutes")]
+        public ProcessingStatisticsWindow Last10Minutes { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("last30Minutes")]
+        public ProcessingStatisticsWindow Last30Minutes { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("last60Minutes")]
+        public ProcessingStatisticsWindow Last60Minutes { get; set; }
+    }
+
+    public partial class ProcessingStatisticsWindow
+    {
+        /// <summary>
+        /// Part of the window the camera service ran
+        /// </summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("coveredSeconds")]
+        public long? CoveredSeconds { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("seconds")]
+        public long? Seconds { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("snapshot")]
+        public ProcessingCounters Snapshot { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("total")]
+        public ProcessingCounters Total { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("trigger")]
+        public ProcessingCounters Trigger { get; set; }
+    }
+
+    public partial class ProcessingCounters
+    {
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("captures")]
+        public long? Captures { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("capturesWithPlates")]
+        public long? CapturesWithPlates { get; set; }
+
+        /// <summary>
+        /// Classifier detections, summed over the captures
+        /// </summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("objects")]
+        public long? Objects { get; set; }
+
+        /// <summary>
+        /// Mean OCR time per exposure, null without OCR
+        /// </summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("ocrAverageMs")]
+        public double? OcrAverageMs { get; set; }
+
+        /// <summary>
+        /// Distinct plates read, summed over the captures
+        /// </summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("plates")]
+        public long? Plates { get; set; }
+    }
+
+    public partial class TelemetryResources
+    {
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("cpu")]
+        public TelemetryCpu Cpu { get; set; }
+
+        /// <summary>
+        /// Bytes
+        /// </summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("memory")]
+        public TelemetryMemory Memory { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("storage")]
+        public TelemetryStorage Storage { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("uptime")]
+        public TelemetryUptime Uptime { get; set; }
+    }
+
+    public partial class TelemetryCpu
+    {
+        /// <summary>
+        /// 1, 5 and 15 minutes
+        /// </summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("loadAverage")]
+        public List<double> LoadAverage { get; set; }
+
+        /// <summary>
+        /// Celsius
+        /// </summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("temperature")]
+        public double? Temperature { get; set; }
+
+        /// <summary>
+        /// Percent of all cores, since the previous reading (a few seconds)
+        /// </summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("usage")]
+        public double? Usage { get; set; }
+    }
+
+    /// <summary>
+    /// Bytes
+    /// </summary>
+    public partial class TelemetryMemory
+    {
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("ram")]
+        public TelemetryMemoryRam Ram { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("swap")]
+        public TelemetryMemorySwap Swap { get; set; }
+    }
+
+    public partial class TelemetryMemoryRam
+    {
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("total")]
+        public long? Total { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("used")]
+        public long? Used { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("usedPct")]
+        public double? UsedPct { get; set; }
+    }
+
+    public partial class TelemetryMemorySwap
+    {
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("total")]
+        public long? Total { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("used")]
+        public long? Used { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("usedPct")]
+        public double? UsedPct { get; set; }
+    }
+
+    public partial class TelemetryStorage
+    {
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("disk")]
+        public TelemetryStorageDevice Disk { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("sdCard")]
+        public TelemetryStorageDevice SdCard { get; set; }
+    }
+
+    public partial class TelemetryStorageDevice
+    {
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("device")]
+        public string Device { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("mountPoint")]
+        public string MountPoint { get; set; }
+
+        /// <summary>
+        /// Bytes
+        /// </summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("total")]
+        public long? Total { get; set; }
+
+        /// <summary>
+        /// Bytes, null when not mounted
+        /// </summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("used")]
+        public long? Used { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("usedPct")]
+        public double? UsedPct { get; set; }
+    }
+
+    public partial class TelemetryUptime
+    {
+        /// <summary>
+        /// Unix time, in seconds
+        /// </summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("lastBoot")]
+        public long? LastBoot { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("seconds")]
+        public long? Seconds { get; set; }
+    }
+
+    public partial class TelemetryService
+    {
+        /// <summary>
+        /// systemd active state (active, activating, failed, inactive...)
+        /// </summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("active")]
+        public string Active { get; set; }
+
+        /// <summary>
+        /// Started at boot; the others start on demand (media-server, by socket)
+        /// </summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("enabled")]
+        public bool? Enabled { get; set; }
+
+        /// <summary>
+        /// camera-daemon only, empty when it started fine
+        /// </summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("initializationError")]
+        public string InitializationError { get; set; }
+
+        /// <summary>
+        /// Automatic restarts since boot
+        /// </summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("restarts")]
+        public long? Restarts { get; set; }
+
+        /// <summary>
+        /// Unix time it became active, in seconds
+        /// </summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("since")]
+        public long? Since { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("sub")]
+        public string Sub { get; set; }
+    }
+
     public enum Mode { Disabled, Fast, Normal, Slow };
 
     public enum TypeEnum { Json };
@@ -2031,6 +2915,11 @@ namespace Pumatronix.Itscam.RestTypes
         public static Licenses FromJson(string json) => JsonSerializer.Deserialize<Licenses>(json, Pumatronix.Itscam.RestTypes.Converter.Settings);
     }
 
+    public partial class SystemTelemetry
+    {
+        public static SystemTelemetry FromJson(string json) => JsonSerializer.Deserialize<SystemTelemetry>(json, Pumatronix.Itscam.RestTypes.Converter.Settings);
+    }
+
     public static class Serialize
     {
         public static string ToJson(this ProfileConfig self) => JsonSerializer.Serialize(self, Pumatronix.Itscam.RestTypes.Converter.Settings);
@@ -2056,6 +2945,7 @@ namespace Pumatronix.Itscam.RestTypes
         public static string ToJson(this RestApiClientConfig self) => JsonSerializer.Serialize(self, Pumatronix.Itscam.RestTypes.Converter.Settings);
         public static string ToJson(this RestApiClientStatus self) => JsonSerializer.Serialize(self, Pumatronix.Itscam.RestTypes.Converter.Settings);
         public static string ToJson(this Licenses self) => JsonSerializer.Serialize(self, Pumatronix.Itscam.RestTypes.Converter.Settings);
+        public static string ToJson(this SystemTelemetry self) => JsonSerializer.Serialize(self, Pumatronix.Itscam.RestTypes.Converter.Settings);
     }
 
     internal static class Converter

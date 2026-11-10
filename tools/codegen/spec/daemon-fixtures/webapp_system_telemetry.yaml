@@ -1,0 +1,522 @@
+# System telemetry schemas of the itscam600 webapp (GET /api/system/telemetry,
+# SW6XX-2976), copied from its generated itscam.yaml.  postprocess.mjs injects
+# them into a snapshot that predates them; a snapshot that has them wins.
+components:
+  schemas:
+    FlashTestAttempt:
+      title: FlashTestAttempt
+      type: object
+      description: Last test, or why the last scheduled one was skipped (FlashTestRun fields when it ran)
+      properties:
+        time:
+          type: integer
+          format: int64
+        skipped:
+          type: string
+          description: pipelineNotReady, busy, noFlashInProfile or irFilterClosed
+        out:
+          type: integer
+        outcome:
+          type: string
+          description: pass, weak, fail, inconclusive
+        reason:
+          type: string
+        delta:
+          type: number
+    FlashTestBaseline:
+      title: FlashTestBaseline
+      type: object
+      description: Light the output adds at one exposure, learned from its passing runs
+      properties:
+        delta:
+          type: number
+        runs:
+          type: integer
+        power:
+          type: integer
+        shutter:
+          type: integer
+          format: int64
+        gain:
+          type: integer
+          format: int64
+    FlashTestOutput:
+      title: FlashTestOutput
+      type: object
+      properties:
+        out:
+          type: integer
+        status:
+          type: string
+          description: ok, degraded, failed, unknown
+        confidence:
+          type: number
+        lastRun:
+          $ref: "#/components/schemas/FlashTestRun"
+        lastConclusiveRun:
+          $ref: "#/components/schemas/FlashTestRun"
+        baseline:
+          $ref: "#/components/schemas/FlashTestBaseline"
+    FlashTestRun:
+      title: FlashTestRun
+      type: object
+      description: One test of a flash output
+      properties:
+        time:
+          type: integer
+          format: int64
+          description: Unix time, in seconds
+        out:
+          type: integer
+          description: Flash output, as in the profiles
+        power:
+          type: integer
+          description: Flash power, in percent
+        shutter:
+          type: integer
+          format: int64
+          description: Shutter, in microseconds
+        gain:
+          type: integer
+          format: int64
+          description: Gain, in millibels
+        outcome:
+          type: string
+          description: pass, weak, fail, inconclusive
+        reason:
+          type: string
+          description: Why it was inconclusive (motion, saturated, ambient, noise, weakSignal, capture, flashNotApplied)
+        delta:
+          type: number
+          description: Luma (0-255) the flash added
+        noise:
+          type: number
+          description: Luma difference between the captures without flash
+        ambient:
+          type: number
+          description: Mean luma without flash
+        usableFraction:
+          type: number
+          description: Part of the image that neither moved nor saturated
+    FlashTestStatus:
+      title: FlashTestStatus
+      type: object
+      description: |
+        Every intervalMinutes, while no triggers come in (or after five intervals skipped in a row, as on constant trigger), the camera takes three diagnostic captures (without, with and without flash) that no client receives, and measures the light one flash output of the current profile adds. Each output's status comes from its recent conclusive runs, and its confidence (0 to 1) grows with agreeing runs and fades a day after the last one.
+      properties:
+        enabled:
+          type: boolean
+        intervalMinutes:
+          type: integer
+        status:
+          type: string
+          description: Worst status of the outputs tested (ok, degraded, failed, unknown)
+        confidence:
+          type: number
+        outputs:
+          type: array
+          items:
+            $ref: "#/components/schemas/FlashTestOutput"
+        lastAttempt:
+          $ref: "#/components/schemas/FlashTestAttempt"
+        warnings:
+          type: array
+          items:
+            $ref: "#/components/schemas/FlashTestWarning"
+    FlashTestWarning:
+      title: FlashTestWarning
+      type: object
+      description: Flash configuration that looks wrong (not a failure)
+      properties:
+        id:
+          type: string
+          description: noFlashConfigured, flashWithIrFilterClosed, flashOutputCannotFlash, flashOutputNotFlash, irPassWithoutFlash
+        severity:
+          type: string
+          description: warning, info
+        profile:
+          type: integer
+        profileName:
+          type: string
+        out:
+          type: integer
+    ProcessingCounters:
+      title: ProcessingCounters
+      type: object
+      properties:
+        captures:
+          type: integer
+        capturesWithPlates:
+          type: integer
+        plates:
+          type: integer
+          description: Distinct plates read, summed over the captures
+        objects:
+          type: integer
+          description: Classifier detections, summed over the captures
+        ocrAverageMs:
+          type: number
+          nullable: true
+          description: Mean OCR time per exposure, null without OCR
+    ProcessingStatistics:
+      title: ProcessingStatistics
+      type: object
+      description: |
+        Captures processed in the last 10, 30 and 60 minutes. A capture is one trigger or snapshot request, counted once: its plates are the distinct texts OCR read across its exposures, its objects the classifier detections of the exposure with most of them.
+      properties:
+        last10Minutes:
+          $ref: "#/components/schemas/ProcessingStatisticsWindow"
+        last30Minutes:
+          $ref: "#/components/schemas/ProcessingStatisticsWindow"
+        last60Minutes:
+          $ref: "#/components/schemas/ProcessingStatisticsWindow"
+    ProcessingStatisticsWindow:
+      title: ProcessingStatisticsWindow
+      type: object
+      properties:
+        seconds:
+          type: integer
+        coveredSeconds:
+          type: integer
+          description: Part of the window the camera service ran
+        trigger:
+          $ref: "#/components/schemas/ProcessingCounters"
+        snapshot:
+          $ref: "#/components/schemas/ProcessingCounters"
+        total:
+          $ref: "#/components/schemas/ProcessingCounters"
+    SystemTelemetry:
+      title: SystemTelemetry
+      type: object
+      description: |
+        State of the whole equipment. A part that can't be read in time is null. Times are unix seconds unless stated otherwise.
+      properties:
+        version:
+          type: integer
+          description: Format version; fields are only added within a version
+          example: 1
+        timestamp:
+          type: string
+          description: When it was read, ISO 8601 UTC
+        device:
+          title: TelemetryDevice
+          type: object
+          nullable: true
+          properties:
+            model:
+              type: string
+            family:
+              type: string
+              description: itscam450, itscam600, itscam
+            firmwareVersion:
+              type: string
+              nullable: true
+        health:
+          $ref: "#/components/schemas/TelemetryHealth"
+        resources:
+          $ref: "#/components/schemas/TelemetryResources"
+        services:
+          type: object
+          nullable: true
+          description: systemd units by name (camera-daemon, webapp, records, redis, media-server), those present on the model
+          additionalProperties:
+            $ref: "#/components/schemas/TelemetryService"
+        camera:
+          title: TelemetryCamera
+          type: object
+          properties:
+            reachable:
+              type: boolean
+              description: Whether the camera service answered
+            pipelineReady:
+              type: boolean
+              nullable: true
+              description: Whether the camera delivers images
+            profile:
+              title: TelemetryCameraProfile
+              type: object
+              nullable: true
+              properties:
+                id:
+                  type: integer
+                name:
+                  type: string
+            fps:
+              title: TelemetryCameraFps
+              type: object
+              nullable: true
+              properties:
+                mjpeg:
+                  type: number
+            failureCounts:
+              type: object
+              nullable: true
+              description: Camera service initialization failures, by error type
+              additionalProperties:
+                type: integer
+        connections:
+          type: object
+          description: |
+            Clients connected now: to the Cougar and ITSCAM (pumatronix) protocols, local ones included (absent when the camera service doesn't answer), and to the CGI endpoints (trigger, mjpegvideo, snapshot, lastframe), those of this web interface excluded.
+          additionalProperties:
+            $ref: "#/components/schemas/TelemetryConnections"
+        integrations:
+          title: TelemetryIntegrations
+          type: object
+          nullable: true
+          properties:
+            itscampro:
+              $ref: "#/components/schemas/TelemetryIntegration"
+            lince:
+              $ref: "#/components/schemas/TelemetryIntegration"
+            restApiClients:
+              type: array
+              items:
+                title: TelemetryRestApiClient
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  enabled:
+                    type: boolean
+                  code:
+                    type: integer
+                    description: 0 when fine, 1 template error, 2 request error
+                  message:
+                    type: string
+                  fileCount:
+                    type: integer
+                    description: Requests saved to disk, waiting to be sent again
+                  diskUsage:
+                    type: integer
+                    format: int64
+        network:
+          title: TelemetryNetwork
+          type: object
+          nullable: true
+          description: |
+            Status of the wired interfaces (by name, eth1...), the wireless and the mobile network, as in the network status websocket. Read every 10 s at most.
+          properties:
+            wired:
+              type: object
+              nullable: true
+            wifi:
+              type: object
+              nullable: true
+            mobile:
+              type: object
+              nullable: true
+        processing:
+          $ref: "#/components/schemas/ProcessingStatistics"
+        flashTest:
+          $ref: "#/components/schemas/FlashTestStatus"
+    TelemetryConnections:
+      title: TelemetryConnections
+      type: object
+      properties:
+        count:
+          type: integer
+        clients:
+          type: array
+          items:
+            title: TelemetryClient
+            type: object
+            properties:
+              ip:
+                type: string
+              port:
+                type: integer
+              since:
+                type: integer
+                format: int64
+                description: Unix time it connected, in seconds
+    TelemetryHealth:
+      title: TelemetryHealth
+      type: object
+      properties:
+        status:
+          type: string
+          description: Most severe issue; info issues leave it ok (ok, warning, critical)
+        issues:
+          type: array
+          items:
+            $ref: "#/components/schemas/TelemetryHealthIssue"
+    TelemetryHealthIssue:
+      title: TelemetryHealthIssue
+      type: object
+      description: |
+        Something that needs attention: id, severity and message, plus the details of its kind.
+      required:
+        - id
+        - severity
+        - message
+      properties:
+        id:
+          type: string
+          description: |
+            cameraServiceDown, cameraServiceUnreachable, cameraServiceInitError, pipelineNotReady, serviceDown, storageFull, memoryHigh, flashFailed, flashDegraded, itscamproDisconnected, linceLoginFailed, restApiClientError, or a flash configuration warning (noFlashConfigured, flashWithIrFilterClosed, flashOutputCannotFlash, flashOutputNotFlash, irPassWithoutFlash)
+        severity:
+          type: string
+          description: info, warning, critical
+        message:
+          type: string
+          description: English text, for logs; use id to show it
+        service:
+          type: string
+          description: serviceDown
+        device:
+          type: string
+          description: storageFull (disk or sdCard)
+        usedPct:
+          type: number
+          description: storageFull, memoryHigh
+        out:
+          type: integer
+          description: Flash output (flash issues and warnings)
+        confidence:
+          type: number
+          description: flashFailed, flashDegraded
+        profile:
+          type: integer
+          description: Flash configuration warnings
+        profileName:
+          type: string
+          description: Flash configuration warnings
+        status:
+          type: string
+          description: itscamproDisconnected, linceLoginFailed
+        clientId:
+          type: integer
+          description: restApiClientError
+        code:
+          type: integer
+          description: restApiClientError
+    TelemetryIntegration:
+      title: TelemetryIntegration
+      type: object
+      nullable: true
+      description: Null when the service doesn't run on this camera
+      properties:
+        enabled:
+          type: boolean
+        status:
+          type: string
+          description: |
+            ITSCAM PRO: CONNECTED, CONNECT_START, DISCONNECTED, DISCONNECT_START, DISABLED or UNKNOWN. Lince: loginSuccess, notInitialized, loginError, discoveryError or undefinedError.
+    TelemetryResources:
+      title: TelemetryResources
+      type: object
+      properties:
+        uptime:
+          title: TelemetryUptime
+          type: object
+          nullable: true
+          properties:
+            seconds:
+              type: integer
+            lastBoot:
+              type: integer
+              format: int64
+              description: Unix time, in seconds
+        cpu:
+          title: TelemetryCpu
+          type: object
+          nullable: true
+          properties:
+            usage:
+              type: number
+              description: Percent of all cores, since the previous reading (a few seconds)
+            temperature:
+              type: number
+              nullable: true
+              description: Celsius
+            loadAverage:
+              type: array
+              description: 1, 5 and 15 minutes
+              items:
+                type: number
+        memory:
+          title: TelemetryMemory
+          type: object
+          nullable: true
+          description: Bytes
+          properties:
+            ram:
+              title: TelemetryMemoryRam
+              type: object
+              properties:
+                total:
+                  type: integer
+                  format: int64
+                used:
+                  type: integer
+                  format: int64
+                usedPct:
+                  type: number
+            swap:
+              title: TelemetryMemorySwap
+              type: object
+              properties:
+                total:
+                  type: integer
+                  format: int64
+                used:
+                  type: integer
+                  format: int64
+                usedPct:
+                  type: number
+        storage:
+          title: TelemetryStorage
+          type: object
+          nullable: true
+          properties:
+            disk:
+              $ref: "#/components/schemas/TelemetryStorageDevice"
+            sdCard:
+              $ref: "#/components/schemas/TelemetryStorageDevice"
+    TelemetryService:
+      title: TelemetryService
+      type: object
+      properties:
+        active:
+          type: string
+          description: systemd active state (active, activating, failed, inactive...)
+        sub:
+          type: string
+        enabled:
+          type: boolean
+          description: Started at boot; the others start on demand (media-server, by socket)
+        since:
+          type: integer
+          format: int64
+          nullable: true
+          description: Unix time it became active, in seconds
+        restarts:
+          type: integer
+          nullable: true
+          description: Automatic restarts since boot
+        initializationError:
+          type: string
+          description: camera-daemon only, empty when it started fine
+    TelemetryStorageDevice:
+      title: TelemetryStorageDevice
+      type: object
+      nullable: true
+      properties:
+        device:
+          type: string
+        mountPoint:
+          type: string
+          nullable: true
+        total:
+          type: integer
+          format: int64
+          description: Bytes
+        used:
+          type: integer
+          format: int64
+          nullable: true
+          description: Bytes, null when not mounted
+        usedPct:
+          type: number
+          nullable: true

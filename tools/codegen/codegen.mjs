@@ -47,6 +47,8 @@ const DEFAULT_SPEC = path.join(TOOL_DIR, "spec", "default.yaml")
 // Phase 2: remaining equipment configs (FTP, Lince, vehicle indicator,
 // protocols, profile transitioner, lanes, IO, REST API client, licenses,
 // image sign).
+// Monitoring: the system telemetry (resources, services, connections,
+// processing statistics, flash test, health).
 const PHASE1_SCHEMAS = [
   "ProfileConfig",
   "OcrConfig",
@@ -72,6 +74,8 @@ const PHASE1_SCHEMAS = [
   "RestApiClientConfig",
   "RestApiClientStatus",
   "Licenses",
+  // Monitoring -------------------------------------------------------------
+  "SystemTelemetry",
 ]
 
 const NOTICE_HEAD = [

@@ -77,6 +77,9 @@
 //
 //    licenses, err := UnmarshalLicenses(bytes)
 //    bytes, err = licenses.Marshal()
+//
+//    systemTelemetry, err := UnmarshalSystemTelemetry(bytes)
+//    bytes, err = systemTelemetry.Marshal()
 
 package itscam
 
@@ -309,6 +312,16 @@ func UnmarshalLicenses(data []byte) (Licenses, error) {
 }
 
 func (r *Licenses) Marshal() ([]byte, error) {
+	return json.Marshal(r)
+}
+
+func UnmarshalSystemTelemetry(data []byte) (SystemTelemetry, error) {
+	var r SystemTelemetry
+	err := json.Unmarshal(data, &r)
+	return r, err
+}
+
+func (r *SystemTelemetry) Marshal() ([]byte, error) {
 	return json.Marshal(r)
 }
 
@@ -995,6 +1008,330 @@ type AnalyticsOcr struct {
 
 type DeviceID struct {
 	Serial *string `json:"serial,omitempty"`
+}
+
+// State of the whole equipment. A part that can't be read in time is null. Times are unix
+// seconds unless stated otherwise.
+type SystemTelemetry struct {
+	Camera                                                                                    *TelemetryCamera                `json:"camera,omitempty"`
+	// Clients connected now: to the Cougar and ITSCAM (pumatronix) protocols, local ones                                     
+	// included (absent when the camera service doesn't answer), and to the CGI endpoints                                     
+	// (trigger, mjpegvideo, snapshot, lastframe), those of this web interface excluded.                                      
+	Connections                                                                               map[string]TelemetryConnections `json:"connections,omitempty"`
+	Device                                                                                    *TelemetryDevice                `json:"device,omitempty"`
+	FlashTest                                                                                 *FlashTestStatus                `json:"flashTest,omitempty"`
+	Health                                                                                    *TelemetryHealth                `json:"health,omitempty"`
+	Integrations                                                                              *TelemetryIntegrations          `json:"integrations,omitempty"`
+	// Status of the wired interfaces (by name, eth1...), the wireless and the mobile network,                                
+	// as in the network status websocket. Read every 10 s at most.                                                           
+	Network                                                                                   *TelemetryNetwork               `json:"network,omitempty"`
+	Processing                                                                                *ProcessingStatistics           `json:"processing,omitempty"`
+	Resources                                                                                 *TelemetryResources             `json:"resources,omitempty"`
+	// systemd units by name (camera-daemon, webapp, records, redis, media-server), those                                     
+	// present on the model                                                                                                   
+	Services                                                                                  map[string]TelemetryService     `json:"services,omitempty"`
+	// When it was read, ISO 8601 UTC                                                                                         
+	Timestamp                                                                                 *string                         `json:"timestamp,omitempty"`
+	// Format version; fields are only added within a version                                                                 
+	Version                                                                                   *int64                          `json:"version,omitempty"`
+}
+
+type TelemetryCamera struct {
+	// Camera service initialization failures, by error type                        
+	FailureCounts                                           map[string]int64        `json:"failureCounts,omitempty"`
+	FPS                                                     *TelemetryCameraFPS     `json:"fps,omitempty"`
+	// Whether the camera delivers images                                           
+	PipelineReady                                           *bool                   `json:"pipelineReady,omitempty"`
+	Profile                                                 *TelemetryCameraProfile `json:"profile,omitempty"`
+	// Whether the camera service answered                                          
+	Reachable                                               *bool                   `json:"reachable,omitempty"`
+}
+
+type TelemetryCameraFPS struct {
+	Mjpeg *float64 `json:"mjpeg,omitempty"`
+}
+
+type TelemetryCameraProfile struct {
+	ID   *int64  `json:"id,omitempty"`
+	Name *string `json:"name,omitempty"`
+}
+
+type TelemetryConnections struct {
+	Clients []TelemetryClient `json:"clients,omitempty"`
+	Count   *int64            `json:"count,omitempty"`
+}
+
+type TelemetryClient struct {
+	IP                                   *string `json:"ip,omitempty"`
+	Port                                 *int64  `json:"port,omitempty"`
+	// Unix time it connected, in seconds        
+	Since                                *int64  `json:"since,omitempty"`
+}
+
+type TelemetryDevice struct {
+	// itscam450, itscam600, itscam        
+	Family                         *string `json:"family,omitempty"`
+	FirmwareVersion                *string `json:"firmwareVersion,omitempty"`
+	Model                          *string `json:"model,omitempty"`
+}
+
+// Every intervalMinutes, while no triggers come in (or after five intervals skipped in a
+// row, as on constant trigger), the camera takes three diagnostic captures (without, with
+// and without flash) that no client receives, and measures the light one flash output of
+// the current profile adds. Each output's status comes from its recent conclusive runs, and
+// its confidence (0 to 1) grows with agreeing runs and fades a day after the last one.
+type FlashTestStatus struct {
+	Confidence                                                           *float64           `json:"confidence,omitempty"`
+	Enabled                                                              *bool              `json:"enabled,omitempty"`
+	IntervalMinutes                                                      *int64             `json:"intervalMinutes,omitempty"`
+	LastAttempt                                                          *FlashTestAttempt  `json:"lastAttempt,omitempty"`
+	Outputs                                                              []FlashTestOutput  `json:"outputs,omitempty"`
+	// Worst status of the outputs tested (ok, degraded, failed, unknown)                   
+	Status                                                               *string            `json:"status,omitempty"`
+	Warnings                                                             []FlashTestWarning `json:"warnings,omitempty"`
+}
+
+// Last test, or why the last scheduled one was skipped (FlashTestRun fields when it ran)
+type FlashTestAttempt struct {
+	Delta                                                        *float64 `json:"delta,omitempty"`
+	Out                                                          *int64   `json:"out,omitempty"`
+	// pass, weak, fail, inconclusive                                     
+	Outcome                                                      *string  `json:"outcome,omitempty"`
+	Reason                                                       *string  `json:"reason,omitempty"`
+	// pipelineNotReady, busy, noFlashInProfile or irFilterClosed         
+	Skipped                                                      *string  `json:"skipped,omitempty"`
+	Time                                                         *int64   `json:"time,omitempty"`
+}
+
+type FlashTestOutput struct {
+	Baseline                        *FlashTestBaseline `json:"baseline,omitempty"`
+	Confidence                      *float64           `json:"confidence,omitempty"`
+	LastConclusiveRun               *FlashTestRun      `json:"lastConclusiveRun,omitempty"`
+	LastRun                         *FlashTestRun      `json:"lastRun,omitempty"`
+	Out                             *int64             `json:"out,omitempty"`
+	// ok, degraded, failed, unknown                   
+	Status                          *string            `json:"status,omitempty"`
+}
+
+// Light the output adds at one exposure, learned from its passing runs
+type FlashTestBaseline struct {
+	Delta   *float64 `json:"delta,omitempty"`
+	Gain    *int64   `json:"gain,omitempty"`
+	Power   *int64   `json:"power,omitempty"`
+	Runs    *int64   `json:"runs,omitempty"`
+	Shutter *int64   `json:"shutter,omitempty"`
+}
+
+// One test of a flash output
+type FlashTestRun struct {
+	// Mean luma without flash                                                                  
+	Ambient                                                                            *float64 `json:"ambient,omitempty"`
+	// Luma (0-255) the flash added                                                             
+	Delta                                                                              *float64 `json:"delta,omitempty"`
+	// Gain, in millibels                                                                       
+	Gain                                                                               *int64   `json:"gain,omitempty"`
+	// Luma difference between the captures without flash                                       
+	Noise                                                                              *float64 `json:"noise,omitempty"`
+	// Flash output, as in the profiles                                                         
+	Out                                                                                *int64   `json:"out,omitempty"`
+	// pass, weak, fail, inconclusive                                                           
+	Outcome                                                                            *string  `json:"outcome,omitempty"`
+	// Flash power, in percent                                                                  
+	Power                                                                              *int64   `json:"power,omitempty"`
+	// Why it was inconclusive (motion, saturated, ambient, noise, weakSignal, capture,         
+	// flashNotApplied)                                                                         
+	Reason                                                                             *string  `json:"reason,omitempty"`
+	// Shutter, in microseconds                                                                 
+	Shutter                                                                            *int64   `json:"shutter,omitempty"`
+	// Unix time, in seconds                                                                    
+	Time                                                                               *int64   `json:"time,omitempty"`
+	// Part of the image that neither moved nor saturated                                       
+	UsableFraction                                                                     *float64 `json:"usableFraction,omitempty"`
+}
+
+// Flash configuration that looks wrong (not a failure)
+type FlashTestWarning struct {
+	// noFlashConfigured, flashWithIrFilterClosed, flashOutputCannotFlash, flashOutputNotFlash,        
+	// irPassWithoutFlash                                                                              
+	ID                                                                                         *string `json:"id,omitempty"`
+	Out                                                                                        *int64  `json:"out,omitempty"`
+	Profile                                                                                    *int64  `json:"profile,omitempty"`
+	ProfileName                                                                                *string `json:"profileName,omitempty"`
+	// warning, info                                                                                   
+	Severity                                                                                   *string `json:"severity,omitempty"`
+}
+
+type TelemetryHealth struct {
+	Issues                                                               []TelemetryHealthIssue `json:"issues,omitempty"`
+	// Most severe issue; info issues leave it ok (ok, warning, critical)                       
+	Status                                                               *string                `json:"status,omitempty"`
+}
+
+// Something that needs attention: id, severity and message, plus the details of its kind.
+type TelemetryHealthIssue struct {
+	// restApiClientError                                                                                
+	ClientID                                                                                    *int64   `json:"clientId,omitempty"`
+	// restApiClientError                                                                                
+	Code                                                                                        *int64   `json:"code,omitempty"`
+	// flashFailed, flashDegraded                                                                        
+	Confidence                                                                                  *float64 `json:"confidence,omitempty"`
+	// storageFull (disk or sdCard)                                                                      
+	Device                                                                                      *string  `json:"device,omitempty"`
+	// cameraServiceDown, cameraServiceUnreachable, cameraServiceInitError, pipelineNotReady,            
+	// serviceDown, storageFull, memoryHigh, flashFailed, flashDegraded, itscamproDisconnected,          
+	// linceLoginFailed, restApiClientError, or a flash configuration warning                            
+	// (noFlashConfigured, flashWithIrFilterClosed, flashOutputCannotFlash, flashOutputNotFlash,         
+	// irPassWithoutFlash)                                                                               
+	ID                                                                                          string   `json:"id"`
+	// English text, for logs; use id to show it                                                         
+	Message                                                                                     string   `json:"message"`
+	// Flash output (flash issues and warnings)                                                          
+	Out                                                                                         *int64   `json:"out,omitempty"`
+	// Flash configuration warnings                                                                      
+	Profile                                                                                     *int64   `json:"profile,omitempty"`
+	// Flash configuration warnings                                                                      
+	ProfileName                                                                                 *string  `json:"profileName,omitempty"`
+	// serviceDown                                                                                       
+	Service                                                                                     *string  `json:"service,omitempty"`
+	// info, warning, critical                                                                           
+	Severity                                                                                    string   `json:"severity"`
+	// itscamproDisconnected, linceLoginFailed                                                           
+	Status                                                                                      *string  `json:"status,omitempty"`
+	// storageFull, memoryHigh                                                                           
+	UsedPct                                                                                     *float64 `json:"usedPct,omitempty"`
+}
+
+type TelemetryIntegrations struct {
+	Itscampro      *TelemetryIntegration    `json:"itscampro,omitempty"`
+	Lince          *TelemetryIntegration    `json:"lince,omitempty"`
+	RESTAPIClients []TelemetryRESTAPIClient `json:"restApiClients,omitempty"`
+}
+
+// Null when the service doesn't run on this camera
+type TelemetryIntegration struct {
+	Enabled                                                                             *bool   `json:"enabled,omitempty"`
+	// ITSCAM PRO: CONNECTED, CONNECT_START, DISCONNECTED, DISCONNECT_START, DISABLED or        
+	// UNKNOWN. Lince: loginSuccess, notInitialized, loginError, discoveryError or              
+	// undefinedError.                                                                          
+	Status                                                                              *string `json:"status,omitempty"`
+}
+
+type TelemetryRESTAPIClient struct {
+	// 0 when fine, 1 template error, 2 request error          
+	Code                                               *int64  `json:"code,omitempty"`
+	DiskUsage                                          *int64  `json:"diskUsage,omitempty"`
+	Enabled                                            *bool   `json:"enabled,omitempty"`
+	// Requests saved to disk, waiting to be sent again        
+	FileCount                                          *int64  `json:"fileCount,omitempty"`
+	ID                                                 *int64  `json:"id,omitempty"`
+	Message                                            *string `json:"message,omitempty"`
+}
+
+// Status of the wired interfaces (by name, eth1...), the wireless and the mobile network,
+// as in the network status websocket. Read every 10 s at most.
+type TelemetryNetwork struct {
+	Mobile map[string]interface{} `json:"mobile,omitempty"`
+	Wifi   map[string]interface{} `json:"wifi,omitempty"`
+	Wired  map[string]interface{} `json:"wired,omitempty"`
+}
+
+// Captures processed in the last 10, 30 and 60 minutes. A capture is one trigger or
+// snapshot request, counted once: its plates are the distinct texts OCR read across its
+// exposures, its objects the classifier detections of the exposure with most of them.
+type ProcessingStatistics struct {
+	Last10Minutes *ProcessingStatisticsWindow `json:"last10Minutes,omitempty"`
+	Last30Minutes *ProcessingStatisticsWindow `json:"last30Minutes,omitempty"`
+	Last60Minutes *ProcessingStatisticsWindow `json:"last60Minutes,omitempty"`
+}
+
+type ProcessingStatisticsWindow struct {
+	// Part of the window the camera service ran                    
+	CoveredSeconds                              *int64              `json:"coveredSeconds,omitempty"`
+	Seconds                                     *int64              `json:"seconds,omitempty"`
+	Snapshot                                    *ProcessingCounters `json:"snapshot,omitempty"`
+	Total                                       *ProcessingCounters `json:"total,omitempty"`
+	Trigger                                     *ProcessingCounters `json:"trigger,omitempty"`
+}
+
+type ProcessingCounters struct {
+	Captures                                          *int64   `json:"captures,omitempty"`
+	CapturesWithPlates                                *int64   `json:"capturesWithPlates,omitempty"`
+	// Classifier detections, summed over the captures         
+	Objects                                           *int64   `json:"objects,omitempty"`
+	// Mean OCR time per exposure, null without OCR            
+	OcrAverageMS                                      *float64 `json:"ocrAverageMs,omitempty"`
+	// Distinct plates read, summed over the captures          
+	Plates                                            *int64   `json:"plates,omitempty"`
+}
+
+type TelemetryResources struct {
+	CPU     *TelemetryCPU     `json:"cpu,omitempty"`
+	// Bytes                  
+	Memory  *TelemetryMemory  `json:"memory,omitempty"`
+	Storage *TelemetryStorage `json:"storage,omitempty"`
+	Uptime  *TelemetryUptime  `json:"uptime,omitempty"`
+}
+
+type TelemetryCPU struct {
+	// 1, 5 and 15 minutes                                                       
+	LoadAverage                                                        []float64 `json:"loadAverage,omitempty"`
+	// Celsius                                                                   
+	Temperature                                                        *float64  `json:"temperature,omitempty"`
+	// Percent of all cores, since the previous reading (a few seconds)          
+	Usage                                                              *float64  `json:"usage,omitempty"`
+}
+
+// Bytes
+type TelemetryMemory struct {
+	RAM  *TelemetryMemoryRAM  `json:"ram,omitempty"`
+	Swap *TelemetryMemorySwap `json:"swap,omitempty"`
+}
+
+type TelemetryMemoryRAM struct {
+	Total   *int64   `json:"total,omitempty"`
+	Used    *int64   `json:"used,omitempty"`
+	UsedPct *float64 `json:"usedPct,omitempty"`
+}
+
+type TelemetryMemorySwap struct {
+	Total   *int64   `json:"total,omitempty"`
+	Used    *int64   `json:"used,omitempty"`
+	UsedPct *float64 `json:"usedPct,omitempty"`
+}
+
+type TelemetryStorage struct {
+	Disk   *TelemetryStorageDevice `json:"disk,omitempty"`
+	SDCard *TelemetryStorageDevice `json:"sdCard,omitempty"`
+}
+
+type TelemetryStorageDevice struct {
+	Device                         *string  `json:"device,omitempty"`
+	MountPoint                     *string  `json:"mountPoint,omitempty"`
+	// Bytes                                
+	Total                          *int64   `json:"total,omitempty"`
+	// Bytes, null when not mounted         
+	Used                           *int64   `json:"used,omitempty"`
+	UsedPct                        *float64 `json:"usedPct,omitempty"`
+}
+
+type TelemetryUptime struct {
+	// Unix time, in seconds       
+	LastBoot                *int64 `json:"lastBoot,omitempty"`
+	Seconds                 *int64 `json:"seconds,omitempty"`
+}
+
+type TelemetryService struct {
+	// systemd active state (active, activating, failed, inactive...)               
+	Active                                                                  *string `json:"active,omitempty"`
+	// Started at boot; the others start on demand (media-server, by socket)        
+	Enabled                                                                 *bool   `json:"enabled,omitempty"`
+	// camera-daemon only, empty when it started fine                               
+	InitializationError                                                     *string `json:"initializationError,omitempty"`
+	// Automatic restarts since boot                                                
+	Restarts                                                                *int64  `json:"restarts,omitempty"`
+	// Unix time it became active, in seconds                                       
+	Since                                                                   *int64  `json:"since,omitempty"`
+	Sub                                                                     *string `json:"sub,omitempty"`
 }
 
 type Mode string
