@@ -11,9 +11,15 @@
  */
 
 #include "itscam_rest_client.h"
+#include "impl/itscam_callback_queue.h"
 #include "impl/itscam_http_transport.h"
+#include "itscam_os.h"
 
+#include <algorithm>
+#include <atomic>
+#include <chrono>
 #include <exception>
+#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
@@ -22,6 +28,10 @@ namespace itscam {
 
 using json      = nlohmann::json;
 using Transport = detail::HttpTransport;
+using Thread    = os::Thread;
+using Mutex     = os::Mutex;
+template<typename M> using LockGuard  = os::LockGuard<M>;
+template<typename M> using UniqueLock = os::UniqueLock<M>;
 namespace rt    = rest_types;
 
 namespace {
@@ -42,6 +52,200 @@ Result<T> mapTyped(Result<json>&& raw) {
     }
 }
 
+//=========================================================================
+// Telemetry stream
+//=========================================================================
+
+// Pushed by the camera every 5 s; the stream path asks for exactly the
+// GET /system/telemetry document
+const char kTelemetryStreamPath[] = "/statusws?format=telemetry";
+
+// Waits before reconnecting: doubles from the first up to the last
+const uint32_t kTelemetryReconnectMinMs = 1000;
+const uint32_t kTelemetryReconnectMaxMs = 30000;
+
+int64_t unixTimeMs() {
+    return std::chrono::duration_cast<std::chrono::milliseconds>(
+               std::chrono::system_clock::now().time_since_epoch())
+        .count();
+}
+
+/// The user's log handler, called through a callback queue by threads that
+/// may outlive the client
+struct LogSlot {
+    Mutex mtx;
+    std::function<void(LogLevel, const std::string&)> handler;
+
+    std::function<void(LogLevel, const std::string&)> get() {
+        LockGuard<Mutex> lk(mtx);
+        return handler;
+    }
+};
+
+/// The last telemetry document received, kept after the stream stops
+struct LatestTelemetry {
+    Mutex           mtx;
+    bool            has = false;
+    TelemetryUpdate update;
+};
+
+/// One telemetry stream and its thread, which connects, reads and
+/// reconnects.  As the MJPEG stream of ItscamCgiClient, the thread only
+/// queues callbacks on the client's callback queue, so it never runs user
+/// code and any thread may join it.  The thread and each queued callback
+/// hold a reference to the worker.
+class TelemetryStreamWorker
+    : public std::enable_shared_from_this<TelemetryStreamWorker> {
+public:
+    TelemetryStreamWorker(std::shared_ptr<Transport> transport,
+                          std::shared_ptr<detail::CallbackQueue> callbacks,
+                          std::shared_ptr<LogSlot> logSlot,
+                          std::shared_ptr<LatestTelemetry> latest,
+                          std::string path, uint32_t timeoutMs,
+                          TelemetryCallback userCallback)
+        : mTransport(std::move(transport))
+        , mCallbacks(std::move(callbacks))
+        , mLogSlot(std::move(logSlot))
+        , mLatest(std::move(latest))
+        , mPath(std::move(path))
+        , mTimeoutMs(timeoutMs)
+        , mUserCallback(std::move(userCallback))
+    {}
+
+    Result<void> start() {
+        mRunning = true;
+        auto self = shared_from_this();
+        mThread = Thread([self]() { self->run(); });
+        if (!mThread.joinable()) {
+            mRunning = false;
+            return Error{Error::Unknown,
+                         "failed to start the telemetry stream thread"};
+        }
+        return Result<void>::success();
+    }
+
+    /// Ask the stream to end.  No document is delivered afterwards, not
+    /// even one already queued.  Never waits: join() ends the connection.
+    void requestStop() {
+        {
+            LockGuard<Mutex> lk(mWaitMtx);
+            mShouldStop = true;
+        }
+        mWaitCv.notifyAll();
+    }
+
+    /// End the connection and wait for the stream thread to exit.  Several
+    /// threads may wait at once.
+    void join() {
+        mCancel.cancel();
+        LockGuard<Mutex> lk(mJoinMtx);
+        if (mThread.joinable()) mThread.join();
+    }
+
+    bool isRunning() const { return mRunning.load() && !mShouldStop.load(); }
+    bool isConnected() const { return mConnected.load(); }
+
+private:
+    void run() {
+        uint32_t reconnectMs = kTelemetryReconnectMinMs;
+        uint64_t sequence = 0;
+        bool warnedFormat = false;
+
+        while (!mShouldStop.load()) {
+            bool received = false;
+            auto res = mTransport->webSocket(
+                mPath, mTimeoutMs,
+                [this]() {
+                    mConnected = true;
+                    log(LogLevel::Info, "Telemetry stream connected");
+                },
+                [&](const std::string& message) -> bool {
+                    if (mShouldStop.load()) return false;
+                    json document = json::parse(message, nullptr, false);
+                    if (!document.is_object() || !document.contains("version")) {
+                        // Firmware without the system telemetry pushes only
+                        // the web interface's status
+                        if (!warnedFormat) {
+                            warnedFormat = true;
+                            log(LogLevel::Error,
+                                "Telemetry stream: the camera sends no telemetry "
+                                "(firmware without GET /api/system/telemetry?)");
+                        }
+                        return true;
+                    }
+                    received = true;
+                    TelemetryUpdate update;
+                    update.sequence     = ++sequence;
+                    update.receivedAtMs = unixTimeMs();
+                    update.document     = std::move(document);
+                    deliver(std::move(update), message.size());
+                    return !mShouldStop.load();
+                },
+                mCancel);
+            mConnected = false;
+            if (mShouldStop.load()) break;
+
+            if (received) reconnectMs = kTelemetryReconnectMinMs;
+            log(LogLevel::Error,
+                "Telemetry stream: " +
+                    (res ? std::string("closed") : res.error().message) +
+                    "; reconnecting in " + std::to_string(reconnectMs) + " ms");
+            {
+                UniqueLock<Mutex> lk(mWaitMtx);
+                mWaitCv.waitFor(lk, reconnectMs,
+                                [this]() { return mShouldStop.load(); });
+            }
+            reconnectMs = std::min(reconnectMs * 2, kTelemetryReconnectMaxMs);
+        }
+        mConnected = false;
+        mRunning = false;
+    }
+
+    // Kept as the latest, then queued for the callback; a callback that
+    // falls behind gets the latest documents
+    void deliver(TelemetryUpdate update, size_t bytes) {
+        {
+            LockGuard<Mutex> lk(mLatest->mtx);
+            mLatest->update = update;
+            mLatest->has = true;
+        }
+        if (!mUserCallback || mShouldStop.load()) return;
+        mCallbacks->post(
+            [self = shared_from_this(), update = std::move(update)]() {
+                if (!self->mShouldStop.load() && self->mUserCallback) {
+                    self->mUserCallback(update);
+                }
+            },
+            bytes, detail::CallbackQueue::Kind::Frame);
+    }
+
+    // Logs run on the callback queue too, never on the stream thread
+    void log(LogLevel lvl, const std::string& msg) {
+        if (!mLogSlot->get()) return;
+        std::shared_ptr<LogSlot> slot = mLogSlot;
+        mCallbacks->post([slot, lvl, msg]() {
+            auto handler = slot->get();
+            if (handler) handler(lvl, msg);
+        }, msg.size(), detail::CallbackQueue::Kind::Event);
+    }
+
+    std::shared_ptr<Transport>             mTransport;
+    std::shared_ptr<detail::CallbackQueue> mCallbacks;
+    std::shared_ptr<LogSlot>               mLogSlot;
+    std::shared_ptr<LatestTelemetry>       mLatest;
+    std::string                            mPath;
+    uint32_t                               mTimeoutMs;
+    TelemetryCallback                      mUserCallback;
+    Transport::StreamCancel                mCancel;
+    Thread                                 mThread;
+    Mutex                                  mJoinMtx;   // a second join() waits for the first
+    Mutex                                  mWaitMtx;   // reconnection wait
+    os::ConditionVariable                  mWaitCv;
+    std::atomic<bool>                      mRunning{false};
+    std::atomic<bool>                      mConnected{false};
+    std::atomic<bool>                      mShouldStop{false};
+};
+
 }  // namespace
 
 //=========================================================================
@@ -50,8 +254,58 @@ Result<T> mapTyped(Result<json>&& raw) {
 
 struct ItscamRestClient::Impl {
 
-    Transport   transport;
+    // Shared with the telemetry stream thread, which may outlive a call
+    std::shared_ptr<Transport> transport = std::make_shared<Transport>();
     std::string apiPrefix = "/api";
+
+    // Telemetry and stream log callbacks run on the shared callback pool
+    // (see CallbackQueue), never on the stream thread.  Request logs still
+    // run on the calling thread.
+    std::shared_ptr<detail::CallbackQueue> callbacks =
+        detail::CallbackQueue::create();
+    std::shared_ptr<LogSlot>         logSlot = std::make_shared<LogSlot>();
+    std::shared_ptr<LatestTelemetry> latest  = std::make_shared<LatestTelemetry>();
+
+    // A telemetry callback may start or stop the stream while another
+    // thread uses the client.
+    mutable Mutex                          streamMtx;
+    std::shared_ptr<TelemetryStreamWorker> telemetryWorker;
+
+    Impl() {
+        std::shared_ptr<LogSlot> slot = logSlot;
+        callbacks->setDropReporter([slot](uint64_t dropped) {
+            auto handler = slot->get();
+            if (handler) {
+                handler(LogLevel::Error,
+                        "Callbacks fell behind: " + std::to_string(dropped) +
+                        " events dropped");
+            }
+        });
+    }
+
+    ~Impl() {
+        stopTelemetryStream();
+        // Destroyed from a callback, that one runs on: the queue only drops
+        // the others
+        callbacks->close();
+    }
+
+    // Stops the stream.  Once this returns no telemetry callback runs,
+    // unless it is called from one, which then runs on.
+    void stopTelemetryStream() {
+        std::shared_ptr<TelemetryStreamWorker> worker;
+        {
+            LockGuard<Mutex> lk(streamMtx);
+            worker = std::move(telemetryWorker);
+            // Under streamMtx: a concurrent stop that finds no worker must
+            // find this one's documents already cancelled
+            if (worker) worker->requestStop();
+        }
+        // Without streamMtx: ending the connection may wait for a connection
+        // attempt, and the next stream may start meanwhile
+        if (worker) worker->join();
+        callbacks->waitForCallback();
+    }
 
     /// Parse the body of an HttpResponse as JSON, falling back to a string
     /// JSON value when the body is not valid JSON.  Empty bodies become
@@ -99,7 +353,7 @@ struct ItscamRestClient::Impl {
         detail::HttpRequest req;
         req.method = "GET";
         req.path   = path;
-        return mapResponse(transport.request(req, timeoutMs), "GET", path);
+        return mapResponse(transport->request(req, timeoutMs), "GET", path);
     }
 
     Result<json> doPut(const std::string& path, const json& body,
@@ -109,7 +363,7 @@ struct ItscamRestClient::Impl {
         req.path        = path;
         req.body        = body.dump();
         req.contentType = "application/json";
-        return mapResponse(transport.request(req, timeoutMs), "PUT", path);
+        return mapResponse(transport->request(req, timeoutMs), "PUT", path);
     }
 
     Result<json> doPost(const std::string& path, const json& body,
@@ -119,14 +373,14 @@ struct ItscamRestClient::Impl {
         req.path        = path;
         req.body        = body.dump();
         req.contentType = "application/json";
-        return mapResponse(transport.request(req, timeoutMs), "POST", path);
+        return mapResponse(transport->request(req, timeoutMs), "POST", path);
     }
 
     Result<json> doDelete(const std::string& path, uint32_t timeoutMs) {
         detail::HttpRequest req;
         req.method = "DELETE";
         req.path   = path;
-        return mapResponse(transport.request(req, timeoutMs), "DELETE", path);
+        return mapResponse(transport->request(req, timeoutMs), "DELETE", path);
     }
 };
 
@@ -147,7 +401,7 @@ ItscamRestClient& ItscamRestClient::operator=(ItscamRestClient&&) noexcept
 
 void ItscamRestClient::setBaseUrl(const std::string& host, uint16_t port,
                                   const std::string& scheme) {
-    mImpl->transport.setBaseUrl(host, port, scheme);
+    mImpl->transport->setBaseUrl(host, port, scheme);
 }
 
 //=========================================================================
@@ -155,20 +409,20 @@ void ItscamRestClient::setBaseUrl(const std::string& host, uint16_t port,
 //=========================================================================
 
 void ItscamRestClient::setCaCertFile(const std::string& pemPath) {
-    mImpl->transport.setCaCertFile(pemPath);
+    mImpl->transport->setCaCertFile(pemPath);
 }
 
 void ItscamRestClient::setCaCertData(const std::string& pem) {
-    mImpl->transport.setCaCertData(pem);
+    mImpl->transport->setCaCertData(pem);
 }
 
 void ItscamRestClient::setVerifyServerCertificate(bool verify) {
-    mImpl->transport.setVerifyServerCertificate(verify);
+    mImpl->transport->setVerifyServerCertificate(verify);
 }
 
 void ItscamRestClient::setClientCertificate(const std::string& certPem,
                                             const std::string& keyPem) {
-    mImpl->transport.setClientCertificate(certPem, keyPem);
+    mImpl->transport->setClientCertificate(certPem, keyPem);
 }
 
 //=========================================================================
@@ -190,9 +444,9 @@ Result<nlohmann::json> ItscamRestClient::login(const std::string& username,
     if (result) {
         const auto& body = result.value();
         if (body.is_object() && body.contains("token")) {
-            mImpl->transport.setBearerToken(
+            mImpl->transport->setBearerToken(
                 body["token"].get<std::string>());
-            mImpl->transport.log(LogLevel::Info,
+            mImpl->transport->log(LogLevel::Info,
                                  "Authenticated as '" + username + "'");
         }
     }
@@ -200,11 +454,11 @@ Result<nlohmann::json> ItscamRestClient::login(const std::string& username,
 }
 
 void ItscamRestClient::setAuthToken(const std::string& token) {
-    mImpl->transport.setBearerToken(token);
+    mImpl->transport->setBearerToken(token);
 }
 
 void ItscamRestClient::clearAuthToken() {
-    mImpl->transport.clearBearerToken();
+    mImpl->transport->clearBearerToken();
 }
 
 //=========================================================================
@@ -622,6 +876,69 @@ Result<rt::Licenses> ItscamRestClient::getLicenses(uint32_t timeoutMs) {
 }
 
 //=========================================================================
+// System telemetry
+//=========================================================================
+
+Result<rt::SystemTelemetry> TelemetryUpdate::telemetry() const {
+    return mapTyped<rt::SystemTelemetry>(Result<json>(document));
+}
+
+Result<rt::SystemTelemetry> ItscamRestClient::getSystemTelemetry(
+    uint32_t timeoutMs) {
+    return mapTyped<rt::SystemTelemetry>(
+        mImpl->doGet(mImpl->apiPrefix + "/system/telemetry", timeoutMs));
+}
+
+Result<void> ItscamRestClient::startTelemetryStream(TelemetryCallback callback,
+                                                    uint32_t timeoutMs) {
+    // Never waits for a telemetry callback: the caller may hold a lock that
+    // they need.
+    std::shared_ptr<TelemetryStreamWorker> ended;
+    Result<void> started;
+    {
+        LockGuard<Mutex> lk(mImpl->streamMtx);
+        if (mImpl->telemetryWorker) {
+            if (mImpl->telemetryWorker->isRunning()) {
+                return Error{Error::InvalidParameter,
+                             "telemetry stream already running"};
+            }
+            ended = std::move(mImpl->telemetryWorker);
+            ended->requestStop();
+        }
+        auto worker = std::make_shared<TelemetryStreamWorker>(
+            mImpl->transport, mImpl->callbacks, mImpl->logSlot, mImpl->latest,
+            mImpl->apiPrefix + kTelemetryStreamPath, timeoutMs,
+            std::move(callback));
+        started = worker->start();
+        if (started) mImpl->telemetryWorker = std::move(worker);
+    }
+    if (ended) ended->join();
+    return started;
+}
+
+void ItscamRestClient::stopTelemetryStream() {
+    mImpl->stopTelemetryStream();
+}
+
+bool ItscamRestClient::isTelemetryStreamRunning() const {
+    LockGuard<Mutex> lk(mImpl->streamMtx);
+    return mImpl->telemetryWorker && mImpl->telemetryWorker->isRunning();
+}
+
+bool ItscamRestClient::isTelemetryStreamConnected() const {
+    LockGuard<Mutex> lk(mImpl->streamMtx);
+    return mImpl->telemetryWorker && mImpl->telemetryWorker->isConnected();
+}
+
+Result<TelemetryUpdate> ItscamRestClient::latestTelemetry() const {
+    LockGuard<Mutex> lk(mImpl->latest->mtx);
+    if (!mImpl->latest->has) {
+        return Error{Error::Disconnected, "no telemetry received yet"};
+    }
+    return mImpl->latest->update;
+}
+
+//=========================================================================
 // Generic HTTP methods
 //=========================================================================
 
@@ -667,7 +984,11 @@ std::string ItscamRestClient::apiPrefix() const {
 
 void ItscamRestClient::setLogHandler(
     std::function<void(LogLevel, const std::string&)> cb) {
-    mImpl->transport.setLogHandler(std::move(cb));
+    {
+        LockGuard<Mutex> lk(mImpl->logSlot->mtx);
+        mImpl->logSlot->handler = cb;
+    }
+    mImpl->transport->setLogHandler(std::move(cb));
 }
 
 } // namespace itscam

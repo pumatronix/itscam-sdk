@@ -42,7 +42,14 @@ typedef struct ITSCAM_String ITSCAM_String;
 /// Allocate a new REST client.  Returns NULL on out-of-memory.
 ITSCAM_C_API ITSCAM_RestClient* ITSCAM_RestClient_create(void);
 
-/// Free a REST client.  Safe to call with NULL.
+/**
+ * @brief Stop the telemetry stream (see ITSCAM_RestClient_stopTelemetryStream)
+ * and free the client.  Safe to call with NULL.
+ *
+ * Returns once no callback of this client is running or can still start.
+ * May be called from a telemetry callback: it then does not wait for that
+ * callback, which runs on.
+ */
 ITSCAM_C_API void ITSCAM_RestClient_destroy(ITSCAM_RestClient* client);
 
 /* ============================================================================
@@ -227,7 +234,84 @@ ITSCAM_C_API ITSCAM_ErrorCode ITSCAM_RestClient_getItscamproStatus(
     ITSCAM_String** outResponse);
 
 /* ============================================================================
+ *  System telemetry
+ *    GET       /api/system/telemetry            (read it once)
+ *    WebSocket /api/statusws?format=telemetry   (pushed every 5 s)
+ *  Both carry the same JSON document.  Requires firmware with SW6XX-2976.
+ * ============================================================================ */
+
+/** One telemetry document pushed by the camera. */
+typedef struct ITSCAM_TelemetryUpdate {
+    uint64_t    sequence;      /* 1 for the stream's first document, then +1 */
+    int64_t     receivedAtMs;  /* Unix time it arrived, in milliseconds */
+    const char* json;          /* UTF-8 JSON, NUL-terminated; valid for the
+                                  duration of the callback */
+    size_t      jsonLen;
+} ITSCAM_TelemetryUpdate;
+
+typedef void (*ITSCAM_TelemetryCallback)(
+    const ITSCAM_TelemetryUpdate* update, void* userData);
+
+/** GET /api/system/telemetry: *outResponse receives the JSON document. */
+ITSCAM_C_API ITSCAM_ErrorCode ITSCAM_RestClient_getSystemTelemetry(
+    ITSCAM_RestClient* client, uint32_t timeoutMs,
+    ITSCAM_String** outResponse);
+
+/**
+ * @brief Receive the telemetry the camera pushes: one document at once, then
+ * one every 5 s.
+ *
+ * The stream runs on its own thread and reconnects by itself (1 s, doubling
+ * up to 30 s) with the client's current authentication.  @p callback runs
+ * on the SDK's callback pool, never on that thread; do not block in it.  One
+ * that falls behind gets the latest documents.  It may stop or restart the
+ * stream, or destroy the client.  @p callback may be NULL: the stream then
+ * only keeps the latest document (ITSCAM_RestClient_latestTelemetry).
+ *
+ * @param timeoutMs  Silence after which the connection is dropped and
+ *                   reopened (0 selects 15000).
+ */
+ITSCAM_C_API ITSCAM_ErrorCode ITSCAM_RestClient_startTelemetryStream(
+    ITSCAM_RestClient* client,
+    ITSCAM_TelemetryCallback callback,
+    void* userData,
+    uint32_t timeoutMs);
+
+/**
+ * @brief Stop the telemetry stream.
+ *
+ * Returns once no telemetry callback of this client runs any more: no
+ * document follows, not even one already queued.  No telemetry callback may
+ * wait for the calling thread.  Called from a telemetry callback, it does
+ * not wait for that callback, and a new stream may be started right away.
+ */
+ITSCAM_C_API void ITSCAM_RestClient_stopTelemetryStream(
+    ITSCAM_RestClient* client);
+
+/** 1 from start until stop. */
+ITSCAM_C_API int ITSCAM_RestClient_isTelemetryStreamRunning(
+    ITSCAM_RestClient* client);
+
+/** 1 while the stream is connected to the camera. */
+ITSCAM_C_API int ITSCAM_RestClient_isTelemetryStreamConnected(
+    ITSCAM_RestClient* client);
+
+/**
+ * @brief The last document the stream received, also after it stopped.
+ *
+ * Returns ITSCAM_ERROR_DISCONNECTED before the first one.  @p outSequence and
+ * @p outReceivedAtMs may be NULL.
+ */
+ITSCAM_C_API ITSCAM_ErrorCode ITSCAM_RestClient_latestTelemetry(
+    ITSCAM_RestClient* client,
+    uint64_t* outSequence,
+    int64_t* outReceivedAtMs,
+    ITSCAM_String** outJson);
+
+/* ============================================================================
  *  Logging
+ *  Telemetry stream logs run on the SDK's callback pool; request logs on the
+ *  calling thread.
  * ============================================================================ */
 
 ITSCAM_C_API void ITSCAM_RestClient_onLog(
