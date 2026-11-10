@@ -41,6 +41,28 @@ import SwaggerParser from "@apidevtools/swagger-parser"
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url))
 const FIXTURES_DIR = path.join(__dirname, "spec", "daemon-fixtures")
 
+// What RestApiClientConfig has on the camera beyond the snapshot; optional,
+// since older firmware doesn't have them
+const REST_API_CLIENT_FIELDS = {
+  auxCameraName: {
+    type: "string",
+    description:
+      "Name of the auxiliary camera whose detections are attached to the request (empty to disable)",
+  },
+  discardStatusCodes: {
+    type: "array",
+    description:
+      "HTTP status codes for which a failed request is discarded right away, without retries and without being persisted for a later resend",
+    items: { type: "integer" },
+  },
+  minSpeed: {
+    type: "integer",
+    description:
+      "Minimum transfer speed in bytes per second before the request is aborted",
+  },
+}
+const REST_API_CLIENT_PART_TYPES = ["json", "xml", "raw", "jpeg", "form-urlencoded"]
+
 function die(message) {
   console.error(`[postprocess] ERROR: ${message}`)
   process.exit(1)
@@ -282,6 +304,35 @@ function applyUpstreamPatches(doc) {
       "Patched TransitionStepConfig.level: integer/int32 -> number/float "
         + "(camera serialises this as a float threshold)."
     )
+  }
+
+  // Patch 3: RestApiClientConfig
+  //
+  // The snapshot predates fields the camera has.  The camera replaces the
+  // whole configuration on PUT, resetting what is left out, so the typed
+  // wrappers must carry them through a get/set.  It also lists only "json"
+  // as a body part type, so a configuration using another one can't be read.
+  const rac = schemas.RestApiClientConfig
+  if (rac?.properties) {
+    const added = Object.keys(REST_API_CLIENT_FIELDS).filter(
+      (name) => !rac.properties[name]
+    )
+    for (const name of added) {
+      rac.properties[name] = REST_API_CLIENT_FIELDS[name]
+    }
+    const partType = rac.properties.body?.properties?.parts?.items?.properties?.type
+    const missingTypes = REST_API_CLIENT_PART_TYPES.filter(
+      (type) => partType?.enum && !partType.enum.includes(type)
+    )
+    if (missingTypes.length > 0) {
+      partType.enum.push(...missingTypes)
+    }
+    if (added.length > 0 || missingTypes.length > 0) {
+      info(
+        `Patched RestApiClientConfig: fields [${added.join(", ")}], `
+          + `body part types [${missingTypes.join(", ")}].`
+      )
+    }
   }
 
   return doc

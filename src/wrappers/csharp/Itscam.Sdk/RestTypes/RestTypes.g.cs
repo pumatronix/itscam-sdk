@@ -1662,8 +1662,24 @@ namespace Pumatronix.Itscam.RestTypes
     /// </summary>
     public partial class RestApiClientConfig
     {
+        /// <summary>
+        /// Name of the auxiliary camera whose detections are attached to the request (empty to
+        /// disable)
+        /// </summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("auxCameraName")]
+        public string AuxCameraName { get; set; }
+
         [JsonPropertyName("body")]
         public Body Body { get; set; }
+
+        /// <summary>
+        /// HTTP status codes for which a failed request is discarded right away, without retries and
+        /// without being persisted for a later resend
+        /// </summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("discardStatusCodes")]
+        public List<long> DiscardStatusCodes { get; set; }
 
         [JsonPropertyName("enabled")]
         public bool Enabled { get; set; }
@@ -1676,6 +1692,13 @@ namespace Pumatronix.Itscam.RestTypes
 
         [JsonPropertyName("method")]
         public Method Method { get; set; }
+
+        /// <summary>
+        /// Minimum transfer speed in bytes per second before the request is aborted
+        /// </summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("minSpeed")]
+        public long? MinSpeed { get; set; }
 
         [JsonPropertyName("persistency")]
         public Persistency Persistency { get; set; }
@@ -2792,7 +2815,7 @@ namespace Pumatronix.Itscam.RestTypes
 
     public enum Mode { Disabled, Fast, Normal, Slow };
 
-    public enum TypeEnum { Json };
+    public enum TypeEnum { FormUrlencoded, Jpeg, Json, Raw, Xml };
 
     public enum Variant { Multipart, Singlepart };
 
@@ -3097,19 +3120,41 @@ namespace Pumatronix.Itscam.RestTypes
         public override TypeEnum Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
         {
             var value = reader.GetString()!;
-            if (value == "json")
+            switch (value)
             {
-                return TypeEnum.Json;
+                case "form-urlencoded":
+                    return TypeEnum.FormUrlencoded;
+                case "jpeg":
+                    return TypeEnum.Jpeg;
+                case "json":
+                    return TypeEnum.Json;
+                case "raw":
+                    return TypeEnum.Raw;
+                case "xml":
+                    return TypeEnum.Xml;
             }
             throw new Exception("Cannot unmarshal type TypeEnum");
         }
 
         public override void Write(Utf8JsonWriter writer, TypeEnum value, JsonSerializerOptions options)
         {
-            if (value == TypeEnum.Json)
+            switch (value)
             {
-                JsonSerializer.Serialize(writer, "json", options);
-                return;
+                case TypeEnum.FormUrlencoded:
+                    JsonSerializer.Serialize(writer, "form-urlencoded", options);
+                    return;
+                case TypeEnum.Jpeg:
+                    JsonSerializer.Serialize(writer, "jpeg", options);
+                    return;
+                case TypeEnum.Json:
+                    JsonSerializer.Serialize(writer, "json", options);
+                    return;
+                case TypeEnum.Raw:
+                    JsonSerializer.Serialize(writer, "raw", options);
+                    return;
+                case TypeEnum.Xml:
+                    JsonSerializer.Serialize(writer, "xml", options);
+                    return;
             }
             throw new Exception("Cannot marshal type TypeEnum");
         }

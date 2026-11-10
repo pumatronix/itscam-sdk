@@ -906,18 +906,26 @@ type IoBasic struct {
 
 // REST API Client service configuration
 type RESTAPIClientConfig struct {
-	Body                   Body        `json:"body"`
-	Enabled                bool        `json:"enabled"`
-	Headers                []Header    `json:"headers"`
-	JPEG                   JPEG        `json:"jpeg"`
-	Method                 Method      `json:"method"`
-	Persistency            Persistency `json:"persistency"`
-	Retries                int64       `json:"retries"`
-	SendIndividualRequests bool        `json:"sendIndividualRequests"`
-	SendWithoutOcr         bool        `json:"sendWithoutOcr"`
-	Timeout                int64       `json:"timeout"`
-	TLS                    TLS         `json:"tls"`
-	URL                    URL         `json:"url"`
+	// Name of the auxiliary camera whose detections are attached to the request (empty to                  
+	// disable)                                                                                             
+	AuxCameraName                                                                               *string     `json:"auxCameraName,omitempty"`
+	Body                                                                                        Body        `json:"body"`
+	// HTTP status codes for which a failed request is discarded right away, without retries and            
+	// without being persisted for a later resend                                                           
+	DiscardStatusCodes                                                                          []int64     `json:"discardStatusCodes,omitempty"`
+	Enabled                                                                                     bool        `json:"enabled"`
+	Headers                                                                                     []Header    `json:"headers"`
+	JPEG                                                                                        JPEG        `json:"jpeg"`
+	Method                                                                                      Method      `json:"method"`
+	// Minimum transfer speed in bytes per second before the request is aborted                             
+	MinSpeed                                                                                    *int64      `json:"minSpeed,omitempty"`
+	Persistency                                                                                 Persistency `json:"persistency"`
+	Retries                                                                                     int64       `json:"retries"`
+	SendIndividualRequests                                                                      bool        `json:"sendIndividualRequests"`
+	SendWithoutOcr                                                                              bool        `json:"sendWithoutOcr"`
+	Timeout                                                                                     int64       `json:"timeout"`
+	TLS                                                                                         TLS         `json:"tls"`
+	URL                                                                                         URL         `json:"url"`
 }
 
 type Body struct {
@@ -1346,7 +1354,11 @@ const (
 type Type string
 
 const (
-	JSON Type = "json"
+	FormUrlencoded Type = "form-urlencoded"
+	JPEGType       Type = "jpeg"
+	JSON           Type = "json"
+	Raw            Type = "raw"
+	XML            Type = "xml"
 )
 
 type Variant string

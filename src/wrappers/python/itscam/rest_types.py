@@ -2402,7 +2402,11 @@ class IoBasic:
 
 
 class TypeEnum(Enum):
+    FORM_URLENCODED = "form-urlencoded"
+    JPEG = "jpeg"
     JSON = "json"
+    RAW = "raw"
+    XML = "xml"
 
 
 @dataclass
@@ -2605,6 +2609,16 @@ class RESTAPIClientConfig:
     timeout: int
     tls: TLS
     url: URL
+    aux_camera_name: Optional[str] = None
+    """Name of the auxiliary camera whose detections are attached to the request (empty to
+    disable)
+    """
+    discard_status_codes: Optional[List[int]] = None
+    """HTTP status codes for which a failed request is discarded right away, without retries and
+    without being persisted for a later resend
+    """
+    min_speed: Optional[int] = None
+    """Minimum transfer speed in bytes per second before the request is aborted"""
 
     @staticmethod
     def from_dict(obj: Any) -> 'RESTAPIClientConfig':
@@ -2621,7 +2635,10 @@ class RESTAPIClientConfig:
         timeout = from_int(obj.get("timeout"))
         tls = TLS.from_dict(obj.get("tls"))
         url = URL.from_dict(obj.get("url"))
-        return RESTAPIClientConfig(body, enabled, headers, jpeg, method, persistency, retries, send_individual_requests, send_without_ocr, timeout, tls, url)
+        aux_camera_name = from_union([from_str, from_none], obj.get("auxCameraName"))
+        discard_status_codes = from_union([lambda x: from_list(from_int, x), from_none], obj.get("discardStatusCodes"))
+        min_speed = from_union([from_int, from_none], obj.get("minSpeed"))
+        return RESTAPIClientConfig(body, enabled, headers, jpeg, method, persistency, retries, send_individual_requests, send_without_ocr, timeout, tls, url, aux_camera_name, discard_status_codes, min_speed)
 
     def to_dict(self) -> dict:
         result: dict = {}
@@ -2637,6 +2654,12 @@ class RESTAPIClientConfig:
         result["timeout"] = from_int(self.timeout)
         result["tls"] = to_class(TLS, self.tls)
         result["url"] = to_class(URL, self.url)
+        if self.aux_camera_name is not None:
+            result["auxCameraName"] = from_union([from_str, from_none], self.aux_camera_name)
+        if self.discard_status_codes is not None:
+            result["discardStatusCodes"] = from_union([lambda x: from_list(from_int, x), from_none], self.discard_status_codes)
+        if self.min_speed is not None:
+            result["minSpeed"] = from_union([from_int, from_none], self.min_speed)
         return result
 
 

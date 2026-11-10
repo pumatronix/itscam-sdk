@@ -156,6 +156,7 @@ const TARGETS = [
     },
     outRel: "src/wrappers/go/itscam/rest_types.go",
     notice: NOTICE_HEAD,
+    postProcess: keepGoJpegStructName,
   },
 ]
 
@@ -335,6 +336,17 @@ function fixCSharpNullableGetString(text) {
     /var value = reader\.GetString\(\);/g,
     "var value = reader.GetString()!;"
   )
+}
+
+/// The "jpeg" body part type makes quicktype name a constant JPEG and rename
+/// the JPEG struct, which existing code uses, to JPEGClass.  Keep the struct's
+/// name and name the constant after its type.
+function keepGoJpegStructName(text) {
+  return text
+    .replace(/^(\s*)JPEG( +)Type = "jpeg"/m, (_, indent, pad) =>
+      `${indent}JPEGType${" ".repeat(Math.max(1, pad.length - 4))}Type = "jpeg"`)
+    .replace(/^type JPEGClass struct/m, "type JPEG struct")
+    .replace(/\bJPEGClass( +)/g, (_, pad) => `JPEG${" ".repeat(pad.length + 5)}`)
 }
 
 /// Drop the `DateOnlyConverter` and `TimeOnlyConverter` classes that quicktype

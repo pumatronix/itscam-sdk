@@ -770,7 +770,7 @@ namespace rest_types {
         int64_t port;
     };
 
-    enum class Type : int { JSON };
+    enum class Type : int { FORM_URLENCODED, JPEG, JSON, RAW, XML };
 
     struct Part {
         std::string data;
@@ -827,11 +827,25 @@ namespace rest_types {
      * REST API Client service configuration
      */
     struct RestApiClientConfig {
+        /**
+         * Name of the auxiliary camera whose detections are attached to the request (empty to
+         * disable)
+         */
+        nonstd::optional<std::string> aux_camera_name;
         Body body;
+        /**
+         * HTTP status codes for which a failed request is discarded right away, without retries and
+         * without being persisted for a later resend
+         */
+        nonstd::optional<std::vector<int64_t>> discard_status_codes;
         bool enabled;
         std::vector<Header> headers;
         Jpeg jpeg;
         Method method;
+        /**
+         * Minimum transfer speed in bytes per second before the request is aborted
+         */
+        nonstd::optional<int64_t> min_speed;
         Persistency persistency;
         int64_t retries;
         bool send_individual_requests;
@@ -3125,11 +3139,14 @@ namespace rest_types {
     }
 
     inline void from_json(json const & j, RestApiClientConfig& x) {
+        x.aux_camera_name = get_stack_optional<std::string>(j, "auxCameraName");
         x.body = j.at("body").get<Body>();
+        x.discard_status_codes = get_stack_optional<std::vector<int64_t>>(j, "discardStatusCodes");
         x.enabled = j.at("enabled").get<bool>();
         x.headers = j.at("headers").get<std::vector<Header>>();
         x.jpeg = j.at("jpeg").get<Jpeg>();
         x.method = j.at("method").get<Method>();
+        x.min_speed = get_stack_optional<int64_t>(j, "minSpeed");
         x.persistency = j.at("persistency").get<Persistency>();
         x.retries = j.at("retries").get<int64_t>();
         x.send_individual_requests = j.at("sendIndividualRequests").get<bool>();
@@ -3141,11 +3158,14 @@ namespace rest_types {
 
     inline void to_json(json & j, RestApiClientConfig const & x) {
         j = json::object();
+        j["auxCameraName"] = x.aux_camera_name;
         j["body"] = x.body;
+        j["discardStatusCodes"] = x.discard_status_codes;
         j["enabled"] = x.enabled;
         j["headers"] = x.headers;
         j["jpeg"] = x.jpeg;
         j["method"] = x.method;
+        j["minSpeed"] = x.min_speed;
         j["persistency"] = x.persistency;
         j["retries"] = x.retries;
         j["sendIndividualRequests"] = x.send_individual_requests;
@@ -3763,13 +3783,21 @@ namespace rest_types {
     }
 
     inline void from_json(json const & j, Type & x) {
-        if (j == "json") x = Type::JSON;
+        if (j == "form-urlencoded") x = Type::FORM_URLENCODED;
+        else if (j == "jpeg") x = Type::JPEG;
+        else if (j == "json") x = Type::JSON;
+        else if (j == "raw") x = Type::RAW;
+        else if (j == "xml") x = Type::XML;
         else { throw std::runtime_error("Input JSON does not conform to schema!"); }
     }
 
     inline void to_json(json & j, Type const & x) {
         switch (x) {
+            case Type::FORM_URLENCODED: j = "form-urlencoded"; break;
+            case Type::JPEG: j = "jpeg"; break;
             case Type::JSON: j = "json"; break;
+            case Type::RAW: j = "raw"; break;
+            case Type::XML: j = "xml"; break;
             default: throw std::runtime_error("Unexpected value in enumeration \"Type\": " + std::to_string(static_cast<int>(x)));
         }
     }
@@ -4585,11 +4613,14 @@ namespace rest_types {
 
     inline json to_partial_json(RestApiClientConfig const & x) {
         json j = json::object();
+        if (x.aux_camera_name) j["auxCameraName"] = *x.aux_camera_name;
         j["body"] = to_partial_json(x.body);
+        if (x.discard_status_codes) j["discardStatusCodes"] = *x.discard_status_codes;
         j["enabled"] = x.enabled;
         j["headers"] = x.headers;
         j["jpeg"] = to_partial_json(x.jpeg);
         j["method"] = x.method;
+        if (x.min_speed) j["minSpeed"] = *x.min_speed;
         j["persistency"] = to_partial_json(x.persistency);
         j["retries"] = x.retries;
         j["sendIndividualRequests"] = x.send_individual_requests;
