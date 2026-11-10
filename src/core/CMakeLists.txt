@@ -72,7 +72,10 @@ include(${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/mbedtls/mbedtls.cmake)
 
 if(MBEDTLS_SOURCES)
     add_library(itscam_sdk ${SDK_SOURCES} $<TARGET_OBJECTS:itscam_mbedtls_objects>)
-    target_compile_definitions(itscam_sdk PRIVATE CPPHTTPLIB_MBEDTLS_SUPPORT)
+    # The mbedTLS configuration of the C sources (see mbedtls.cmake): httplib.h
+    # includes mbedTLS headers, which must agree with them on struct layouts
+    target_compile_definitions(itscam_sdk PRIVATE CPPHTTPLIB_MBEDTLS_SUPPORT
+        MBEDTLS_USER_CONFIG_FILE="itscam_mbedtls_config.h")
     target_include_directories(itscam_sdk PRIVATE
         ${MBEDTLS_INCLUDE} ${MBEDTLS_CONFIG_DIR})
 else()

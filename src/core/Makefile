@@ -79,8 +79,15 @@ CXXFLAGS_COMMON := -std=c++17 -O2 -fPIC -Wall -Wextra
 # so this is normally always enabled.  We still guard on the presence of
 # the headers so out-of-tree consumers that prune the vendored sources
 # still get a working (HTTP-only) build.
+#
+# httplib.h includes mbedTLS headers, so the C++ sources must see the same
+# mbedTLS configuration as the vendored C sources (MBEDTLS_CFLAGS_COMMON):
+# without it the two disagree on struct layouts, and verifying a server
+# certificate's hostname crashes.
 ifneq (,$(wildcard $(MBEDTLS_INC)/mbedtls/ssl.h))
-    TLS_DEFINES := -DCPPHTTPLIB_MBEDTLS_SUPPORT
+    TLS_DEFINES := -DCPPHTTPLIB_MBEDTLS_SUPPORT \
+        -DMBEDTLS_USER_CONFIG_FILE='"itscam_mbedtls_config.h"' \
+        -I$(MBEDTLS_DIR)
 else
     TLS_DEFINES :=
 endif
