@@ -81,6 +81,33 @@ namespace Pumatronix.Itscam
         }
     }
 
+    /// <summary>
+    /// One telemetry document pushed by the camera, delivered through
+    /// ItscamRestClient.TelemetryReceived.
+    /// </summary>
+    public sealed class TelemetryUpdate
+    {
+        /// <summary>1 for the stream's first document, then one more for each, across reconnections.</summary>
+        public ulong Sequence { get; }
+
+        /// <summary>When it arrived, in Unix milliseconds.</summary>
+        public long ReceivedAtMs { get; }
+
+        /// <summary>The document, as GET /api/system/telemetry returns it.</summary>
+        public string Json { get; }
+
+        public TelemetryUpdate(ulong sequence, long receivedAtMs, string json)
+        {
+            Sequence     = sequence;
+            ReceivedAtMs = receivedAtMs;
+            Json         = json ?? string.Empty;
+        }
+
+        /// <summary>The document as the typed SystemTelemetry.</summary>
+        public RestTypes.SystemTelemetry GetTelemetry() =>
+            ItscamRestClient.ParseTelemetry(Json);
+    }
+
     /// <summary>Timestamp with millisecond precision from the binary client.</summary>
     public sealed class ItscamTimestamp
     {
