@@ -891,6 +891,7 @@ Result<rt::SystemTelemetry> ItscamRestClient::getSystemTelemetry(
 
 Result<void> ItscamRestClient::startTelemetryStream(TelemetryCallback callback,
                                                     uint32_t timeoutMs) {
+    if (timeoutMs == 0) timeoutMs = 15000;
     // Never waits for a telemetry callback: the caller may hold a lock that
     // they need.
     std::shared_ptr<TelemetryStreamWorker> ended;

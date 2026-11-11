@@ -365,7 +365,6 @@ ITSCAM_ErrorCode ITSCAM_RestClient_startTelemetryStream(
     ITSCAM_RestClient* c, ITSCAM_TelemetryCallback cb, void* ud,
     uint32_t timeoutMs) {
     if (!c) return ITSCAM_ERROR_NULL_HANDLE;
-    if (timeoutMs == 0) timeoutMs = 15000;
     itscam::TelemetryCallback callback;
     if (cb) {
         // Captures cb and ud, not c: the callback may destroy the client

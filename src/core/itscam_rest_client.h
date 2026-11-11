@@ -507,7 +507,7 @@ public:
     /// Pass nullptr to only keep the latest document (latestTelemetry()).
     ///
     /// @param timeoutMs  Silence after which the connection is dropped and
-    ///                   reopened.  Default 15 s (three pushes).
+    ///                   reopened.  Default 15 s (three pushes); 0 selects it.
     Result<void> startTelemetryStream(TelemetryCallback callback,
                                       uint32_t timeoutMs = 15000);
 
