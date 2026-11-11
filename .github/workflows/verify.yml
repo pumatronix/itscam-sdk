@@ -69,6 +69,10 @@ jobs:
       # compat stage's own install script runs in one, committed as the image.
       - name: Build compat image
         run: |
+          # What resolves from a container, for the log of a failed install
+          docker run --rm ubuntu:22.04 sh -c 'cat /etc/resolv.conf | grep -v "^#";
+            for h in archive.ubuntu.com azure.archive.ubuntu.com repo.maven.apache.org github.com; do
+              getent hosts $h >/dev/null && echo "resolves: $h" || echo "DOES NOT RESOLVE: $h"; done' || true
           docker run --name itscam-sdk-compat-build \
             -v "$PWD/tools/docker/install-compat.sh:/install-compat.sh:ro" \
             ubuntu:22.04 /install-compat.sh

@@ -12,11 +12,25 @@
 set -eux
 export DEBIAN_FRONTEND=noninteractive
 
-# apt fails on any fetch error and retries: apt-get update alone only warns
-for attempt in 1 2 3 4 5; do
-    if apt-get -o Acquire::Retries=5 update --error-on=any; then break; fi
-    if [ "$attempt" = 5 ]; then exit 1; fi
-    sleep $((attempt * 10))
-done
+# apt-get update alone only warns when it can't fetch: --error-on=any makes
+# it fail, so the loop can retry, then try another mirror.  GitHub's runners
+# have failed to resolve archive.ubuntu.com for a whole job, while their own
+# images use the Azure mirror.
+update() {
+    for attempt in 1 2 3; do
+        if apt-get -o Acquire::Retries=3 update --error-on=any; then return 0; fi
+        sleep $((attempt * 5))
+    done
+    return 1
+}
+if ! update; then
+    for mirror in http://azure.archive.ubuntu.com/ubuntu http://mirrors.kernel.org/ubuntu; do
+        echo "install-compat: archive.ubuntu.com unreachable, trying $mirror"
+        sed -i -E "s#http://(archive|security)\\.ubuntu\\.com/ubuntu#$mirror#g" /etc/apt/sources.list
+        if update; then break; fi
+        if [ "$mirror" = http://mirrors.kernel.org/ubuntu ]; then exit 1; fi
+        sed -i -E "s#$mirror#http://archive.ubuntu.com/ubuntu#g" /etc/apt/sources.list
+    done
+fi
 apt-get install -y --no-install-recommends -o Acquire::Retries=5 abigail-tools python3 binutils
 rm -rf /var/lib/apt/lists/*
