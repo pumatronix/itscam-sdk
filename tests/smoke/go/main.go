@@ -7,6 +7,12 @@
 // pointing at the core: CGO_CFLAGS=-I<src/core> CGO_LDFLAGS=-L<build dir>.
 package main
 
+/*
+#cgo LDFLAGS: -litscam_sdk
+#include "c_api/itscam_sdk_c.h"
+*/
+import "C"
+
 import (
 	"fmt"
 	"os"
@@ -45,8 +51,18 @@ func main() {
 	port, _ := strconv.Atoi(env("ITSCAM_TEST_PORT", "18080"))
 	fmt.Printf("Go smoke against %s:%d\n", host, port)
 
-	version := itscam.GetSDKVersion()
-	check(version != "", "version", version)
+	check(itscam.GetSDKVersion() != "", "wrapper version", itscam.GetSDKVersion())
+
+	// The wrapper has no call for the native library's version: ask the
+	// library itself.  ITSCAM_TEST_EXPECT_VERSION is the library under
+	// test, so that a stale copy found first fails instead of passing
+	version := C.GoString(C.ITSCAM_getVersion())
+	expected := os.Getenv("ITSCAM_TEST_EXPECT_VERSION")
+	if expected == "" || version == expected {
+		check(version != "", "version", version)
+	} else {
+		check(false, "version", version+", expected "+expected)
+	}
 
 	rest, err := itscam.NewRestClient()
 	if err != nil {

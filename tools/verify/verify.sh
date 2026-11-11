@@ -222,7 +222,8 @@ run_x64_only() {
             -e ITSCAM_TEST_PORT=$PORT -e ITSCAM_TEST_EXPECT_VERSION="$(lib_version x64)" -- bash -c "java -Dfile.encoding=$enc -Ditscam.sdk.library=$lib -cp $cp Smoke"
     done
     step "run x64: C# (.NET 8)" docker_run "$BUILDER_IMAGE" --network "container:$STANDIN" \
-        -e ITSCAM_TEST_PORT=$PORT -e LD_LIBRARY_PATH=/sdk/src/core/build/linux -- dotnet "$BIN/csharp/Smoke.dll"
+        -e ITSCAM_TEST_PORT=$PORT -e ITSCAM_TEST_EXPECT_VERSION="$(lib_version x64)" \
+        -e LD_LIBRARY_PATH=/sdk/src/core/build/linux -- dotnet "$BIN/csharp/Smoke.dll"
 }
 
 step_cmake() {

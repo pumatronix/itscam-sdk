@@ -8,6 +8,7 @@
 
 using System;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Pumatronix.Itscam;
@@ -15,6 +16,11 @@ using Pumatronix.Itscam;
 internal static class Program
 {
     private static int _failures;
+
+    // The wrapper has no call for the native library's version: ask the
+    // library itself, under the name the wrapper loads it by
+    [DllImport("itscam_sdk", EntryPoint = "ITSCAM_getVersion")]
+    private static extern IntPtr NativeVersion();
 
     private static void Check(bool ok, string name, string detail = "")
     {
@@ -34,9 +40,16 @@ internal static class Program
         var port = ushort.Parse(Env("ITSCAM_TEST_PORT", "18080"));
         Console.WriteLine($"C# smoke ({Environment.Version}) against {host}:{port}");
 
-        var version = typeof(ItscamRestClient).Assembly
+        var wrapperVersion = typeof(ItscamRestClient).Assembly
             .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "";
-        Check(version.Length > 0, "version", version);
+        Check(wrapperVersion.Length > 0, "wrapper version", wrapperVersion);
+
+        // ITSCAM_TEST_EXPECT_VERSION: the library under test, so that a stale
+        // copy found first fails instead of passing
+        var version = Marshal.PtrToStringAnsi(NativeVersion()) ?? "";
+        var expected = Env("ITSCAM_TEST_EXPECT_VERSION", "");
+        Check(version.Length > 0 && (expected.Length == 0 || version == expected), "version",
+              expected.Length == 0 || version == expected ? version : $"{version}, expected {expected}");
 
         using (var rest = new ItscamRestClient())
         {
