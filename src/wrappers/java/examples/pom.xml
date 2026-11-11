@@ -2,11 +2,12 @@
 <!--
   ITSCAM Client SDK - Java examples.
 
-    Four runnable demos that mirror the Python / Go / C# examples:
+    Five runnable demos that mirror the Python / Go / C# examples:
     - CaptureExample      (binary client, TCP 60000)
     - RestExample         (REST API on 80/443; login required)
     - CgiSnapshotExample  (CGI on 80/443; auth optional)
     - ConfigVirtualLoopPreset (typed REST virtual loop preset)
+    - TelemetryExample    (system telemetry: polling and stream)
 
   Each main class is exposed as a separate `mvn exec:java` profile so
   developers can run them directly from the source tree:

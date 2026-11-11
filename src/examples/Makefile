@@ -50,7 +50,8 @@ EXAMPLE_NAMES := \
 	itscam_rest_example \
 	itscam_cgi_example \
 	itscam_trigger_recorder \
-	itscam_snapshot_to_freeflow
+	itscam_snapshot_to_freeflow \
+	itscam_telemetry_example
 
 LINUX_EXAMPLES         := $(addprefix $(BUILD_DIR)/,$(EXAMPLE_NAMES))
 LINUX_ARM_EXAMPLES     := $(addprefix $(BUILD_DIR_LINUX_ARM)/,$(EXAMPLE_NAMES))
@@ -61,21 +62,24 @@ WIN_X64_EXAMPLES := \
 	$(BUILD_DIR_WIN_X64)/itscam_rest_example.exe \
 	$(BUILD_DIR_WIN_X64)/itscam_cgi_example.exe \
 	$(BUILD_DIR_WIN_X64)/itscam_trigger_recorder.exe \
-	$(BUILD_DIR_WIN_X64)/itscam_snapshot_to_freeflow.exe
+	$(BUILD_DIR_WIN_X64)/itscam_snapshot_to_freeflow.exe \
+	$(BUILD_DIR_WIN_X64)/itscam_telemetry_example.exe
 
 WIN_X86_EXAMPLES := \
 	$(BUILD_DIR_WIN_X86)/itscam_sdk_example.exe \
 	$(BUILD_DIR_WIN_X86)/itscam_rest_example.exe \
 	$(BUILD_DIR_WIN_X86)/itscam_cgi_example.exe \
 	$(BUILD_DIR_WIN_X86)/itscam_trigger_recorder.exe \
-	$(BUILD_DIR_WIN_X86)/itscam_snapshot_to_freeflow.exe
+	$(BUILD_DIR_WIN_X86)/itscam_snapshot_to_freeflow.exe \
+	$(BUILD_DIR_WIN_X86)/itscam_telemetry_example.exe
 
 EXAMPLE_SOURCES := \
 	itscam_sdk_example.cpp \
 	itscam_rest_example.cpp \
 	itscam_cgi_example.cpp \
 	itscam_trigger_recorder.cpp \
-	itscam_snapshot_to_freeflow.cpp
+	itscam_snapshot_to_freeflow.cpp \
+	itscam_telemetry_example.cpp
 
 .PHONY: all linux linux-arm linux-arm64 linux-all windows windows-x64 windows-x86 clean help
 
@@ -158,8 +162,8 @@ $(BUILD_DIR_$(2))/$(1).exe: $(1).cpp | $(BUILD_DIR_$(2))
 	    -static-libgcc -static-libstdc++ -lws2_32 -lbcrypt -lcrypt32
 endef
 
-$(foreach name,itscam_sdk_example itscam_rest_example itscam_cgi_example itscam_trigger_recorder itscam_snapshot_to_freeflow,$(eval $(call windows_example_rule,$(name),WIN_X64,win-x64)))
-$(foreach name,itscam_sdk_example itscam_rest_example itscam_cgi_example itscam_trigger_recorder itscam_snapshot_to_freeflow,$(eval $(call windows_example_rule,$(name),WIN_X86,win-x86)))
+$(foreach name,itscam_sdk_example itscam_rest_example itscam_cgi_example itscam_trigger_recorder itscam_snapshot_to_freeflow itscam_telemetry_example,$(eval $(call windows_example_rule,$(name),WIN_X64,win-x64)))
+$(foreach name,itscam_sdk_example itscam_rest_example itscam_cgi_example itscam_trigger_recorder itscam_snapshot_to_freeflow itscam_telemetry_example,$(eval $(call windows_example_rule,$(name),WIN_X86,win-x86)))
 
 # ============================================================================
 #  Cleanup

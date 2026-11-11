@@ -402,7 +402,8 @@ EXAMPLES := \
 	$(BUILD_DIR)/itscam_sdk_example \
 	$(BUILD_DIR)/itscam_rest_example \
 	$(BUILD_DIR)/itscam_cgi_example \
-	$(BUILD_DIR)/itscam_trigger_recorder
+	$(BUILD_DIR)/itscam_trigger_recorder \
+	$(BUILD_DIR)/itscam_telemetry_example
 
 .PHONY: all clean help
 
@@ -521,6 +522,7 @@ stage_examples_source() {
     cp "$GO_EXAMPLES"/capture_example.go \
        "$GO_EXAMPLES"/rest_example.go \
        "$GO_EXAMPLES"/cgi_snapshot_example.go \
+       "$GO_EXAMPLES"/telemetry_example.go \
        "$dest/go/"
     mkdir -p "$dest/go/gui"
     tar -C "$GO_EXAMPLES/gui" --exclude='./build' -cf - . | tar -C "$dest/go/gui" -xf -
@@ -530,6 +532,7 @@ stage_examples_source() {
         MjpegGrabberExample
         SoftwareTriggerSnapshotExample
         BinaryCaptureExample
+        TelemetryExample
     )
     for project in "${csharp_projects[@]}"; do
         mkdir -p "$dest/csharp/$project"

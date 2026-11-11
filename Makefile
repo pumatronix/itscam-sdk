@@ -245,7 +245,10 @@ go-examples: lib
 	go build -o rest_example rest_example.go && \
 	CGO_LDFLAGS="-L$(CURDIR)/$(SRC_DIR)/core/build/linux" \
 	CGO_CFLAGS="-I$(CURDIR)/$(SRC_DIR)/core" \
-	go build -o cgi_snapshot_example cgi_snapshot_example.go
+	go build -o cgi_snapshot_example cgi_snapshot_example.go && \
+	CGO_LDFLAGS="-L$(CURDIR)/$(SRC_DIR)/core/build/linux" \
+	CGO_CFLAGS="-I$(CURDIR)/$(SRC_DIR)/core" \
+	go build -o telemetry_example telemetry_example.go
 
 # Cross-compile Go CLI examples for Windows amd64 (used by sdk-dist).
 go-examples-windows: windows
@@ -266,7 +269,11 @@ go-examples-windows: windows
 	CGO_ENABLED=1 GOOS=windows GOARCH=amd64 CC=x86_64-w64-mingw32-gcc \
 	CGO_LDFLAGS="-L$(CURDIR)/$(SRC_DIR)/core/build/win-x64" \
 	CGO_CFLAGS="-I$(CURDIR)/$(SRC_DIR)/core" \
-	go build -o build/win-x64/cgi_snapshot_example.exe cgi_snapshot_example.go
+	go build -o build/win-x64/cgi_snapshot_example.exe cgi_snapshot_example.go && \
+	CGO_ENABLED=1 GOOS=windows GOARCH=amd64 CC=x86_64-w64-mingw32-gcc \
+	CGO_LDFLAGS="-L$(CURDIR)/$(SRC_DIR)/core/build/win-x64" \
+	CGO_CFLAGS="-I$(CURDIR)/$(SRC_DIR)/core" \
+	go build -o build/win-x64/telemetry_example.exe telemetry_example.go
 
 # Cross-compile Go CLI examples for Windows x86 (used by sdk-dist).
 go-examples-windows-x86: windows
@@ -287,7 +294,11 @@ go-examples-windows-x86: windows
 	CGO_ENABLED=1 GOOS=windows GOARCH=386 CC=i686-w64-mingw32-gcc \
 	CGO_LDFLAGS="-L$(CURDIR)/$(SRC_DIR)/core/build/win-x86" \
 	CGO_CFLAGS="-I$(CURDIR)/$(SRC_DIR)/core" \
-	go build -o build/win-x86/cgi_snapshot_example.exe cgi_snapshot_example.go
+	go build -o build/win-x86/cgi_snapshot_example.exe cgi_snapshot_example.go && \
+	CGO_ENABLED=1 GOOS=windows GOARCH=386 CC=i686-w64-mingw32-gcc \
+	CGO_LDFLAGS="-L$(CURDIR)/$(SRC_DIR)/core/build/win-x86" \
+	CGO_CFLAGS="-I$(CURDIR)/$(SRC_DIR)/core" \
+	go build -o build/win-x86/telemetry_example.exe telemetry_example.go
 
 # Cross-compile Go CLI examples for Linux ARMv7 (used by sdk-dist).
 # Requires CC override -- the Arm GNU 8.3-2019.03 cross-compiler shipped
@@ -302,7 +313,7 @@ go-examples-arm: lib-arm
 	fi
 	@mkdir -p $(GO_EXAMPLES_DIR)/build/linux-arm
 	@cd $(GO_EXAMPLES_DIR) && \
-	for prog in capture_example rest_example cgi_snapshot_example; do \
+	for prog in capture_example rest_example cgi_snapshot_example telemetry_example; do \
 	    CGO_ENABLED=1 GOOS=linux GOARCH=arm GOARM=7 \
 	    CC=$(ARMHF_TOOLCHAIN_PATH)/arm-linux-gnueabihf-gcc \
 	    CGO_LDFLAGS="-L$(CURDIR)/$(SRC_DIR)/core/build/linux-arm" \
@@ -318,7 +329,7 @@ go-examples-arm64: lib-arm64
 	fi
 	@mkdir -p $(GO_EXAMPLES_DIR)/build/linux-arm64
 	@cd $(GO_EXAMPLES_DIR) && \
-	for prog in capture_example rest_example cgi_snapshot_example; do \
+	for prog in capture_example rest_example cgi_snapshot_example telemetry_example; do \
 	    CGO_ENABLED=1 GOOS=linux GOARCH=arm64 \
 	    CC=$(ARM64_TOOLCHAIN_PATH)/aarch64-linux-gnu-gcc \
 	    CGO_LDFLAGS="-L$(CURDIR)/$(SRC_DIR)/core/build/linux-arm64" \
@@ -422,6 +433,9 @@ csharp-examples-publish: lib
 	@dotnet publish -c Release -r $(CSHARP_RID) --self-contained true \
 	    -p:PublishSingleFile=true \
 	    $(SRC_DIR)/wrappers/csharp/examples/ProfileConfigExample/ProfileConfigExample.csproj
+	@dotnet publish -c Release -r $(CSHARP_RID) --self-contained true \
+	    -p:PublishSingleFile=true \
+	    $(SRC_DIR)/wrappers/csharp/examples/TelemetryExample/TelemetryExample.csproj
 	@echo "Binaries in examples/*/bin/Release/net8.0/$(CSHARP_RID)/publish/"
 
 # Publish self-contained C# examples for every platform in the SDK dist.
@@ -1002,7 +1016,8 @@ clean:
 	$(MAKE) -C $(SRC_DIR)/examples clean
 	@rm -f $(SRC_DIR)/wrappers/go/examples/capture_example \
 	       $(SRC_DIR)/wrappers/go/examples/rest_example \
-	       $(SRC_DIR)/wrappers/go/examples/cgi_snapshot_example
+	       $(SRC_DIR)/wrappers/go/examples/cgi_snapshot_example \
+	       $(SRC_DIR)/wrappers/go/examples/telemetry_example
 	@rm -rf $(SRC_DIR)/wrappers/go/examples/build
 	@rm -rf $(SRC_DIR)/wrappers/go/examples/gui/build
 	@rm -rf $(SRC_DIR)/wrappers/csharp/Itscam.Sdk/bin \
@@ -1017,6 +1032,8 @@ clean:
 	        $(SRC_DIR)/wrappers/csharp/examples/BinaryCaptureExample/obj
 	@rm -rf $(SRC_DIR)/wrappers/csharp/examples/ProfileConfigExample/bin \
 	        $(SRC_DIR)/wrappers/csharp/examples/ProfileConfigExample/obj
+	@rm -rf $(SRC_DIR)/wrappers/csharp/examples/TelemetryExample/bin \
+	        $(SRC_DIR)/wrappers/csharp/examples/TelemetryExample/obj
 	@rm -rf $(SRC_DIR)/wrappers/csharp/nupkg
 	@rm -rf $(SRC_DIR)/wrappers/java/itscam-sdk/target \
 	        $(SRC_DIR)/wrappers/java/examples/target \
