@@ -101,7 +101,11 @@ CXXFLAGS_WINDOWS := $(CXXFLAGS_COMMON) $(TLS_DEFINES) -DWIN32 -D_WIN32 \
 
 # mbedTLS C compile flags.  The custom user config lives next to the
 # vendored sources, so we add $(MBEDTLS_DIR) to the include path.
-MBEDTLS_CFLAGS_COMMON := -O2 -fvisibility=hidden \
+# -fno-strict-aliasing: GCC 5.4 for ARMv7, which builds the release library,
+# miscompiles gcm.c under strict aliasing at -O2: every AES-GCM record failed
+# its tag check, so no TLS handshake completed on ARMv7.  For every file and
+# target: the same latent fault in another one would be as silent.
+MBEDTLS_CFLAGS_COMMON := -O2 -fno-strict-aliasing -fvisibility=hidden \
     -DMBEDTLS_USER_CONFIG_FILE='"itscam_mbedtls_config.h"' \
     -I$(MBEDTLS_INC) -I$(MBEDTLS_DIR)
 MBEDTLS_CFLAGS_LINUX   := $(MBEDTLS_CFLAGS_COMMON) -fPIC
