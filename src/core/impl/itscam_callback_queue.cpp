@@ -142,6 +142,12 @@ private:
                         if (returned) return;
                         LockGuard<Mutex> g(pool.mMtx);
                         --pool.mThreads;
+                        // schedule() still counted this thread: a queue it
+                        // put back may have no other thread to run it
+                        if (pool.mReady.size() > pool.mIdle &&
+                            pool.mThreads < pool.mMax) {
+                            pool.startThread();
+                        }
                     }
                 } leave{*this, false};
                 queue->runNext();
