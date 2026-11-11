@@ -29,7 +29,6 @@
 #include <cctype>
 #include <cstdlib>
 #include <chrono>
-#include <random>
 
 // A request must not raise SIGPIPE in the host process when the server, or
 // a stream stop, has closed the socket: httplib passes these flags to every
@@ -636,7 +635,9 @@ std::string sha1(const std::string& data) {
 }
 
 /// Handshake nonces and frame masks, from the operating system's generator:
-/// RFC 6455 5.3 wants masks nobody can predict from earlier ones
+/// RFC 6455 5.3 wants masks nobody can predict from earlier ones.  Returns
+/// an empty string if the system has none to give: the connection then
+/// fails, as a generator of its own would be predictable.
 std::string randomBytes(size_t count) {
     std::string out(count, '\0');
 #ifdef _WIN32
@@ -659,15 +660,7 @@ std::string randomBytes(size_t count) {
     }
     if (got == count) return out;
 #endif
-    // No system generator (it should never happen): the bytes still vary
-    static Mutex mtx;
-    static std::mt19937 rng{static_cast<uint32_t>(
-        std::random_device{}() ^
-        static_cast<uint32_t>(
-            std::chrono::steady_clock::now().time_since_epoch().count()))};
-    LockGuard<Mutex> lk(mtx);
-    for (auto& c : out) c = static_cast<char>(rng() & 0xFFu);
-    return out;
+    return std::string();
 }
 
 std::string toLower(std::string s) {
@@ -752,6 +745,7 @@ public:
             }
         }
         const std::string mask = randomBytes(4);
+        if (mask.size() != 4) return false;
         frame += mask;
         for (size_t i = 0; i < payload.size(); ++i) {
             frame.push_back(static_cast<char>(payload[i] ^ mask[i % 4]));
@@ -967,7 +961,12 @@ Result<void> HttpTransport::webSocket(const std::string& path,
 
     // --- Handshake ---------------------------------------------------------
 
-    const std::string key = httplib::detail::base64_encode(randomBytes(16));
+    const std::string nonce = randomBytes(16);
+    if (nonce.size() != 16) {
+        return Error{Error::ConnectionFailed,
+                     label + ": no system random generator"};
+    }
+    const std::string key = httplib::detail::base64_encode(nonce);
     std::string hostHeader =
         host.find(':') != std::string::npos ? "[" + host + "]" : host;
     if (actualPort != defaultPort) {
