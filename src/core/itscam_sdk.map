@@ -1,0 +1,27 @@
+/*
+ *  itscam_sdk.map -- the symbols libitscam_sdk exports on Linux.
+ *
+ *  Copyright (c) 2026 Pumatronix
+ *
+ *  The C API and the itscam namespace: what the headers declare.  The rest
+ *  stays inside the library: libstdc++ (linked in), mbedTLS, cpp-httplib,
+ *  nlohmann::json, and the std:: templates the library instantiates.  So
+ *  none of it interposes on, or binds to, an application's own copy of the
+ *  same code, which may be another version or, on ARM, follow the calling
+ *  convention GCC 7.1 changed.  Used by src/core/Makefile and CMakeLists.txt;
+ *  tools/compat/check-compat.sh compares what it exports between releases.
+ */
+{
+  global:
+    ITSCAM_*;
+    extern "C++" {
+      itscam::*;
+      "typeinfo for itscam::*";
+      "typeinfo name for itscam::*";
+      "vtable for itscam::*";
+      "VTT for itscam::*";
+      "guard variable for itscam::*";
+    };
+  local:
+    *;
+};

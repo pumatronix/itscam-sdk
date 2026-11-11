@@ -6,7 +6,11 @@
 # symbols up to a given maximum version.
 #
 # Usage:
-#   tools/check-glibc.sh <file.so> <max-glibc-version>
+#   tools/check-glibc.sh <file.so> <max-glibc-version> [--no-cxx-runtime]
+#
+# --no-cxx-runtime also fails if the file needs libstdc++ or libgcc_s, or
+# references their versioned symbols (GLIBCXX_, CXXABI_, GCC_): the release
+# libraries carry their own C++ runtime (STATIC_RUNTIME=1 in src/core/Makefile).
 #
 # Example:
 #   tools/check-glibc.sh src/core/build/linux/libitscam_sdk.so 2.27
@@ -20,13 +24,14 @@
 
 set -euo pipefail
 
-if [ $# -ne 2 ]; then
-    echo "usage: $(basename "$0") <file> <max-glibc-version>" >&2
+if [ $# -lt 2 ] || [ $# -gt 3 ] || { [ $# -eq 3 ] && [ "$3" != "--no-cxx-runtime" ]; }; then
+    echo "usage: $(basename "$0") <file> <max-glibc-version> [--no-cxx-runtime]" >&2
     exit 64
 fi
 
 file="$1"
 cap="$2"
+no_cxx_runtime="${3:-}"
 
 if [ ! -f "$file" ]; then
     echo "check-glibc: file not found: $file" >&2
@@ -80,4 +85,24 @@ if [ "${#bad[@]}" -ne 0 ]; then
     exit 1
 fi
 
-echo "check-glibc: OK   ${file}  (<= GLIBC_${cap}; tags seen: ${versions[*]:-none})"
+if [ -n "$no_cxx_runtime" ]; then
+    mapfile -t needed < <(
+        "$OBJDUMP" -p "$file" 2>/dev/null |
+        awk '$1 == "NEEDED" && $2 ~ /^lib(stdc\+\+|gcc_s)\./ {print $2}'
+    )
+    mapfile -t cxx_tags < <(
+        "$OBJDUMP" -T "$file" 2>/dev/null |
+        grep -oE '\b(GLIBCXX|CXXABI|GCC)_[0-9][0-9A-Za-z_.]*' |
+        sort -u
+    )
+    if [ "${#needed[@]}" -ne 0 ] || [ "${#cxx_tags[@]}" -ne 0 ]; then
+        echo "check-glibc: FAIL ${file}" >&2
+        echo "  needs the C++ runtime, which the release libraries carry inside" >&2
+        echo "  (STATIC_RUNTIME=1):" >&2
+        [ "${#needed[@]}" -ne 0 ] && echo "  NEEDED: ${needed[*]}" >&2
+        [ "${#cxx_tags[@]}" -ne 0 ] && echo "  tags:   ${cxx_tags[*]}" >&2
+        exit 1
+    fi
+fi
+
+echo "check-glibc: OK   ${file}  (<= GLIBC_${cap}; tags seen: ${versions[*]:-none}${no_cxx_runtime:+; no C++ runtime dependency})"
