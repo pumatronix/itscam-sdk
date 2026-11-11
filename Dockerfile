@@ -69,16 +69,9 @@ FROM ubuntu:22.04 AS compat
 LABEL maintainer="Pumatronix"
 LABEL description="API/ABI comparison tools for the ITSCAM SDK"
 ENV DEBIAN_FRONTEND=noninteractive
-# apt fails on any fetch error and retries: a CI runner's DNS can drop for
-# seconds, and apt-get update alone only warns about it
-RUN set -eux; \
-    for attempt in 1 2 3 4 5; do \
-        if apt-get -o Acquire::Retries=5 update --error-on=any; then break; fi; \
-        if [ "$attempt" = 5 ]; then exit 1; fi; \
-        sleep $((attempt * 10)); \
-    done; \
-    apt-get install -y --no-install-recommends -o Acquire::Retries=5 abigail-tools python3 binutils; \
-    rm -rf /var/lib/apt/lists/*
+# The packages are in a script CI also runs outside `docker build`
+COPY tools/docker/install-compat.sh /usr/local/bin/install-compat.sh
+RUN /usr/local/bin/install-compat.sh
 WORKDIR /sdk
 
 FROM ubuntu:18.04 AS builder
