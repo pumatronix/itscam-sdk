@@ -179,12 +179,14 @@ function useVendoredCppOptional(text) {
     .replace(
       /#include <optional>/g,
       [
+        // Before selecting ours: optional_USES_STD_OPTIONAL reads the setting
+        // when it is used, and the include guard keeps the earlier choice
+        "#if defined(optional_USES_STD_OPTIONAL) && optional_USES_STD_OPTIONAL",
+        '#error "Include itscam_sdk.h before anything that selects the standard optional in optional-lite"',
+        "#endif",
         "#undef optional_CONFIG_SELECT_OPTIONAL",
         "#define optional_CONFIG_SELECT_OPTIONAL optional_OPTIONAL_NONSTD",
         "#include <nonstd/optional.hpp>",
-        "#if optional_USES_STD_OPTIONAL",
-        '#error "Include itscam_sdk.h before anything that selects the standard optional in optional-lite"',
-        "#endif",
       ].join("\n")
     )
     .replace(/std::optional/g, "nonstd::optional")
