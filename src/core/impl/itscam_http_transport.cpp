@@ -698,8 +698,33 @@ public:
     httplib::tls::session_t session = nullptr;
 #endif
     std::unique_ptr<httplib::Stream> stream;
+    time_t writeSec  = 0;   ///< write timeout, as the stream's
+    time_t writeUsec = 0;
 
     bool writeAll(const char* data, size_t size) {
+#ifdef CPPHTTPLIB_SSL_ENABLED
+        // Not SSLSocketStream::write(): before writing, it probes the peer
+        // with a one-byte TLS read (tls::is_peer_closed) and drops the byte,
+        // the first of a frame that arrives at that moment
+        if (session) {
+            int wantWrite = 1000;
+            while (size > 0) {
+                if (httplib::detail::select_write(sock, writeSec, writeUsec) <= 0) {
+                    return false;
+                }
+                httplib::tls::TlsError err;
+                const ssize_t n = httplib::tls::write(session, data, size, err);
+                if (n > 0) {
+                    data += n;
+                    size -= static_cast<size_t>(n);
+                } else if (err.code != httplib::tls::ErrorCode::WantWrite ||
+                           --wantWrite <= 0) {
+                    return false;
+                }
+            }
+            return true;
+        }
+#endif
         while (size > 0) {
             const ssize_t n = stream->write(data, size);
             if (n <= 0) return false;
@@ -931,6 +956,8 @@ Result<void> HttpTransport::webSocket(const std::string& path,
         }
         conn.stream.reset(new httplib::detail::SSLSocketStream(
             sock, conn.session, toSec, toUsec, toSec, toUsec));
+        conn.writeSec  = toSec;
+        conn.writeUsec = toUsec;
     } else
 #endif
     {
