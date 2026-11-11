@@ -63,6 +63,25 @@ subproject_binary_cxx14() {
     "$OUT/subproject-binary-cxx14/consumer"
 }
 
+# The same build configured the way docs/cmake.md shows a parent project:
+# set() before add_subdirectory().  The consumer fails to configure if the
+# SDK ignores it (as option() did before CMake 3.13)
+subproject_documented() {
+    configure_build "$OUT/subproject-documented" -DCONSUMER_CXX_STANDARD=14 \
+        -DCONSUMER_DOCUMENTED_MINIMAL=ON &&
+    "$OUT/subproject-documented/consumer"
+}
+
+# Examples and tests requested with clients switched off: only those the
+# library can link are built
+standalone_binary_only() {
+    SRC="$ROOT" configure_build "$OUT/standalone-binary-only" \
+        -DITSCAM_SDK_BUILD_EXAMPLES=ON -DITSCAM_SDK_BUILD_TESTS=ON \
+        -DITSCAM_SDK_WITH_REST=OFF -DITSCAM_SDK_WITH_CGI=OFF -DITSCAM_SDK_WITH_TLS=OFF &&
+    test -x "$OUT/standalone-binary-only/src/examples/itscam_sdk_example" &&
+    test ! -e "$OUT/standalone-binary-only/src/examples/itscam_rest_example"
+}
+
 subproject_shared() {
     configure_build "$OUT/subproject-shared" -DITSCAM_SDK_SHARED=ON -DCONSUMER_CXX_STANDARD=14 &&
     "$OUT/subproject-shared/consumer"
@@ -97,7 +116,7 @@ mingw_x86_static() {
     i686-w64-mingw32-objdump -f "$OUT/mingw-x86-static/consumer.exe" | grep -q "pei-i386"
 }
 
-ALL="standalone subproject_static subproject_binary_cxx14 subproject_shared package cross_arm cross_arm64 mingw_x64 mingw_x86_static"
+ALL="standalone standalone_binary_only subproject_static subproject_binary_cxx14 subproject_documented subproject_shared package cross_arm cross_arm64 mingw_x64 mingw_x86_static"
 mkdir -p "$OUT"
 echo "cmake $(cmake --version | head -1 | awk '{print $3}'), $(c++ --version | head -1)"
 for variant in ${@:-$ALL}; do

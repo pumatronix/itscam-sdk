@@ -26,8 +26,9 @@ endif()
 
 add_subdirectory(src/core)
 
-option(ITSCAM_SDK_BUILD_EXAMPLES "Build the C++ examples (src/examples)" OFF)
-option(ITSCAM_SDK_BUILD_TESTS "Build the C and C++ smoke tests (tests/smoke)" OFF)
+include("${CMAKE_CURRENT_LIST_DIR}/cmake/ItscamSdkOptions.cmake")
+itscam_sdk_option(ITSCAM_SDK_BUILD_EXAMPLES "Build the C++ examples (src/examples)" OFF)
+itscam_sdk_option(ITSCAM_SDK_BUILD_TESTS "Build the C and C++ smoke tests (tests/smoke)" OFF)
 
 if(ITSCAM_SDK_BUILD_EXAMPLES)
     add_subdirectory(src/examples)

@@ -32,15 +32,18 @@ if(DEFINED BUILD_SHARED_LIBS)
 else()
     set(_itscam_shared_default ${ITSCAM_SDK_IS_TOP_LEVEL})
 endif()
-option(ITSCAM_SDK_SHARED "Build libitscam_sdk as a shared library" ${_itscam_shared_default})
-option(ITSCAM_SDK_WITH_REST "Include the REST client (ItscamRestClient)" ON)
-option(ITSCAM_SDK_WITH_CGI "Include the CGI client (ItscamCgiClient)" ON)
-option(ITSCAM_SDK_WITH_TLS "HTTPS for the REST and CGI clients (vendored mbedTLS)" ON)
-option(ITSCAM_SDK_WITH_C_API "Include the C API the language wrappers bind" ON)
-option(ITSCAM_SDK_STATIC_RUNTIME
+# itscam_sdk_option() and itscam_sdk_setting() keep a value the parent project
+# set() before add_subdirectory(), which option() alone drops before CMake 3.13
+include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/ItscamSdkOptions.cmake")
+itscam_sdk_option(ITSCAM_SDK_SHARED "Build libitscam_sdk as a shared library" ${_itscam_shared_default})
+itscam_sdk_option(ITSCAM_SDK_WITH_REST "Include the REST client (ItscamRestClient)" ON)
+itscam_sdk_option(ITSCAM_SDK_WITH_CGI "Include the CGI client (ItscamCgiClient)" ON)
+itscam_sdk_option(ITSCAM_SDK_WITH_TLS "HTTPS for the REST and CGI clients (vendored mbedTLS)" ON)
+itscam_sdk_option(ITSCAM_SDK_WITH_C_API "Include the C API the language wrappers bind" ON)
+itscam_sdk_option(ITSCAM_SDK_STATIC_RUNTIME
     "Link libstdc++ and libgcc into the shared library and keep their symbols local" ON)
-option(ITSCAM_SDK_INSTALL "Generate install rules and the itscam_sdk package" ${ITSCAM_SDK_IS_TOP_LEVEL})
-set(ITSCAM_SDK_CXX_STANDARD 17 CACHE STRING "C++ standard the SDK sources compile with (14 or 17)")
+itscam_sdk_option(ITSCAM_SDK_INSTALL "Generate install rules and the itscam_sdk package" ${ITSCAM_SDK_IS_TOP_LEVEL})
+itscam_sdk_setting(ITSCAM_SDK_CXX_STANDARD 17 "C++ standard the SDK sources compile with (14 or 17)")
 set_property(CACHE ITSCAM_SDK_CXX_STANDARD PROPERTY STRINGS 14 17)
 
 if(NOT ITSCAM_SDK_CXX_STANDARD MATCHES "^(14|17)$")
