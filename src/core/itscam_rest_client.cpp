@@ -985,11 +985,18 @@ std::string ItscamRestClient::apiPrefix() const {
 
 void ItscamRestClient::setLogHandler(
     std::function<void(LogLevel, const std::string&)> cb) {
+    // Once this returns, the previous handler is not running and will not
+    // be called, unless this runs in a callback of the client
+    std::function<void(LogLevel, const std::string&)> previous;
     {
         LockGuard<Mutex> lk(mImpl->logSlot->mtx);
+        previous = std::move(mImpl->logSlot->handler);
         mImpl->logSlot->handler = cb;
     }
+    // Request logs: the transport's setter waits for one being delivered
     mImpl->transport->setLogHandler(std::move(cb));
+    // Telemetry stream logs run on the callback queue
+    if (previous) mImpl->callbacks->waitForCallback();
 }
 
 } // namespace itscam
