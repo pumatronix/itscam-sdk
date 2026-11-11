@@ -4,19 +4,26 @@
 //
 //	go run ./tools/compat/api_go <path to src/wrappers/go/itscam>
 //
-// Parses the sources only (no cgo build): exported functions and methods
+// Reads the sources only (no cgo build): exported functions and methods
 // with their parameter and result types, exported struct fields with types
 // and tags, interface methods, other types, constants and variables.
 // Parameter names are left out: renaming one doesn't break a caller.
+//
+// Constants are listed with the type and value the type checker gives them,
+// so that reordering an iota block, which changes values without changing
+// any declaration's text, changes the listing.
 package main
 
 import (
 	"bytes"
 	"fmt"
 	"go/ast"
+	"go/constant"
+	"go/importer"
 	"go/parser"
 	"go/printer"
 	"go/token"
+	"go/types"
 	"os"
 	"sort"
 	"strings"
@@ -81,6 +88,26 @@ func main() {
 	var lines []string
 	add := func(format string, args ...interface{}) { lines = append(lines, fmt.Sprintf(format, args...)) }
 	for _, pkg := range pkgs {
+		// Constant values: `import "C"` is faked and errors are ignored, as
+		// only declarations that don't depend on C need to resolve
+		var paths []string
+		for path := range pkg.Files {
+			paths = append(paths, path)
+		}
+		sort.Strings(paths)
+		var files []*ast.File
+		for _, path := range paths {
+			files = append(files, pkg.Files[path])
+		}
+		info := &types.Info{Defs: map[*ast.Ident]types.Object{}}
+		conf := types.Config{
+			FakeImportC: true,
+			Importer:    importer.ForCompiler(fset, "source", nil),
+			Error:       func(error) {},
+		}
+		conf.Check(pkg.Name, fset, files, info)
+		unqualified := func(*types.Package) string { return "" }
+
 		for path, file := range pkg.Files {
 			// version.go is generated per build (tools/version/gen-version.sh):
 			// its constants are API, their values (dates, commits) are not
@@ -153,11 +180,21 @@ func main() {
 									continue
 								}
 								line := kind + " " + n.Name
-								if s.Type != nil {
-									line += " " + expr(s.Type)
-								}
-								if kind == "const" && i < len(s.Values) && !generated {
-									line += " = " + expr(s.Values[i])
+								c, resolved := info.Defs[n].(*types.Const)
+								if resolved && c.Val().Kind() != constant.Unknown {
+									// An implicit iota constant has no type or
+									// value of its own in the source
+									line += " " + types.TypeString(c.Type(), unqualified)
+									if !generated {
+										line += " = " + c.Val().ExactString()
+									}
+								} else {
+									if s.Type != nil {
+										line += " " + expr(s.Type)
+									}
+									if kind == "const" && i < len(s.Values) && !generated {
+										line += " = " + expr(s.Values[i])
+									}
 								}
 								add("%s", line)
 							}

@@ -10,14 +10,16 @@
 # Next release: libitscam_sdk exports only the C API and the itscam namespace
 # (src/core/itscam_sdk.map).  The symbols it stopped exporting are copies of
 # header-only code (libstdc++ templates, nlohmann::json, cpp-httplib) that
-# every application compiles itself, so none can have bound to them.
+# every application compiles itself, so none can have bound to them.  The
+# rule spares both public prefixes: removing an itscam:: or ITSCAM_ symbol
+# still fails.
 [suppress_function]
   change_kind = deleted-function
-  name_not_regexp = ^itscam::
+  name_not_regexp = ^(itscam::|ITSCAM_)
 
 [suppress_variable]
   change_kind = deleted-variable
-  name_not_regexp = ^itscam::
+  name_not_regexp = ^(itscam::|ITSCAM_)
 
 # 0.10.0: RestApiClientConfig carries every setting the camera has
 # (auxCameraName, minSpeed, discardStatusCodes) and every body part type
