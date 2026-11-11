@@ -18,3 +18,27 @@
 [suppress_variable]
   change_kind = deleted-variable
   name_not_regexp = ^itscam::
+
+# 0.10.0: RestApiClientConfig carries every setting the camera has
+# (auxCameraName, minSpeed, discardStatusCodes) and every body part type
+# (Type: FORM_URLENCODED, JPEG, JSON, RAW, XML), so a get/set round trip no
+# longer resets settings.  Both changed layout or values: C++ applications
+# that use getRestApiClientConfig/setRestApiClientConfig must be rebuilt.
+[suppress_type]
+  name = itscam::rest_types::RestApiClientConfig
+
+[suppress_type]
+  name = itscam::Result<itscam::rest_types::RestApiClientConfig>
+
+[suppress_type]
+  name = itscam::rest_types::Part
+
+[suppress_type]
+  name = itscam::rest_types::Type
+
+# 0.10.0, ARMv7 only: libabigail reads ItscamRestClient's constructor,
+# destructor and clearAuthToken() from the baseline's debug info as returning
+# ItscamRestClient* (the ARM EABI returns `this` from constructors).  They
+# have returned void, unchanged, since v0.7.0.
+[suppress_function]
+  name_regexp = ^itscam::ItscamRestClient::(ItscamRestClient|~ItscamRestClient|clearAuthToken)$
