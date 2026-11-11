@@ -1,0 +1,20 @@
+# itscam_sdk package configuration (installed by the SDK's CMake build).
+#
+#   find_package(itscam_sdk 0.9 CONFIG REQUIRED)
+#   target_link_libraries(app PRIVATE itscam::sdk)
+
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+find_dependency(Threads)
+
+include("${CMAKE_CURRENT_LIST_DIR}/itscam_sdk-targets.cmake")
+
+# What this installation was built with (see docs/cmake.md)
+set(itscam_sdk_SHARED @ITSCAM_SDK_SHARED@)
+set(itscam_sdk_WITH_REST @ITSCAM_SDK_WITH_REST@)
+set(itscam_sdk_WITH_CGI @ITSCAM_SDK_WITH_CGI@)
+set(itscam_sdk_WITH_TLS @ITSCAM_SDK_HAS_TLS@)
+set(itscam_sdk_WITH_C_API @ITSCAM_SDK_WITH_C_API@)
+
+check_required_components(itscam_sdk)

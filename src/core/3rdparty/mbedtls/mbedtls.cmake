@@ -36,7 +36,6 @@ else()
         ${MBEDTLS_CONFIG_DIR})
     target_compile_definitions(itscam_mbedtls_objects PUBLIC
         MBEDTLS_USER_CONFIG_FILE="itscam_mbedtls_config.h")
-    if(WIN32)
-        target_link_libraries(itscam_mbedtls_objects INTERFACE bcrypt)
-    endif()
+    # Its Windows RNG needs bcrypt, which itscam_sdk links (an OBJECT
+    # library can't link anything before CMake 3.12)
 endif()

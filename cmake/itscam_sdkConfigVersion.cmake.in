@@ -1,0 +1,32 @@
+# itscam_sdk package version check (installed by the SDK's CMake build).
+#
+# While the major version is 0, a minor release may break callers
+# (docs/compatibility.md): find_package(itscam_sdk 0.9) accepts 0.9.x only.
+# From 1.0 on, any later release of the same major version is accepted.
+
+set(PACKAGE_VERSION "@ITSCAM_SDK_VERSION@")
+set(PACKAGE_VERSION_COMPATIBLE FALSE)
+set(PACKAGE_VERSION_EXACT FALSE)
+
+if(NOT PACKAGE_FIND_VERSION)
+    set(PACKAGE_VERSION_COMPATIBLE TRUE)
+elseif(NOT PACKAGE_VERSION VERSION_LESS PACKAGE_FIND_VERSION)
+    if("@ITSCAM_SDK_VERSION_MAJOR@" STREQUAL "0")
+        if(PACKAGE_FIND_VERSION_MAJOR EQUAL 0 AND
+           PACKAGE_FIND_VERSION_MINOR EQUAL @ITSCAM_SDK_VERSION_MINOR@)
+            set(PACKAGE_VERSION_COMPATIBLE TRUE)
+        endif()
+    elseif(PACKAGE_FIND_VERSION_MAJOR EQUAL @ITSCAM_SDK_VERSION_MAJOR@)
+        set(PACKAGE_VERSION_COMPATIBLE TRUE)
+    endif()
+endif()
+if(PACKAGE_FIND_VERSION STREQUAL PACKAGE_VERSION)
+    set(PACKAGE_VERSION_EXACT TRUE)
+endif()
+
+# A 64-bit build can't use a 32-bit installation, nor the other way round
+if(NOT "${CMAKE_SIZEOF_VOID_P}" STREQUAL "" AND
+   NOT "${CMAKE_SIZEOF_VOID_P}" STREQUAL "@CMAKE_SIZEOF_VOID_P@")
+    set(PACKAGE_VERSION "${PACKAGE_VERSION} (@CMAKE_SIZEOF_VOID_P@-byte pointers)")
+    set(PACKAGE_VERSION_UNSUITABLE TRUE)
+endif()
