@@ -36,15 +36,22 @@ function findNativeLibrary() {
     const candidates = [
         path.join(__dirname, '..', 'native', `${platform}-${arch}`),
         path.join(__dirname, '..', 'native'),
-        // dev tree: SDK shared library produced by `make lib`
-        path.join(__dirname, '..', '..', '..', 'core', 'build', 'linux'),
-        path.join(__dirname, '..', '..', '..', 'core', 'build', 'win-x64'),
     ];
 
     if (process.env.LD_LIBRARY_PATH) {
         for (const p of process.env.LD_LIBRARY_PATH.split(path.delimiter)) {
             if (p) candidates.push(p);
         }
+    }
+
+    // dev tree: the library `make lib` / `make lib-arm*` / `make windows`
+    // built for this platform and architecture, never another one's
+    const devBuild = {
+        'linux-x64': 'linux', 'linux-arm': 'linux-arm', 'linux-arm64': 'linux-arm64',
+        'win32-x64': 'win-x64', 'win32-ia32': 'win-x86',
+    }[`${platform}-${arch}`];
+    if (devBuild) {
+        candidates.push(path.join(__dirname, '..', '..', '..', 'core', 'build', devBuild));
     }
     if (platform === 'win32' && process.env.PATH) {
         for (const p of process.env.PATH.split(path.delimiter)) {
