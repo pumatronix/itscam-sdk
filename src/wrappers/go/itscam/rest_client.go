@@ -852,6 +852,9 @@ type TelemetryCallback func(TelemetryUpdate)
 // GetSystemTelemetry reads GET /api/system/telemetry: the state of the
 // whole camera.  The camera reads it at most every 2 s.
 func (r *RestClient) GetSystemTelemetry(timeoutMs uint32) (SystemTelemetry, error) {
+	// The native error text is per thread
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
 	r.mu.Lock()
 	var out *C.ITSCAM_String
 	rc := C.ITSCAM_RestClient_getSystemTelemetry(r.handle,
@@ -859,7 +862,10 @@ func (r *RestClient) GetSystemTelemetry(timeoutMs uint32) (SystemTelemetry, erro
 	r.mu.Unlock()
 	body := takeString(out)
 	if err := errorFromCode(int(rc)); err != nil {
-		return SystemTelemetry{}, err
+		if rc == C.ITSCAM_ERROR_NULL_HANDLE {
+			return SystemTelemetry{}, err
+		}
+		return SystemTelemetry{}, fmt.Errorf("%w: %s", err, C.GoString(C.ITSCAM_getLastError()))
 	}
 	var t SystemTelemetry
 	return t, decodeInto(body, &t)

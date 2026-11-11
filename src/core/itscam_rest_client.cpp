@@ -13,6 +13,7 @@
 #include "itscam_rest_client.h"
 #include "impl/itscam_callback_queue.h"
 #include "impl/itscam_http_transport.h"
+#include "impl/itscam_system_telemetry.h"
 #include "itscam_os.h"
 
 #include <algorithm>
@@ -162,9 +163,7 @@ private:
                 [&](const std::string& message) -> bool {
                     if (mShouldStop.load()) return false;
                     json document = json::parse(message, nullptr, false);
-                    if (!document.is_object() || !document.contains("version")) {
-                        // Firmware without the system telemetry pushes only
-                        // the web interface's status
+                    if (!detail::isSystemTelemetry(document)) {
                         if (!warnedFormat) {
                             warnedFormat = true;
                             log(LogLevel::Error,
@@ -885,8 +884,9 @@ Result<rt::SystemTelemetry> TelemetryUpdate::telemetry() const {
 
 Result<rt::SystemTelemetry> ItscamRestClient::getSystemTelemetry(
     uint32_t timeoutMs) {
-    return mapTyped<rt::SystemTelemetry>(
-        mImpl->doGet(mImpl->apiPrefix + "/system/telemetry", timeoutMs));
+    const std::string path = mImpl->apiPrefix + "/system/telemetry";
+    return mapTyped<rt::SystemTelemetry>(detail::requireSystemTelemetry(
+        mImpl->doGet(path, timeoutMs), path));
 }
 
 Result<void> ItscamRestClient::startTelemetryStream(TelemetryCallback callback,

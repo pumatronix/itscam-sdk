@@ -640,7 +640,10 @@ class ItscamRestClient:
             rc = self._lib.ITSCAM_RestClient_getSystemTelemetry(
                 h, timeout_ms, bindings.byref(out))
             body = _take_string(out)
-            _raise_for_error(rc, "get_system_telemetry")
+            if rc != ErrorCode.OK:
+                detail = self._lib.ITSCAM_getLastError()
+                _raise_for_error(rc, detail.decode("utf-8", "replace") if detail
+                                 else "get_system_telemetry")
         return _rt.SystemTelemetry.from_dict(_decode(body))
 
     def start_telemetry_stream(self,

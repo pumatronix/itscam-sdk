@@ -12,6 +12,7 @@
 
 #include "itscam_rest_client_c.h"
 #include "../itscam_rest_client.h"
+#include "../impl/itscam_system_telemetry.h"
 #include "impl/itscam_c_internal.h"
 
 #include "../3rdparty/nlohmann/json.hpp"
@@ -354,7 +355,10 @@ ITSCAM_ErrorCode ITSCAM_RestClient_getSystemTelemetry(ITSCAM_RestClient* c,
                                                       ITSCAM_String** out) {
     if (!c) return ITSCAM_ERROR_NULL_HANDLE;
     // Raw JSON: every wrapper decodes it into its own types
-    return handleResult(c->impl.httpGet(apiPath(c, "/system/telemetry"), t), out);
+    const std::string path = apiPath(c, "/system/telemetry");
+    return handleResult(
+        itscam::detail::requireSystemTelemetry(c->impl.httpGet(path, t), path),
+        out);
 }
 
 ITSCAM_ErrorCode ITSCAM_RestClient_startTelemetryStream(
