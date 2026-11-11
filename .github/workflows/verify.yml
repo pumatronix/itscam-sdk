@@ -63,11 +63,12 @@ jobs:
           cache-from: type=gha,scope=itscam-sdk-core-xenial
           cache-to: type=gha,mode=max,scope=itscam-sdk-core-xenial
 
-      # Docker's own builder: RUN steps in buildx's container builder couldn't
-      # resolve archive.ubuntu.com on GitHub's runners, and the cached images
-      # above never run them.  This image is small enough not to need a cache.
+      # Docker's own builder, on the runner's network: RUN steps couldn't
+      # resolve archive.ubuntu.com in a build network on GitHub's runners
+      # (containers started by docker run can), and the cached images above
+      # never run them.  This image is small enough not to need a cache.
       - name: Build compat image
-        run: docker buildx build --builder default --target compat -t itscam-sdk-compat:ci .
+        run: docker buildx build --builder default --network host --target compat -t itscam-sdk-compat:ci .
 
       - name: make verify
         env:
