@@ -125,6 +125,23 @@ string json = await rest.GetAsync("/api/equipment/misc/readonly/volatile");
 
 Typed setters use **partial serialization** -- only fields explicitly set on the struct are included in the PUT body. The daemon merges the supplied fields into the existing config. The generic `PatchJsonAsync` remains available for untyped payloads or endpoints without a typed helper. See `docs/api/rest-client.md` for details.
 
+## System telemetry
+
+```csharp
+SystemTelemetry t = await rest.GetSystemTelemetryAsync();   // polling
+
+rest.TelemetryReceived += (_, update) =>
+{
+    SystemTelemetry typed = update.GetTelemetry();          // update.Json: JSON
+};
+rest.StartTelemetryStream();
+// ...
+rest.StopTelemetryStream();
+TelemetryUpdate last = rest.LatestTelemetry();              // null before the first
+```
+
+Handlers run on the SDK's callback pool; do not block. An exception a handler throws is discarded. Details of the document and the stream in [`docs/api/rest-client.en-US.md`](../api/rest-client.en-US.md#system-telemetry). Complete example in [`examples/TelemetryExample/`](../../src/wrappers/csharp/examples/TelemetryExample/).
+
 ## Example project
 
 A complete end-to-end example lives at [`src/wrappers/csharp/examples/CaptureExample/`](../../src/wrappers/csharp/examples/CaptureExample/):

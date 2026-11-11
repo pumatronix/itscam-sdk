@@ -162,6 +162,72 @@ auto gen = rest.getGeneralConfig();            // -> Result<nlohmann::json>
 rest.setGeneralConfig(json);                   // PUT /api/equipment/general
 ```
 
+## System telemetry
+
+A single document describes the state of the whole equipment. Use **polling** to read it whenever you want, or the **stream** to receive what the camera pushes, without dealing with WebSockets.
+
+```cpp
+// Polling: one read of the whole equipment
+auto t = rest.getSystemTelemetry();            // -> Result<SystemTelemetry>
+if (t && t.value().health)
+    std::cout << t.value().health->status.value_or("?") << '\n';
+
+// Stream: one document at once, then one every 5 s
+rest.startTelemetryStream([](const TelemetryUpdate& update) {
+    auto typed = update.telemetry();           // or update.document, the JSON
+});
+
+// ...
+rest.stopTelemetryStream();
+auto last = rest.latestTelemetry();            // the last document received
+```
+
+| Language | Read once | Stream | Stop | Last document |
+| -------- | --------- | ------ | ---- | ------------- |
+| C++ | `getSystemTelemetry()` | `startTelemetryStream(callback, timeoutMs)` | `stopTelemetryStream()` | `latestTelemetry()` |
+| C# | `GetSystemTelemetryAsync()` | `TelemetryReceived` event + `StartTelemetryStream(timeoutMs)` | `StopTelemetryStream()` | `LatestTelemetry()` |
+| Python | `get_system_telemetry()` | `start_telemetry_stream(callback, timeout_ms)` | `stop_telemetry_stream()` | `latest_telemetry()` |
+| Go | `GetSystemTelemetry(timeoutMs)` | `StartTelemetryStream(cb, timeoutMs)` | `StopTelemetryStream()` | `LatestTelemetry()` |
+| Java | `getSystemTelemetry(timeoutMs)` | `startTelemetryStream(onUpdate, timeoutMs)` | `stopTelemetryStream()` | `latestTelemetry()` |
+| Node.js | `getSystemTelemetry()` | `startTelemetryStream(onUpdate, timeoutMs)` | `await stopTelemetryStream()` | `latestTelemetry()` |
+
+Complete examples: see the "System telemetry" row in the [`README`](../../README.en-US.md).
+
+### The document
+
+`GET /api/system/telemetry`; the stream delivers exactly the same document.
+
+| Field | Content |
+| ----- | ------- |
+| `version` | Format version. Within a version, fields are only added. |
+| `timestamp` | When it was read (ISO 8601, UTC). |
+| `device` | Model, family and firmware version. |
+| `health` | `status` (`ok`, `warning`, `critical`) and `issues`: what needs attention. |
+| `resources` | Uptime, CPU, memory and storage. |
+| `services` | State of the equipment's services, by name. |
+| `camera` | Whether the camera service answers and delivers images, active profile, FPS, initialization failures. |
+| `connections` | Clients connected now, per protocol (Cougar, ITSCAM, CGI). |
+| `integrations` | ITSCAM PRO, Lince and the REST API clients. |
+| `network` | Wired interfaces, Wi-Fi and mobile network. |
+| `processing` | Processing statistics of the last 10, 30 and 60 minutes. |
+| `flashTest` | Result of the online flash test. |
+
+A part that can't be read in time is `null`: check before using it. To react to a problem, use each issue's `id`; `message` is English text, for logs.
+
+### Polling or stream
+
+The camera reads the document at most every 2 s, so polling faster returns the same document. The stream delivers one document at once, then one every 5 s.
+
+- The stream runs on its own thread and reconnects by itself (1 s, doubling up to 30 s) with the client's current token. If the token expires, log in again: the next reconnection uses it.
+- `timeoutMs` is the silence after which the connection is dropped and reopened (0 selects 15000).
+- The callback runs on the SDK's callback pool; do not block. One that falls behind gets the latest documents. It may stop or restart the stream, or destroy the client.
+- Without a callback, the stream only keeps the latest document, available from `latestTelemetry()`.
+- `stopTelemetryStream()` returns once no callback runs: no document follows, not even one already queued. Called from a callback, it returns at once.
+- `latestTelemetry()` stays available after the stop; check `receivedAtMs` to tell how old the document is. Before the first document, it returns `Error::Disconnected` in C++ and nothing (`null`, `None`, `ok == false`) in the wrappers.
+- `sequence` starts at 1 and keeps counting across reconnections.
+
+The firmware must have the endpoint: on earlier versions the `GET` fails, and the stream connects but delivers no documents.
+
 ## Generic HTTP verbs (escape hatch)
 
 For endpoints not covered by typed helpers (or when you need to send a partial-update body):

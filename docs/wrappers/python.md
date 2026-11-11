@@ -129,6 +129,22 @@ with ItscamRestClient() as rest:
 
 O módulo completo de POCOs também está disponível em `itscam.rest_types` para imports explícitos.
 
+### Telemetria do sistema
+
+```python
+t = rest.get_system_telemetry()                # polling
+
+def on_update(update):
+    typed = update.telemetry()                 # update.document: dict
+
+rest.start_telemetry_stream(on_update)
+# ...
+rest.stop_telemetry_stream()
+last = rest.latest_telemetry()                 # None antes do primeiro
+```
+
+O callback roda no pool de callbacks do SDK; não bloqueie. Detalhes do documento e do stream em [`docs/api/rest-client.md`](../api/rest-client.md#telemetria-do-sistema).
+
 ## Uso do binary client
 
 ```python
@@ -150,6 +166,7 @@ Scripts prontos para rodar em [`src/wrappers/python/examples/`](../../src/wrappe
 | ---------------------------------------- | ------------------------------------- |
 | `capture_example.py <host>`              | Capture loop pelo binary client.      |
 | `rest_example.py <host> <user> <pass>`   | REST login + leitura de configuration.|
+| `telemetry_example.py <host> <user> <pass>` | Telemetria do sistema: polling e stream. |
 | `cgi_snapshot_example.py <host> [...]`   | CGI lastframe + snapshot + MJPEG.     |
 
 O example de CGI aceita flags opcionais `--user` / `--password`; sem elas, ele fala com a câmera de forma anônima.

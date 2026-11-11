@@ -181,6 +181,19 @@ auto raw = rest.httpGet("/api/equipment/misc/readonly/volatile").value();
 
 Detalhe completo (typed helpers com serialização parcial, escape hatch genérico e quando usar `httpGet` / `httpPut`) em [docs/api/rest-client.md](../api/rest-client.md).
 
+### Telemetria do sistema
+
+```cpp
+auto t = rest.getSystemTelemetry();            // polling
+rest.startTelemetryStream([](const TelemetryUpdate& update) {
+    auto typed = update.telemetry();           // update.document: JSON
+});
+rest.stopTelemetryStream();
+auto last = rest.latestTelemetry();
+```
+
+O callback roda no pool de callbacks do SDK; não bloqueie. Detalhes do documento e do stream em [`docs/api/rest-client.md`](../api/rest-client.md#telemetria-do-sistema).
+
 ### Binary (Cougar TCP :60000)
 
 ```cpp
@@ -211,6 +224,7 @@ Em [`src/examples/`](../../src/examples/):
 | ---------------------------------------------------------------------------------------------- | -------------------------------------------------- |
 | [`itscam_sdk_example.cpp`](../../src/examples/itscam_sdk_example.cpp)                          | Binary client connect + capture + eventos.         |
 | [`itscam_rest_example.cpp`](../../src/examples/itscam_rest_example.cpp)                        | REST login + leitura de configuration.             |
+| [`itscam_telemetry_example.cpp`](../../src/examples/itscam_telemetry_example.cpp)              | Telemetria do sistema: polling e stream.           |
 | [`itscam_cgi_example.cpp`](../../src/examples/itscam_cgi_example.cpp)                          | CGI lastframe + snapshot + MJPEG (auth opcional).  |
 | [`itscam_trigger_recorder.cpp`](../../src/examples/itscam_trigger_recorder.cpp)                | Trigger burst recorder em disco (binary client).   |
 

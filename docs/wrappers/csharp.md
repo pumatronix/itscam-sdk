@@ -125,6 +125,23 @@ string json = await rest.GetAsync("/api/equipment/misc/readonly/volatile");
 
 Setters tipados usam **serialização parcial** -- apenas fields explicitamente setados no struct são incluídos no body PUT. O daemon faz merge dos campos enviados sobre a config existente. O genérico `PatchJsonAsync` permanece disponível para payloads não tipados ou endpoints sem typed helper. Veja [`docs/api/rest-client.md`](../api/rest-client.md) para detalhes.
 
+## Telemetria do sistema
+
+```csharp
+SystemTelemetry t = await rest.GetSystemTelemetryAsync();   // polling
+
+rest.TelemetryReceived += (_, update) =>
+{
+    SystemTelemetry typed = update.GetTelemetry();          // update.Json: JSON
+};
+rest.StartTelemetryStream();
+// ...
+rest.StopTelemetryStream();
+TelemetryUpdate last = rest.LatestTelemetry();              // null antes do primeiro
+```
+
+Handlers rodam no pool de callbacks do SDK; não bloqueie. Uma exceção de um handler é descartada. Detalhes do documento e do stream em [`docs/api/rest-client.md`](../api/rest-client.md#telemetria-do-sistema). Exemplo completo em [`examples/TelemetryExample/`](../../src/wrappers/csharp/examples/TelemetryExample/).
+
 ## Projeto de example
 
 Um example end-to-end completo fica em [`src/wrappers/csharp/examples/CaptureExample/`](../../src/wrappers/csharp/examples/CaptureExample/):

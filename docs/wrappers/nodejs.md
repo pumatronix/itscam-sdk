@@ -130,6 +130,22 @@ try {
 * **Generic verbs** (escape hatch): `get`, `put`, `post`, `delete`, `patchJson`. Retornam JSON parseado (objeto / array) ou string raw quando o body não é JSON.
 * **Generic partial PUT** — `rest.patchJson(path, partialBody)` envia somente os campos que mudaram. Disponível para payloads não tipados ou endpoints sem typed helper. Veja [`docs/api/rest-client.md`](../api/rest-client.md).
 
+### Telemetria do sistema
+
+```js
+const t = rest.getSystemTelemetry();           // polling
+
+// O callback roda na thread do JS quando o event loop estiver livre
+rest.startTelemetryStream((update) => {
+    console.log(update.sequence, update.document.health);
+});
+// ...
+await rest.stopTelemetryStream();
+const last = rest.latestTelemetry();           // null antes do primeiro
+```
+
+Detalhes do documento e do stream em [`docs/api/rest-client.md`](../api/rest-client.md#telemetria-do-sistema).
+
 ## Uso do binary client
 
 ```js
@@ -173,6 +189,7 @@ Em [`src/wrappers/nodejs/examples/`](../../src/wrappers/nodejs/examples/):
 | ------ | --------- |
 | `capture-example.js <host> [pass]` | Binary client connect + authenticate + snapshot. |
 | `rest-example.js <host> <user> <pass>` | REST login + leitura de configuration. |
+| `telemetry-example.js <host> <user> <pass>` | Telemetria do sistema: polling e stream. |
 | `cgi-snapshot-example.js <host> [...]` | `lastframe.cgi`, `snapshot.cgi`, MJPEG streaming. |
 
 Run com:

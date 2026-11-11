@@ -146,6 +146,22 @@ fmt.Println(body)
 
 The generated structs live in [`src/wrappers/go/itscam/rest_types.go`](../../src/wrappers/go/itscam/rest_types.go); optional fields are modelled as pointers so `nil` round-trips cleanly via `encoding/json`.
 
+### System telemetry
+
+```go
+t, _ := rest.GetSystemTelemetry(10000)         // polling
+
+_ = rest.StartTelemetryStream(func(update itscam.TelemetryUpdate) {
+    typed, _ := update.Telemetry()             // update.Document: JSON
+    _ = typed
+}, 0)
+// ...
+rest.StopTelemetryStream()
+last, ok, _ := rest.LatestTelemetry()          // ok == false before the first
+```
+
+The callback runs on the SDK's callback pool; do not block. Details of the document and the stream in [`docs/api/rest-client.en-US.md`](../api/rest-client.en-US.md#system-telemetry).
+
 ## Examples
 
 Under [`src/wrappers/go/examples/`](../../src/wrappers/go/examples/):
@@ -154,6 +170,7 @@ Under [`src/wrappers/go/examples/`](../../src/wrappers/go/examples/):
 | ----------------------------- | ----------------------------------------------------- |
 | `capture_example.go`          | Binary client connect + capture loop.                 |
 | `rest_example.go`             | REST login + read configuration.                      |
+| `telemetry_example.go`        | System telemetry: polling and stream.                 |
 | `cgi_snapshot_example.go`     | CGI lastframe + snapshot + MJPEG (auth optional).     |
 | `gui/`                        | Wails-based desktop viewer; see `gui/README.md`.      |
 

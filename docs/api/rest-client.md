@@ -162,6 +162,72 @@ auto gen = rest.getGeneralConfig();            // -> Result<nlohmann::json>
 rest.setGeneralConfig(json);                   // PUT /api/equipment/general
 ```
 
+## Telemetria do sistema
+
+Um único documento descreve o estado do equipamento inteiro. Use **polling** para ler quando quiser, ou o **stream** para receber o que a câmera publica, sem lidar com WebSocket.
+
+```cpp
+// Polling: uma leitura do equipamento inteiro
+auto t = rest.getSystemTelemetry();            // -> Result<SystemTelemetry>
+if (t && t.value().health)
+    std::cout << t.value().health->status.value_or("?") << '\n';
+
+// Stream: um documento na hora, depois um a cada 5 s
+rest.startTelemetryStream([](const TelemetryUpdate& update) {
+    auto typed = update.telemetry();           // ou update.document, o JSON
+});
+
+// ...
+rest.stopTelemetryStream();
+auto last = rest.latestTelemetry();            // o último documento recebido
+```
+
+| Linguagem | Ler uma vez | Stream | Parar | Último documento |
+| --------- | ----------- | ------ | ----- | ---------------- |
+| C++ | `getSystemTelemetry()` | `startTelemetryStream(callback, timeoutMs)` | `stopTelemetryStream()` | `latestTelemetry()` |
+| C# | `GetSystemTelemetryAsync()` | evento `TelemetryReceived` + `StartTelemetryStream(timeoutMs)` | `StopTelemetryStream()` | `LatestTelemetry()` |
+| Python | `get_system_telemetry()` | `start_telemetry_stream(callback, timeout_ms)` | `stop_telemetry_stream()` | `latest_telemetry()` |
+| Go | `GetSystemTelemetry(timeoutMs)` | `StartTelemetryStream(cb, timeoutMs)` | `StopTelemetryStream()` | `LatestTelemetry()` |
+| Java | `getSystemTelemetry(timeoutMs)` | `startTelemetryStream(onUpdate, timeoutMs)` | `stopTelemetryStream()` | `latestTelemetry()` |
+| Node.js | `getSystemTelemetry()` | `startTelemetryStream(onUpdate, timeoutMs)` | `await stopTelemetryStream()` | `latestTelemetry()` |
+
+Exemplos completos: veja a linha "System telemetry" no [`README`](../../README.md).
+
+### O documento
+
+`GET /api/system/telemetry`; o stream entrega exatamente o mesmo documento.
+
+| Campo | Conteúdo |
+| ----- | -------- |
+| `version` | Versão do formato. Dentro de uma versão, campos só são adicionados. |
+| `timestamp` | Quando foi lido (ISO 8601, UTC). |
+| `device` | Modelo, família e versão de firmware. |
+| `health` | `status` (`ok`, `warning`, `critical`) e `issues`: o que precisa de atenção. |
+| `resources` | Uptime, CPU, memória e armazenamento. |
+| `services` | Estado dos serviços do equipamento, por nome. |
+| `camera` | Se o serviço da câmera responde e entrega imagens, profile ativo, FPS, falhas de inicialização. |
+| `connections` | Clientes conectados agora, por protocolo (Cougar, ITSCAM, CGI). |
+| `integrations` | ITSCAM PRO, Lince e clientes da API REST. |
+| `network` | Interfaces cabeadas, Wi-Fi e rede móvel. |
+| `processing` | Estatísticas de processamento dos últimos 10, 30 e 60 minutos. |
+| `flashTest` | Resultado do teste online do flash. |
+
+Uma parte que não pôde ser lida a tempo vem `null`: teste antes de usar. Para reagir a um problema, use o `id` de cada issue; `message` é um texto em inglês, para logs.
+
+### Polling ou stream
+
+A câmera lê o documento no máximo a cada 2 s, então fazer polling mais rápido retorna o mesmo documento. O stream entrega um documento na hora e depois um a cada 5 s.
+
+- O stream roda em uma thread própria e reconecta sozinho (1 s, dobrando até 30 s) com o token atual do client. Se o token expirar, faça login de novo: a próxima reconexão já o usa.
+- `timeoutMs` é o silêncio depois do qual a conexão é derrubada e reaberta (0 seleciona 15000).
+- O callback roda no pool de callbacks do SDK; não bloqueie. Um callback que fica para trás recebe os documentos mais recentes. Ele pode parar ou reiniciar o stream, ou destruir o client.
+- Sem callback, o stream só guarda o último documento, disponível em `latestTelemetry()`.
+- `stopTelemetryStream()` retorna quando nenhum callback roda: nenhum documento vem depois, nem um que já estava na fila. Chamado de um callback, retorna na hora.
+- `latestTelemetry()` continua disponível depois do stop; confira `receivedAtMs` para saber a idade do documento. Antes do primeiro documento, retorna `Error::Disconnected` em C++ e nulo (`null`, `None`, `ok == false`) nos wrappers.
+- `sequence` começa em 1 e continua contando através das reconexões.
+
+O firmware precisa ter o endpoint: em versões anteriores o `GET` falha, e o stream conecta mas não entrega documentos.
+
 ## HTTP verbs genéricos (escape hatch)
 
 Para endpoints não cobertos por typed helpers (ou quando você precisa mandar um body de partial-update):

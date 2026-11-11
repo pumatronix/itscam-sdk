@@ -150,6 +150,24 @@ try (ItscamRestClient rest = new ItscamRestClient()) {
 }
 ```
 
+### Telemetria do sistema
+
+```java
+SystemTelemetry t = rest.getSystemTelemetry(10000);    // polling
+String status = t.getHealthStatus();                   // t.get("camera"), ...
+
+rest.startTelemetryStream(new ItscamConsumer<TelemetryUpdate>() {
+    @Override public void accept(TelemetryUpdate update) {
+        SystemTelemetry typed = update.telemetry();    // update.json(): JSON
+    }
+}, 0);
+// ...
+rest.stopTelemetryStream();
+TelemetryUpdate last = rest.latestTelemetry();         // null antes do primeiro
+```
+
+O callback roda no pool de callbacks do SDK; não bloqueie. Detalhes do documento e do stream em [`docs/api/rest-client.md`](../api/rest-client.md#telemetria-do-sistema).
+
 ## Uso do binary client
 
 ```java
@@ -174,6 +192,7 @@ Em [`src/wrappers/java/examples/src/main/java/com/pumatronix/itscam/examples/`](
 | ------ | --------- |
 | `CaptureExample` | Binary client connect + authenticate + snapshot. |
 | `RestExample` | REST login + leitura de configuration sobre HTTP/HTTPS. |
+| `TelemetryExample` | Telemetria do sistema: polling e stream. |
 | `CgiSnapshotExample` | `lastframe.cgi`, `snapshot.cgi`, MJPEG streaming. |
 
 Run com:
