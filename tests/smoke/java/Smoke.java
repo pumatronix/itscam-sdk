@@ -48,8 +48,13 @@ public final class Smoke {
         System.out.println("Java " + System.getProperty("java.version") + " smoke ("
                 + System.getProperty("file.encoding") + ") against " + host + ":" + port);
 
+        // ITSCAM_TEST_EXPECT_VERSION: the library under test, so that a stale
+        // copy found first fails instead of passing
         String version = Sdk.getNativeLibraryVersion();
-        check(version != null && !version.isEmpty(), "version", version);
+        String expected = env("ITSCAM_TEST_EXPECT_VERSION", "");
+        boolean current = expected.isEmpty() || expected.equals(version);
+        check(version != null && !version.isEmpty() && current, "version",
+                current ? version : version + ", expected " + expected);
 
         ItscamRestClient rest = new ItscamRestClient();
         try {
@@ -134,6 +139,30 @@ public final class Smoke {
             }
         } finally {
             telemetryRest.close();
+        }
+
+        // The stand-in's certificate is self-signed: nobody trusts it
+        int tlsPort = Integer.parseInt(env("ITSCAM_TEST_TLS_PORT", "18443"));
+        ItscamRestClient untrusting = new ItscamRestClient();
+        try {
+            untrusting.setBaseUrl(host, tlsPort, "https");
+            untrusting.login("admin", "1234", 10000);
+            check(false, "https refuses an untrusted certificate", "accepted");
+        } catch (ItscamException e) {
+            check(true, "https refuses an untrusted certificate", e.getMessage());
+        } finally {
+            untrusting.close();
+        }
+        ItscamRestClient trusting = new ItscamRestClient();
+        try {
+            trusting.setBaseUrl(host, tlsPort, "https");
+            trusting.setCaCertFile(env("ITSCAM_TEST_CA", "tests/standin/tls/cert.pem"));
+            trusting.login("admin", "1234", 10000);
+            check(trusting.getProfiles(10000).size() == 1, "https with the certificate trusted", "");
+        } catch (ItscamException e) {
+            check(false, "https with the certificate trusted", e.getMessage());
+        } finally {
+            trusting.close();
         }
 
         // Nothing listens on port 1: fails fast and leaves no thread behind

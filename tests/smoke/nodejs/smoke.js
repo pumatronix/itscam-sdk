@@ -27,8 +27,13 @@ async function main() {
     const port = Number(process.env.ITSCAM_TEST_PORT || 18080);
     console.log(`Node.js ${process.version} smoke against ${host}:${port}`);
 
+    // ITSCAM_TEST_EXPECT_VERSION: the library under test, so that a stale
+    // copy (the wrapper prefers natives staged in its package) fails
     const version = itscam.getNativeLibraryVersion();
-    check(!!version, "version", version);
+    const expected = process.env.ITSCAM_TEST_EXPECT_VERSION;
+    check(!!version && (!expected || version === expected), "version",
+        !expected || version === expected ? version
+            : `${version}, expected ${expected} (loaded ${itscam.getLibraryPath()})`);
 
     const rest = new itscam.ItscamRestClient();
     try {
@@ -103,6 +108,30 @@ async function main() {
         }
     } finally {
         telemetryRest.close();
+    }
+
+    // The stand-in's certificate is self-signed: nobody trusts it
+    const tlsPort = Number(process.env.ITSCAM_TEST_TLS_PORT || 18443);
+    const untrusting = new itscam.ItscamRestClient();
+    try {
+        untrusting.setBaseUrl(host, tlsPort, "https");
+        untrusting.login("admin", "1234");
+        check(false, "https refuses an untrusted certificate", "accepted");
+    } catch (e) {
+        check(true, "https refuses an untrusted certificate", e.message);
+    } finally {
+        untrusting.close();
+    }
+    const trusting = new itscam.ItscamRestClient();
+    try {
+        trusting.setBaseUrl(host, tlsPort, "https");
+        trusting.setCaCertFile(process.env.ITSCAM_TEST_CA || "tests/standin/tls/cert.pem");
+        trusting.login("admin", "1234");
+        check(trusting.getProfiles().length === 1, "https with the certificate trusted");
+    } catch (e) {
+        check(false, "https with the certificate trusted", e.message);
+    } finally {
+        trusting.close();
     }
 
     // Nothing listens on port 1: fails fast and leaves no thread behind

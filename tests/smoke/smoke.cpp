@@ -7,7 +7,8 @@
  *  each supported compiler, then runs it on every Linux architecture.  The
  *  checks match the other languages' smoke tests (see tests/README.md).
  *
- *  Environment: ITSCAM_TEST_HOST (127.0.0.1), ITSCAM_TEST_PORT (18080).
+ *  Environment: ITSCAM_TEST_HOST (127.0.0.1), ITSCAM_TEST_PORT (18080),
+ *  ITSCAM_TEST_TLS_PORT (18443), ITSCAM_TEST_CA (tests/standin/tls/cert.pem).
  */
 
 #include <atomic>
@@ -41,8 +42,13 @@ int main() {
     std::printf("C++ smoke (__cplusplus %ld) against %s:%u\n",
                 static_cast<long>(__cplusplus), host.c_str(), port);
 
+    // ITSCAM_TEST_EXPECT_VERSION: the library under test, so that a stale
+    // copy found first on the search path fails instead of passing
     const std::string version = ITSCAM_getVersion();
-    check(!version.empty(), "version", version);
+    const std::string expected = env("ITSCAM_TEST_EXPECT_VERSION", "");
+    check(!version.empty() && (expected.empty() || version == expected), "version",
+          expected.empty() || version == expected ? version
+                                                  : version + ", expected " + expected);
 
     {
         ItscamRestClient rest;
@@ -112,6 +118,34 @@ int main() {
         auto latest = rest.latestTelemetry();
         check(started && received >= 2 && latest && latest.value().sequence >= 2,
               "telemetry stream",
+              started ? std::to_string(received.load()) + " documents" : started.error().message);
+    }
+
+    {
+        // The stand-in's certificate is self-signed: nobody trusts it
+        const uint16_t tlsPort = static_cast<uint16_t>(
+            std::atoi(env("ITSCAM_TEST_TLS_PORT", "18443").c_str()));
+        ItscamRestClient untrusting;
+        untrusting.setBaseUrl(host, tlsPort, "https");
+        auto refused = untrusting.login("admin", "1234");
+        check(!refused, "https refuses an untrusted certificate",
+              refused ? "accepted" : refused.error().message);
+
+        ItscamRestClient rest;
+        rest.setBaseUrl(host, tlsPort, "https");
+        rest.setCaCertFile(env("ITSCAM_TEST_CA", "tests/standin/tls/cert.pem"));
+        auto login = rest.login("admin", "1234");
+        auto profiles = rest.getProfiles();
+        check(login && profiles && profiles.value().size() == 1,
+              "https with the certificate trusted",
+              login ? (profiles ? "" : profiles.error().message) : login.error().message);
+
+        std::atomic<int> received{0};
+        auto started = rest.startTelemetryStream(
+            [&received](const TelemetryUpdate&) { ++received; });
+        for (int i = 0; i < 100 && received < 2; ++i) os::sleepForMs(50);
+        rest.stopTelemetryStream();
+        check(started && received >= 2, "telemetry stream over TLS",
               started ? std::to_string(received.load()) + " documents" : started.error().message);
     }
 

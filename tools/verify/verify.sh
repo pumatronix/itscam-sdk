@@ -57,6 +57,16 @@ newer_runtime() { case "$1" in x64) echo ubuntu:18.04 ;; *) echo debian:buster ;
 node_image() { case "$1" in arm) echo node:20-bookworm-slim ;; *) echo node:16-slim ;; esac; }
 goarch()    { case "$1" in x64) echo "GOARCH=amd64" ;; arm) echo "GOARCH=arm GOARM=7" ;; arm64) echo "GOARCH=arm64" ;; esac; }
 has_step()  { [[ " $STEPS " == *" $1 "* ]]; }
+# The version string built into an architecture's library: the smoke tests
+# check they loaded that one, not a stale copy found first
+lib_version() {
+    python3 - "$ROOT/src/core/build/$(core_dir "$1")/libitscam_sdk.so" <<'PY'
+import re, sys
+data = open(sys.argv[1], "rb").read()
+m = re.search(rb"\d+\.\d+\.\d+[ -~]*\([0-9a-f]{7,40}, \d{4}-\d{2}-\d{2}\)", data)
+print(m.group(0).decode() if m else "")
+PY
+}
 
 INCLUDES="-Isrc/core -Isrc/core/3rdparty"
 
@@ -169,10 +179,12 @@ stop_standin() { docker rm -f "$STANDIN" >/dev/null 2>&1 || true; }
 run_on() {
     local arch="$1" image="$2"; shift 2
     local ref; ref="$(platform_image "$image" "$(platform "$arch")")" || return 1
+    local lib_dir="/sdk/src/core/build/$(core_dir "$arch")"
     docker run --rm --platform "$(platform "$arch")" --network "container:$STANDIN" \
         -v "$ROOT:/sdk:ro" -w /sdk -e PYTHONDONTWRITEBYTECODE=1 \
         -e ITSCAM_TEST_HOST=127.0.0.1 -e ITSCAM_TEST_PORT=$PORT \
-        -e LD_LIBRARY_PATH="/sdk/src/core/build/$(core_dir "$arch")" \
+        -e ITSCAM_TEST_EXPECT_VERSION="$(lib_version "$arch")" \
+        -e LD_LIBRARY_PATH="$lib_dir" -e ITSCAM_SDK_LIBRARY="$lib_dir/libitscam_sdk.so" \
         "$ref" "$@"
 }
 
@@ -207,14 +219,15 @@ run_x64_only() {
     local cp="src/wrappers/java/itscam-sdk/target/itscam-sdk-0.0.0.jar:\$(cat $BIN/java-classpath.txt):$BIN/java"
     for enc in UTF-8 US-ASCII; do
         step "run x64: Java (default charset $enc)" docker_run "$BUILDER_IMAGE" --network "container:$STANDIN" \
-            -e ITSCAM_TEST_PORT=$PORT -- bash -c "java -Dfile.encoding=$enc -Ditscam.sdk.library=$lib -cp $cp Smoke"
+            -e ITSCAM_TEST_PORT=$PORT -e ITSCAM_TEST_EXPECT_VERSION="$(lib_version x64)" -- bash -c "java -Dfile.encoding=$enc -Ditscam.sdk.library=$lib -cp $cp Smoke"
     done
     step "run x64: C# (.NET 8)" docker_run "$BUILDER_IMAGE" --network "container:$STANDIN" \
         -e ITSCAM_TEST_PORT=$PORT -e LD_LIBRARY_PATH=/sdk/src/core/build/linux -- dotnet "$BIN/csharp/Smoke.dll"
 }
 
 step_cmake() {
-    docker_run "$BUILDER_IMAGE" --network "container:$STANDIN" -e ITSCAM_TEST_PORT=$PORT -- tools/verify/cmake-matrix.sh
+    docker_run "$BUILDER_IMAGE" --network "container:$STANDIN" -e ITSCAM_TEST_PORT=$PORT \
+        -e ITSCAM_TEST_CA=/sdk/tests/standin/tls/cert.pem -- tools/verify/cmake-matrix.sh
 }
 
 step_codegen() {

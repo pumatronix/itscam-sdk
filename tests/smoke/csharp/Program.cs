@@ -111,6 +111,30 @@ internal static class Program
             catch (ItscamException e) { Check(false, "telemetry stream", e.Message); }
         }
 
+        // The stand-in's certificate is self-signed: nobody trusts it
+        var tlsPort = ushort.Parse(Env("ITSCAM_TEST_TLS_PORT", "18443"));
+        using (var rest = new ItscamRestClient())
+        {
+            rest.SetBaseUrl(host, tlsPort, "https");
+            try
+            {
+                await rest.LoginAsync("admin", "1234");
+                Check(false, "https refuses an untrusted certificate", "accepted");
+            }
+            catch (ItscamException e) { Check(true, "https refuses an untrusted certificate", e.Message); }
+        }
+        using (var rest = new ItscamRestClient())
+        {
+            rest.SetBaseUrl(host, tlsPort, "https");
+            rest.SetCaCertFile(Env("ITSCAM_TEST_CA", "tests/standin/tls/cert.pem"));
+            try
+            {
+                await rest.LoginAsync("admin", "1234");
+                Check((await rest.GetProfilesAsync()).Count == 1, "https with the certificate trusted");
+            }
+            catch (ItscamException e) { Check(false, "https with the certificate trusted", e.Message); }
+        }
+
         // Nothing listens on port 1: fails fast and leaves no thread behind
         using (var client = new ItscamClient())
         {

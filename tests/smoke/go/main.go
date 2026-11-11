@@ -135,6 +135,24 @@ func main() {
 		check(false, "telemetry", err.Error())
 	}
 
+	// The stand-in's certificate is self-signed: nobody trusts it
+	tlsPort, _ := strconv.Atoi(env("ITSCAM_TEST_TLS_PORT", "18443"))
+	if rest, err := itscam.NewRestClient(); err == nil {
+		rest.SetBaseUrl(host, uint16(tlsPort), "https")
+		_, err := rest.Login("admin", "1234", 10000)
+		check(err != nil, "https refuses an untrusted certificate", errText(err))
+		rest.Close()
+	}
+	if rest, err := itscam.NewRestClient(); err == nil {
+		rest.SetBaseUrl(host, uint16(tlsPort), "https")
+		rest.SetCaCertFile(env("ITSCAM_TEST_CA", "tests/standin/tls/cert.pem"))
+		_, err := rest.Login("admin", "1234", 10000)
+		profiles, perr := rest.GetProfiles(10000)
+		check(err == nil && perr == nil && len(profiles) == 1,
+			"https with the certificate trusted", errText(err)+errText(perr))
+		rest.Close()
+	}
+
 	// Nothing listens on port 1: fails fast and leaves no thread behind
 	client, err := itscam.NewClient()
 	if err != nil {

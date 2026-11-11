@@ -34,8 +34,12 @@ def main():
     port = int(os.environ.get("ITSCAM_TEST_PORT") or "18080")
     print("Python %s smoke against %s:%d" % (sys.version.split()[0], host, port))
 
+    # ITSCAM_TEST_EXPECT_VERSION: the library under test, so that a stale
+    # copy found first on the search path fails instead of passing
     version = itscam.get_version()
-    check(bool(version), "version", version)
+    expected = os.environ.get("ITSCAM_TEST_EXPECT_VERSION")
+    check(bool(version) and (not expected or version == expected), "version",
+          version if not expected or version == expected else "%s, expected %s" % (version, expected))
 
     rest = ItscamRestClient()
     try:
@@ -109,6 +113,30 @@ def main():
                   "telemetry stream", "%d documents" % len(received))
         except ItscamError as e:
             check(False, "telemetry stream", str(e))
+    finally:
+        rest.close()
+
+    # The stand-in's certificate is self-signed: nobody trusts it
+    tls_port = int(os.environ.get("ITSCAM_TEST_TLS_PORT") or "18443")
+    rest = ItscamRestClient()
+    try:
+        rest.set_base_url(host, tls_port, "https")
+        try:
+            rest.login("admin", "1234")
+            check(False, "https refuses an untrusted certificate", "accepted")
+        except ItscamError as e:
+            check(True, "https refuses an untrusted certificate", str(e))
+    finally:
+        rest.close()
+    rest = ItscamRestClient()
+    try:
+        rest.set_base_url(host, tls_port, "https")
+        rest.set_ca_cert_file(os.environ.get("ITSCAM_TEST_CA") or "tests/standin/tls/cert.pem")
+        try:
+            rest.login("admin", "1234")
+            check(len(rest.get_profiles()) == 1, "https with the certificate trusted")
+        except ItscamError as e:
+            check(False, "https with the certificate trusted", str(e))
     finally:
         rest.close()
 

@@ -7,7 +7,8 @@
  *  no C++ in the consumer at all.  Same checks as the other languages
  *  (tests/README.md), on the REST and binary clients.
  *
- *  Environment: ITSCAM_TEST_HOST (127.0.0.1), ITSCAM_TEST_PORT (18080).
+ *  Environment: ITSCAM_TEST_HOST (127.0.0.1), ITSCAM_TEST_PORT (18080),
+ *  ITSCAM_TEST_TLS_PORT (18443), ITSCAM_TEST_CA (tests/standin/tls/cert.pem).
  */
 
 #define _POSIX_C_SOURCE 199309L  /* nanosleep */
@@ -42,11 +43,15 @@ static void sleep_ms(int ms) {
 #endif
 }
 
-/* Callbacks of one client run one at a time, on the SDK's callback pool */
-static volatile int telemetry_received = 0;
+/* Written by the SDK's callback pool and read by main: the compilers' atomic
+ * builtins (GCC, MinGW, Clang), as C99 has no atomics of its own */
+static int telemetry_received = 0;
+static int received_count(void) { return __sync_fetch_and_add(&telemetry_received, 0); }
 static void on_telemetry(const ITSCAM_TelemetryUpdate* update, void* user_data) {
     (void)user_data;
-    if (update && update->json && strstr(update->json, "\"version\":1")) ++telemetry_received;
+    if (update && update->json && strstr(update->json, "\"version\":1")) {
+        __sync_fetch_and_add(&telemetry_received, 1);
+    }
 }
 
 static const char* env(const char* name, const char* fallback) {
@@ -64,7 +69,12 @@ int main(void) {
 
     printf("C smoke against %s:%u\n", host, port);
 
-    check(ITSCAM_getVersion() && *ITSCAM_getVersion(), "version", ITSCAM_getVersion());
+    /* ITSCAM_TEST_EXPECT_VERSION: the library under test, so that a stale
+     * copy found first on the search path fails instead of passing */
+    check(ITSCAM_getVersion() && *ITSCAM_getVersion() &&
+              (!*env("ITSCAM_TEST_EXPECT_VERSION", "") ||
+               strcmp(ITSCAM_getVersion(), env("ITSCAM_TEST_EXPECT_VERSION", "")) == 0),
+          "version", ITSCAM_getVersion());
 
     rest = ITSCAM_RestClient_create();
     check(rest != NULL, "rest create", "");
@@ -108,15 +118,34 @@ int main(void) {
             int64_t received_at = 0;
             int i;
             rc = ITSCAM_RestClient_startTelemetryStream(rest, on_telemetry, NULL, 0);
-            for (i = 0; i < 100 && telemetry_received < 2; ++i) sleep_ms(50);
+            for (i = 0; i < 100 && received_count() < 2; ++i) sleep_ms(50);
             ITSCAM_RestClient_stopTelemetryStream(rest);
             out = NULL;
             ITSCAM_RestClient_latestTelemetry(rest, &sequence, &received_at, &out);
             if (out) ITSCAM_String_destroy(out);
-            check(rc == ITSCAM_OK && telemetry_received >= 2 && sequence >= 2,
+            check(rc == ITSCAM_OK && received_count() >= 2 && sequence >= 2,
                   "telemetry stream", rc == ITSCAM_OK ? "" : ITSCAM_getLastError());
         }
         ITSCAM_RestClient_destroy(rest);
+    }
+
+    /* The stand-in's certificate is self-signed: nobody trusts it */
+    {
+        unsigned short tls_port = (unsigned short)atoi(env("ITSCAM_TEST_TLS_PORT", "18443"));
+        ITSCAM_RestClient* https = ITSCAM_RestClient_create();
+        ITSCAM_RestClient_setBaseUrl(https, host, tls_port, "https");
+        rc = ITSCAM_RestClient_login(https, "admin", "1234", 10000, NULL);
+        check(rc != ITSCAM_OK, "https refuses an untrusted certificate",
+              rc != ITSCAM_OK ? ITSCAM_getLastError() : "accepted");
+        ITSCAM_RestClient_destroy(https);
+
+        https = ITSCAM_RestClient_create();
+        ITSCAM_RestClient_setBaseUrl(https, host, tls_port, "https");
+        ITSCAM_RestClient_setCaCertFile(https, env("ITSCAM_TEST_CA", "tests/standin/tls/cert.pem"));
+        rc = ITSCAM_RestClient_login(https, "admin", "1234", 10000, NULL);
+        check(rc == ITSCAM_OK, "https with the certificate trusted",
+              rc == ITSCAM_OK ? "" : ITSCAM_getLastError());
+        ITSCAM_RestClient_destroy(https);
     }
 
     /* Nothing listens on port 1: fails fast and leaves no thread behind */

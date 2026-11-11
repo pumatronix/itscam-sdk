@@ -15,12 +15,20 @@
  *
  *  /api/statusws?format=telemetry is a WebSocket pushing the system telemetry
  *  document every PUSH_MS (default 200 ms; the camera pushes every 5 s).
+ *
+ *  The same API is served over TLS on TLS_PORT (default 18443), with the
+ *  self-signed certificate in tls/: for 127.0.0.1 and localhost, valid for a
+ *  century, and trusted by nobody.  A client must refuse it until it is told
+ *  to trust tls/cert.pem.  The key is public: never use it for anything else.
  */
 
 "use strict";
 
 const crypto = require("crypto");
+const fs = require("fs");
 const http = require("http");
+const https = require("https");
+const path = require("path");
 
 // What the smoke tests expect, in every language
 const FIXTURES = {
@@ -117,7 +125,7 @@ async function handle(req, res) {
     return sendJson(res, 404, { message: `no route for ${route}` });
 }
 
-const server = http.createServer((req, res) => {
+function onRequest(req, res) {
     const started = Date.now();
     res.on("finish", () => {
         console.log(`${req.method} ${req.url} -> ${res.statusCode} (${Date.now() - started} ms)`);
@@ -126,7 +134,13 @@ const server = http.createServer((req, res) => {
         console.error(e);
         if (!res.headersSent) sendJson(res, 500, { message: String(e) });
     });
-});
+}
+
+const server = http.createServer(onRequest);
+const tlsServer = https.createServer({
+    key: fs.readFileSync(path.join(__dirname, "tls", "key.pem")),
+    cert: fs.readFileSync(path.join(__dirname, "tls", "cert.pem")),
+}, onRequest);
 
 // --- WebSocket (RFC 6455, the parts the SDK uses) ---------------------------
 
@@ -187,8 +201,14 @@ function upgrade(req, socket) {
 }
 
 server.on("upgrade", upgrade);
+tlsServer.on("upgrade", upgrade);
+// A client that refuses the certificate drops the handshake: not an error
+tlsServer.on("tlsClientError", () => {});
 
 const port = Number(process.env.PORT || 18080);
-server.listen(port, process.env.HOST || "0.0.0.0", () => {
-    console.log(`stand-in listening on ${port}`);
+const tlsPort = Number(process.env.TLS_PORT || 18443);
+tlsServer.listen(tlsPort, process.env.HOST || "0.0.0.0", () => {
+    server.listen(port, process.env.HOST || "0.0.0.0", () => {
+        console.log(`stand-in listening on ${port} (TLS on ${tlsPort})`);
+    });
 });
