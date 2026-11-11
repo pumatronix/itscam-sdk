@@ -207,6 +207,8 @@ Antes de abrir o PR adicionando o wrapper novo:
 - [ ] `make all` passa (build de tudo + wrapper novo).
 - [ ] `make docker-all` passa (mesmo, dentro do Docker; reproduzível para CI).
 - [ ] `make codegen-check` passa, se o wrapper participa do codegen.
+- [ ] Um smoke test em `tests/smoke/<linguagem>/` faz as mesmas verificações que os outros ([`tests/README.md`](../tests/README.md)), o `tools/verify/verify.sh` compila e executa ele em toda arquitetura que a linguagem suporta, e o `tools/compat/check-compat.sh` lista a API pública do wrapper.
+- [ ] `make verify` passa ([`compatibility.md`](compatibility.md)), e a versão mais antiga suportada da linguagem está na tabela.
 - [ ] `make regression-examples CAMERA_IP=<ip>` passa contra uma câmera viva — incluindo o capture/rest/cgi examples do wrapper novo.
 - [ ] Versão é gerada por `tools/version/gen-version.sh` (ou tem fallback hardcoded em `0.0.0` enquanto a integração de versão não foi feita; deixe um TODO na shell script).
 - [ ] PR mention `AGENTS.md` se algum wrapper rule mudou (ex.: novos error codes que precisam ser refletidos em todos os wrappers).

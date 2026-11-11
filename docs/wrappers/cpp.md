@@ -73,7 +73,7 @@ make examples       # binários C++ em src/examples/build/
 make docker-all     # tudo dentro da builder image (recomendado)
 ```
 
-Os ARMs usam os toolchains Arm GNU-A 8.3-2019.03 (`/opt/cross/{armhf,arm64}` na imagem Docker oficial). Defina `ARMHF_TOOLCHAIN_PATH` e `ARM64_TOOLCHAIN_PATH` se eles estiverem em outro lugar.
+As bibliotecas ARM do release são compiladas contra a glibc 2.23 e levam o próprio runtime C++, então as aplicações linkam com qualquer toolchain ARM com glibc 2.23 ou mais nova: os cross compilers do Ubuntu ou do Debian, os toolchains Arm GNU-A (`/opt/cross/{armhf,arm64}` na imagem Docker oficial; defina `ARMHF_TOOLCHAIN_PATH` e `ARM64_TOOLCHAIN_PATH` se estiverem em outro lugar) ou o de um SDK de firmware. Veja [`compatibility.md`](../compatibility.md). Para compilar o próprio SDK com o seu toolchain, use o CMake ([`cmake.md`](../cmake.md)).
 
 Para linkar contra o source tree, use os headers em `src/core/` e os artefatos em `src/core/build/linux/`:
 

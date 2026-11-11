@@ -40,6 +40,10 @@ export default withMermaid(
   ignoreDeadLinks: [
     /^\.\.?\/(?:\.\.\/)*src\//,
     /^\.\.?\/(?:\.\.\/)*tools\//,
+    /^\.\.?\/(?:\.\.\/)*tests\//,
+    /^\.\.?\/(?:\.\.\/)*compat(?:\/|$)/,
+    /^\.\.?\/(?:\.\.\/)*cmake\//,
+    /^\.\.?\/(?:\.\.\/)*\.github\//,
     /^\.\.?\/(?:\.\.\/)*Dockerfile/,
     /^\.\.?\/(?:\.\.\/)*Makefile/,
     /^\.\.?\/(?:\.\.\/)*README(?:$|[#.])/,
@@ -84,6 +88,8 @@ export default withMermaid(
         text: "Fundamentos",
         items: [
           { text: "Error handling", link: "/error-handling" },
+          { text: "Compatibilidade e verificação", link: "/compatibility" },
+          { text: "CMake", link: "/cmake" },
           { text: "HTTPS / TLS", link: "/https-tls" },
           { text: "Visualizador de metadados", link: "/metadata-visualizer" },
         ],

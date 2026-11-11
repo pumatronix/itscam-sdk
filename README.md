@@ -174,10 +174,12 @@ Este README é intencionalmente direto. A documentação completa fica em [`docs
 
 ## Platform support
 
-| Platform | Architectures | Toolchain |
-| -------- | ------------- | --------- |
-| Linux | x86_64, ARMv7, ARM64 | GCC / Clang |
-| Windows | x86_64 | MinGW-w64 |
+| Plataforma | Arquiteturas | Exige no alvo | Aplicações compilam com |
+| ---------- | ------------ | ------------- | ----------------------- |
+| Linux | x86_64, ARMv7, ARM64 | glibc 2.23+ (sem libstdc++) | GCC 5+ / Clang, C++14 ou C++17, C99; CMake 3.10+ |
+| Windows | x86_64, x86 | nada | MinGW-w64 |
+
+Toda plataforma é compilada e testada pelo `make verify`: [Compatibilidade e verificação](docs/compatibility.md). Para compilar o SDK com o seu toolchain ou como subprojeto CMake: [Usando o SDK pelo CMake](docs/cmake.md).
 
 ## Licença e contato
 

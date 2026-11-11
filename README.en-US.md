@@ -173,10 +173,12 @@ This README is intentionally concise. Chapter-style documentation lives under [`
 
 ## Platform Support
 
-| Platform | Architectures | Toolchain |
-| -------- | ------------- | --------- |
-| Linux | x86_64, ARMv7, ARM64 | GCC / Clang |
-| Windows | x86_64 | MinGW-w64 |
+| Platform | Architectures | Requires on the target | Applications build with |
+| -------- | ------------- | ---------------------- | ----------------------- |
+| Linux | x86_64, ARMv7, ARM64 | glibc 2.23+ (no libstdc++) | GCC 5+ / Clang, C++14 or C++17, C99; CMake 3.10+ |
+| Windows | x86_64, x86 | nothing | MinGW-w64 |
+
+Every platform is built and tested by `make verify`: [Compatibility and verification](docs/compatibility.en-US.md). To build the SDK with your own toolchain or as a CMake subproject: [Using the SDK from CMake](docs/cmake.en-US.md).
 
 ## License and Contact
 
