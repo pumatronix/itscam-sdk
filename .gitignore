@@ -72,3 +72,11 @@ src/wrappers/go/itscam/version.go
 src/wrappers/java/itscam-sdk/src/main/java/com/pumatronix/itscam/internal/SdkVersion.java
 src/wrappers/nodejs/src/version.js
 VERSION.json
+
+# make verify / make compat-check output and package caches
+/build/
+# .NET projects of the smoke tests and the API listing
+tests/smoke/csharp/bin/
+tests/smoke/csharp/obj/
+tools/compat/api_csharp/bin/
+tools/compat/api_csharp/obj/

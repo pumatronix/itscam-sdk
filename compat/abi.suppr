@@ -1,0 +1,20 @@
+# ABI changes of libitscam_sdk accepted on purpose since compat/baseline:
+# libabigail suppression specifications, read by abidiff in
+# tools/compat/check-compat.sh.  Every entry needs a release note and a
+# release that may break callers (docs/compatibility.md).  Example:
+#
+#   # 0.10.0: RestApiClientConfig gained three fields; C++ callers rebuild
+#   [suppress_type]
+#     name = itscam::rest_types::RestApiClientConfig
+
+# Next release: libitscam_sdk exports only the C API and the itscam namespace
+# (src/core/itscam_sdk.map).  The symbols it stopped exporting are copies of
+# header-only code (libstdc++ templates, nlohmann::json, cpp-httplib) that
+# every application compiles itself, so none can have bound to them.
+[suppress_function]
+  change_kind = deleted-function
+  name_not_regexp = ^itscam::
+
+[suppress_variable]
+  change_kind = deleted-variable
+  name_not_regexp = ^itscam::

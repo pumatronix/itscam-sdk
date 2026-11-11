@@ -59,6 +59,22 @@ WORKDIR /sdk
 ENTRYPOINT ["/usr/local/bin/itscam-docker-entrypoint.sh"]
 CMD ["make", "-C", "src/core", "linux-all"]
 
+# ----------------------------------------------------------------------------
+#  compat: API/ABI comparison against the last release
+# ----------------------------------------------------------------------------
+# libabigail (abidiff) reads the DWARF of the Linux libraries on every
+# architecture, and Python 3.10 lists the wrappers' APIs from their sources.
+# Used by tools/compat/check-compat.sh (`make compat-check`, `make verify`).
+FROM ubuntu:22.04 AS compat
+LABEL maintainer="Pumatronix"
+LABEL description="API/ABI comparison tools for the ITSCAM SDK"
+ENV DEBIAN_FRONTEND=noninteractive
+RUN set -eux; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends abigail-tools python3 binutils; \
+    rm -rf /var/lib/apt/lists/*
+WORKDIR /sdk
+
 FROM ubuntu:18.04 AS builder
 
 ARG BUILDER_VERSION=unknown

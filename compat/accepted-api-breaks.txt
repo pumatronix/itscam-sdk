@@ -1,0 +1,6 @@
+# Wrapper API changes accepted on purpose since compat/baseline.
+#
+# One line per removed or changed declaration: its surface (python, go,
+# nodejs, csharp or java), a space, then the line exactly as
+# tools/compat/check-compat.sh printed it after "- ".  Every entry needs a
+# release note and a release that may break callers (docs/compatibility.md).

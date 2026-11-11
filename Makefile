@@ -18,7 +18,7 @@
 
 .PHONY: all linux windows lib examples examples-windows wrappers clean help
 .PHONY: lib-arm lib-arm64 lib-linux-all examples-arm examples-arm64 examples-linux-all
-.PHONY: check-glibc qemu-smoke qemu-smoke-armhf qemu-smoke-arm64
+.PHONY: check-glibc qemu-smoke qemu-smoke-armhf qemu-smoke-arm64 verify compat-check
 .PHONY: python-example python-rest-example python-cgi-example python-snapshot-to-freeflow-example
 .PHONY: go-example go-rest-example go-cgi-example go-examples go-examples-windows
 .PHONY: go-examples-windows-x86 go-gui go-gui-windows sdk-dist-examples
@@ -30,7 +30,7 @@
 .PHONY: install
 .PHONY: version sdk-dist sdk-dist-clean docker-dist-pristine docker-sdk-dist docker-sdk-dist-examples
 .PHONY: docker-build docker-rebuild docker-build-core-xenial docker-all docker-linux docker-windows docker-shell docker-go-gui
-.PHONY: docker-linux-arm docker-linux-arm64 docker-linux-all docker-qemu-smoke
+.PHONY: docker-linux-arm docker-linux-arm64 docker-linux-all docker-qemu-smoke docker-build-compat
 .PHONY: docker-csharp docker-csharp-examples docker-csharp-examples-publish
 .PHONY: docker-java docker-java-pack docker-java-jdk7-check docker-nodejs docker-nodejs-pack
 .PHONY: regression-examples docker-regression-examples
@@ -50,6 +50,7 @@ VERSION_MK := tools/version/sdk-version.mk
 # generated artefacts stay owned by the host user (never root).
 DOCKER_IMAGE := itscam-sdk-builder
 DOCKER_CORE_IMAGE := itscam-sdk-core-xenial
+DOCKER_COMPAT_IMAGE := itscam-sdk-compat
 # sha256sum is Linux-only; macOS ships shasum -a 256 (and both are absent on
 # some minimal images, where openssl is used as a last resort). Resolve the
 # first available tool explicitly so $(shell) never falls silently through
@@ -120,18 +121,28 @@ lib-linux-all: lib lib-arm lib-arm64
 check-glibc:
 	$(MAKE) -C $(SRC_DIR)/core check-glibc
 
-# Run ARM-cross-compiled examples under qemu-user-static.  Requires the
-# armhf / aarch64 binaries (make examples-arm / examples-arm64 / go-examples-arm*)
-# and qemu-user-static + the matching sysroots (installed in the Docker
-# builder image).
-qemu-smoke:
-	$(CURDIR)/tools/qemu-smoke.sh
+# The ARM part of `make verify`: the Linux cores, every consumer and wrapper
+# built for ARMv7 / ARM64 and run under emulation at the glibc floor.
+VERIFY_ENV = BUILDER_IMAGE=$(DOCKER_IMAGE) CORE_IMAGE=$(DOCKER_CORE_IMAGE) COMPAT_IMAGE=$(DOCKER_COMPAT_IMAGE)
 
-qemu-smoke-armhf:
-	$(CURDIR)/tools/qemu-smoke.sh armhf
+qemu-smoke: docker-build docker-build-core-xenial
+	$(VERIFY_ENV) VERIFY_STEPS="cores consumers wrappers run" VERIFY_ARCHES="arm arm64" tools/verify/verify.sh
 
-qemu-smoke-arm64:
-	$(CURDIR)/tools/qemu-smoke.sh arm64
+qemu-smoke-armhf: docker-build docker-build-core-xenial
+	$(VERIFY_ENV) VERIFY_STEPS="cores consumers wrappers run" VERIFY_ARCHES="arm" tools/verify/verify.sh
+
+qemu-smoke-arm64: docker-build docker-build-core-xenial
+	$(VERIFY_ENV) VERIFY_STEPS="cores consumers wrappers run" VERIFY_ARCHES="arm64" tools/verify/verify.sh
+
+# Everything the SDK ships, built and checked on every supported platform
+# (tools/verify/verify.sh, docs/compatibility.md).  Run it before every
+# pull request; CI runs it too.  VERIFY_STEPS / VERIFY_ARCHES narrow it.
+verify: docker-build docker-build-core-xenial docker-build-compat
+	$(VERIFY_ENV) tools/verify/verify.sh
+
+# API and ABI against the last release (compat/baseline)
+compat-check: docker-build docker-build-core-xenial docker-build-compat
+	$(VERIFY_ENV) tools/compat/check-compat.sh
 
 windows:
 	@echo "=== Building core library (Windows) ==="
@@ -847,6 +858,10 @@ docker-build-core-xenial:
 	@echo "=== Building Docker image for Linux core artefacts (Ubuntu 16.04 / glibc 2.23) ==="
 	docker build --target core-xenial -t $(DOCKER_CORE_IMAGE) .
 
+docker-build-compat:
+	@echo "=== Building Docker image for API/ABI comparison (libabigail) ==="
+	docker build --target compat -t $(DOCKER_COMPAT_IMAGE) .
+
 docker-all: docker-linux-all docker-build
 	@echo "=== Building all inside Docker ==="
 	$(DOCKER_RUN) $(DOCKER_IMAGE) make windows examples wrappers ITSCAM_VERSION_LOCKED=1
@@ -878,9 +893,7 @@ docker-linux-all: docker-build docker-build-core-xenial
 		$(XENIAL_LINUX_ARM_TARGETS) \
 		$(XENIAL_LINUX_ARM64_TARGETS)
 
-docker-qemu-smoke: docker-linux-all docker-build
-	@echo "=== Running qemu smoke tests inside Docker ==="
-	$(DOCKER_RUN) $(DOCKER_IMAGE) bash -c 'make ITSCAM_VERSION_LOCKED=1 examples-arm examples-arm64 go-examples-arm go-examples-arm64 && make qemu-smoke'
+docker-qemu-smoke: qemu-smoke
 
 docker-windows: docker-build
 	@echo "=== Cross-compiling for Windows inside Docker ==="
