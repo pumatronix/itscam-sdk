@@ -46,6 +46,14 @@
 // that httplib pulls in the mbedTLS backend.
 #include "../3rdparty/httplib.h"
 
+#ifdef _WIN32
+#include <bcrypt.h>   // BCryptGenRandom, after httplib's <windows.h>
+#else
+#include <fcntl.h>
+#include <unistd.h>
+#include <cerrno>
+#endif
+
 // Older mingw-w64 i686 import libraries (shipped with the Ubuntu 18.04
 // base used by the SDK builder image) do not export _mkgmtime32, which
 // cpp-httplib calls through _mkgmtime when time_t is 32-bit.  Provide a
@@ -627,12 +635,37 @@ std::string sha1(const std::string& data) {
     return out;
 }
 
-/// Handshake nonces and frame masks: they need to vary, not to be secret
+/// Handshake nonces and frame masks, from the operating system's generator:
+/// RFC 6455 5.3 wants masks nobody can predict from earlier ones
 std::string randomBytes(size_t count) {
-    static Mutex mtx;
-    static std::mt19937 rng{std::random_device{}()};
-    LockGuard<Mutex> lk(mtx);
     std::string out(count, '\0');
+#ifdef _WIN32
+    if (BCryptGenRandom(nullptr, reinterpret_cast<PUCHAR>(&out[0]),
+                        static_cast<ULONG>(count),
+                        BCRYPT_USE_SYSTEM_PREFERRED_RNG) == 0) {
+        return out;
+    }
+#else
+    // Kept open for the life of the process
+    static const int fd = ::open("/dev/urandom", O_RDONLY | O_CLOEXEC);
+    size_t got = 0;
+    while (fd >= 0 && got < count) {
+        const ssize_t n = ::read(fd, &out[got], count - got);
+        if (n > 0) {
+            got += static_cast<size_t>(n);
+        } else if (n == 0 || errno != EINTR) {
+            break;
+        }
+    }
+    if (got == count) return out;
+#endif
+    // No system generator (it should never happen): the bytes still vary
+    static Mutex mtx;
+    static std::mt19937 rng{static_cast<uint32_t>(
+        std::random_device{}() ^
+        static_cast<uint32_t>(
+            std::chrono::steady_clock::now().time_since_epoch().count()))};
+    LockGuard<Mutex> lk(mtx);
     for (auto& c : out) c = static_cast<char>(rng() & 0xFFu);
     return out;
 }
