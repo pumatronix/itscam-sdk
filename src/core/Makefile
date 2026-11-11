@@ -143,6 +143,12 @@ LDFLAGS_WINDOWS := -shared -lws2_32 -lbcrypt -lcrypt32 -static-libgcc -static-li
 # Include paths
 INCLUDES := -I. -Ic_api -I$(3RDPARTY_DIR) -I$(MBEDTLS_INC)
 
+# The compiler records the headers each object includes (.d files beside
+# the objects), so that changing a header rebuilds what uses it: generated
+# ones too (the REST types, the version), which otherwise left a library
+# built from mixed versions of them
+DEPFLAGS := -MMD -MP
+
 # ============================================================================
 #  Source files
 # ============================================================================
@@ -244,12 +250,12 @@ $(LIB_LINUX_A): $(OBJS_LINUX)
 $(BUILD_DIR_LINUX)/%.o: %.cpp
 	@mkdir -p $(dir $@)
 	@echo "Compiling (linux-x64): $<"
-	@$(CXX_LINUX) $(CXXFLAGS_LINUX) $(INCLUDES) -c $< -o $@
+	@$(CXX_LINUX) $(CXXFLAGS_LINUX) $(INCLUDES) $(DEPFLAGS) -c $< -o $@
 
 $(BUILD_DIR_LINUX)/mbedtls/%.o: $(MBEDTLS_DIR)/library/%.c
 	@mkdir -p $(dir $@)
 	@echo "Compiling (mbedtls/linux-x64): $<"
-	@$(CC_LINUX) $(MBEDTLS_CFLAGS_LINUX) -c $< -o $@
+	@$(CC_LINUX) $(MBEDTLS_CFLAGS_LINUX) $(DEPFLAGS) -c $< -o $@
 
 # --- linux-arm (ARMv7-A hard-float, gnueabihf) ------------------------------
 
@@ -266,12 +272,12 @@ $(LIB_LINUX_ARM_A): $(OBJS_LINUX_ARM)
 $(BUILD_DIR_LINUX_ARM)/%.o: %.cpp
 	@mkdir -p $(dir $@)
 	@echo "Compiling (linux-arm): $<"
-	@$(CXX_LINUX_ARM) $(CXXFLAGS_LINUX) $(INCLUDES) -c $< -o $@
+	@$(CXX_LINUX_ARM) $(CXXFLAGS_LINUX) $(INCLUDES) $(DEPFLAGS) -c $< -o $@
 
 $(BUILD_DIR_LINUX_ARM)/mbedtls/%.o: $(MBEDTLS_DIR)/library/%.c
 	@mkdir -p $(dir $@)
 	@echo "Compiling (mbedtls/linux-arm): $<"
-	@$(CC_LINUX_ARM) $(MBEDTLS_CFLAGS_LINUX) -c $< -o $@
+	@$(CC_LINUX_ARM) $(MBEDTLS_CFLAGS_LINUX) $(DEPFLAGS) -c $< -o $@
 
 # --- linux-arm64 (ARMv8, aarch64) -------------------------------------------
 
@@ -288,12 +294,12 @@ $(LIB_LINUX_ARM64_A): $(OBJS_LINUX_ARM64)
 $(BUILD_DIR_LINUX_ARM64)/%.o: %.cpp
 	@mkdir -p $(dir $@)
 	@echo "Compiling (linux-arm64): $<"
-	@$(CXX_LINUX_ARM64) $(CXXFLAGS_LINUX) $(INCLUDES) -c $< -o $@
+	@$(CXX_LINUX_ARM64) $(CXXFLAGS_LINUX) $(INCLUDES) $(DEPFLAGS) -c $< -o $@
 
 $(BUILD_DIR_LINUX_ARM64)/mbedtls/%.o: $(MBEDTLS_DIR)/library/%.c
 	@mkdir -p $(dir $@)
 	@echo "Compiling (mbedtls/linux-arm64): $<"
-	@$(CC_LINUX_ARM64) $(MBEDTLS_CFLAGS_LINUX) -c $< -o $@
+	@$(CC_LINUX_ARM64) $(MBEDTLS_CFLAGS_LINUX) $(DEPFLAGS) -c $< -o $@
 
 check-cross-armhf:
 	@command -v $(CXX_LINUX_ARM) > /dev/null || \
@@ -358,22 +364,22 @@ $(LIB_WIN_X86_STATIC): $(OBJS_WIN_X86)
 $(BUILD_DIR_WIN_X64)/%.o: %.cpp
 	@mkdir -p $(dir $@)
 	@echo "Compiling (win-x64): $<"
-	@$(CXX_WIN_X64) $(CXXFLAGS_WINDOWS) $(INCLUDES) -c $< -o $@
+	@$(CXX_WIN_X64) $(CXXFLAGS_WINDOWS) $(INCLUDES) $(DEPFLAGS) -c $< -o $@
 
 $(BUILD_DIR_WIN_X86)/%.o: %.cpp
 	@mkdir -p $(dir $@)
 	@echo "Compiling (win-x86): $<"
-	@$(CXX_WIN_X86) $(CXXFLAGS_WINDOWS) $(INCLUDES) -c $< -o $@
+	@$(CXX_WIN_X86) $(CXXFLAGS_WINDOWS) $(INCLUDES) $(DEPFLAGS) -c $< -o $@
 
 $(BUILD_DIR_WIN_X64)/mbedtls/%.o: $(MBEDTLS_DIR)/library/%.c
 	@mkdir -p $(dir $@)
 	@echo "Compiling (mbedtls/win-x64): $<"
-	@$(CC_WIN_X64) $(MBEDTLS_CFLAGS_WINDOWS) -c $< -o $@
+	@$(CC_WIN_X64) $(MBEDTLS_CFLAGS_WINDOWS) $(DEPFLAGS) -c $< -o $@
 
 $(BUILD_DIR_WIN_X86)/mbedtls/%.o: $(MBEDTLS_DIR)/library/%.c
 	@mkdir -p $(dir $@)
 	@echo "Compiling (mbedtls/win-x86): $<"
-	@$(CC_WIN_X86) $(MBEDTLS_CFLAGS_WINDOWS) -c $< -o $@
+	@$(CC_WIN_X86) $(MBEDTLS_CFLAGS_WINDOWS) $(DEPFLAGS) -c $< -o $@
 
 check-mingw-x64:
 	@which $(CXX_WIN_X64) > /dev/null || (echo "Error: x86_64 MinGW not found. Install mingw-w64." && exit 1)
@@ -411,6 +417,9 @@ install: linux
 # ============================================================================
 #  Cleanup
 # ============================================================================
+
+# Header dependencies recorded by DEPFLAGS
+-include $(shell find $(BUILD_DIR) -name '*.d' 2>/dev/null)
 
 clean:
 	@echo "Cleaning build artifacts..."
