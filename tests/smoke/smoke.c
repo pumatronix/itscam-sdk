@@ -10,9 +10,15 @@
  *  Environment: ITSCAM_TEST_HOST (127.0.0.1), ITSCAM_TEST_PORT (18080).
  */
 
+#define _POSIX_C_SOURCE 199309L  /* nanosleep */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <time.h>
+#endif
 
 #include "c_api/itscam_sdk_c.h"
 #include "c_api/itscam_rest_client_c.h"
@@ -23,6 +29,24 @@ static void check(int ok, const char* name, const char* detail) {
     printf("%s %s%s%s\n", ok ? "PASS" : "FAIL", name,
            detail && *detail ? ": " : "", detail ? detail : "");
     if (!ok) ++failures;
+}
+
+static void sleep_ms(int ms) {
+#ifdef _WIN32
+    Sleep((DWORD)ms);
+#else
+    struct timespec ts;
+    ts.tv_sec = ms / 1000;
+    ts.tv_nsec = (long)(ms % 1000) * 1000000L;
+    nanosleep(&ts, NULL);
+#endif
+}
+
+/* Callbacks of one client run one at a time, on the SDK's callback pool */
+static volatile int telemetry_received = 0;
+static void on_telemetry(const ITSCAM_TelemetryUpdate* update, void* user_data) {
+    (void)user_data;
+    if (update && update->json && strstr(update->json, "\"version\":1")) ++telemetry_received;
 }
 
 static const char* env(const char* name, const char* fallback) {
@@ -65,6 +89,33 @@ int main(void) {
         check(rc == ITSCAM_ERROR_INVALID_PARAMETER,
               "rest 404 maps to ITSCAM_ERROR_INVALID_PARAMETER", ITSCAM_getLastError());
         if (out) ITSCAM_String_destroy(out);
+
+        out = NULL;
+        rc = ITSCAM_RestClient_getSystemTelemetry(rest, 10000, &out);
+        if (rc != ITSCAM_OK || !out) {
+            check(0, "telemetry read", ITSCAM_getLastError());
+        } else {
+            const char* json = ITSCAM_String_data(out);
+            check(strstr(json, "\"status\":\"warning\"") != NULL &&
+                      strstr(json, "\"id\":\"storageFull\"") != NULL,
+                  "telemetry read", "");
+            ITSCAM_String_destroy(out);
+        }
+
+        {
+            /* The stand-in pushes every 200 ms */
+            uint64_t sequence = 0;
+            int64_t received_at = 0;
+            int i;
+            rc = ITSCAM_RestClient_startTelemetryStream(rest, on_telemetry, NULL, 0);
+            for (i = 0; i < 100 && telemetry_received < 2; ++i) sleep_ms(50);
+            ITSCAM_RestClient_stopTelemetryStream(rest);
+            out = NULL;
+            ITSCAM_RestClient_latestTelemetry(rest, &sequence, &received_at, &out);
+            if (out) ITSCAM_String_destroy(out);
+            check(rc == ITSCAM_OK && telemetry_received >= 2 && sequence >= 2,
+                  "telemetry stream", rc == ITSCAM_OK ? "" : ITSCAM_getLastError());
+        }
         ITSCAM_RestClient_destroy(rest);
     }
 

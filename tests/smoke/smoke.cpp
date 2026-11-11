@@ -10,6 +10,7 @@
  *  Environment: ITSCAM_TEST_HOST (127.0.0.1), ITSCAM_TEST_PORT (18080).
  */
 
+#include <atomic>
 #include <cstdio>
 #include <cstdlib>
 #include <string>
@@ -84,6 +85,34 @@ int main() {
                   "cgi snapshot + jpeg plate",
                   plates.empty() ? "no plate" : plates[0].plate);
         }
+    }
+
+    {
+        ItscamRestClient rest;
+        rest.setBaseUrl(host, port, "http");
+        rest.login("admin", "1234");
+        auto telemetry = rest.getSystemTelemetry();
+        if (!telemetry) {
+            check(false, "telemetry read", telemetry.error().message);
+        } else {
+            const auto& health = telemetry.value().health;
+            const bool ok = health && health->status && *health->status == "warning" &&
+                            health->issues && health->issues->size() == 1 &&
+                            (*health->issues)[0].id == "storageFull";
+            check(ok, "telemetry read",
+                  health && health->status ? "health " + *health->status : "no health");
+        }
+
+        // The stand-in pushes every 200 ms
+        std::atomic<int> received{0};
+        auto started = rest.startTelemetryStream(
+            [&received](const TelemetryUpdate&) { ++received; });
+        for (int i = 0; i < 100 && received < 2; ++i) os::sleepForMs(50);
+        rest.stopTelemetryStream();
+        auto latest = rest.latestTelemetry();
+        check(started && received >= 2 && latest && latest.value().sequence >= 2,
+              "telemetry stream",
+              started ? std::to_string(received.load()) + " documents" : started.error().message);
     }
 
     {

@@ -12,6 +12,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/pumatronix/itscam-sdk-go/itscam"
@@ -100,6 +101,38 @@ func main() {
 			check(len(plates) == 1 && plates[0].Plate == "ABC1D23", "cgi snapshot + jpeg plate", detail)
 		}
 		cgi.Close()
+	}
+
+	if rest, err := itscam.NewRestClient(); err == nil {
+		rest.SetBaseUrl(host, uint16(port), "http")
+		rest.Login("admin", "1234", 10000)
+		telemetry, err := rest.GetSystemTelemetry(10000)
+		if err != nil {
+			check(false, "telemetry read", err.Error())
+		} else {
+			h := telemetry.Health
+			ok := h != nil && h.Status != nil && *h.Status == "warning" &&
+				len(h.Issues) == 1 && h.Issues[0].ID == "storageFull"
+			status := "no health"
+			if h != nil && h.Status != nil {
+				status = "health " + *h.Status
+			}
+			check(ok, "telemetry read", status)
+		}
+
+		// The stand-in pushes every 200 ms
+		var received int32
+		err = rest.StartTelemetryStream(func(itscam.TelemetryUpdate) { atomic.AddInt32(&received, 1) }, 0)
+		for i := 0; i < 100 && atomic.LoadInt32(&received) < 2; i++ {
+			time.Sleep(50 * time.Millisecond)
+		}
+		rest.StopTelemetryStream()
+		latest, ok, lerr := rest.LatestTelemetry()
+		check(err == nil && atomic.LoadInt32(&received) >= 2 && lerr == nil && ok && latest.Sequence >= 2,
+			"telemetry stream", fmt.Sprintf("%d documents %s", atomic.LoadInt32(&received), errText(err)))
+		rest.Close()
+	} else {
+		check(false, "telemetry", err.Error())
 	}
 
 	// Nothing listens on port 1: fails fast and leaves no thread behind

@@ -11,6 +11,7 @@ ITSCAM_SDK_LIBRARY or LD_LIBRARY_PATH.
 
 import os
 import sys
+import threading
 
 import itscam
 from itscam import (ItscamCgiClient, ItscamClient, ItscamError,
@@ -77,6 +78,39 @@ def main():
             check(False, "cgi snapshot + jpeg plate", str(e))
     finally:
         cgi.close()
+
+    rest = ItscamRestClient()
+    try:
+        rest.set_base_url(host, port, "http")
+        rest.login("admin", "1234")
+        try:
+            health = rest.get_system_telemetry().health
+            ok = (health is not None and health.status == "warning" and
+                  len(health.issues or []) == 1 and health.issues[0].id == "storageFull")
+            check(ok, "telemetry read", "health %s" % (health.status if health else None))
+        except ItscamError as e:
+            check(False, "telemetry read", str(e))
+
+        # The stand-in pushes every 200 ms
+        received = []
+        two = threading.Event()
+
+        def on_update(update):
+            received.append(update.sequence)
+            if len(received) >= 2:
+                two.set()
+
+        try:
+            rest.start_telemetry_stream(on_update)
+            two.wait(5)
+            rest.stop_telemetry_stream()
+            latest = rest.latest_telemetry()
+            check(len(received) >= 2 and latest is not None and latest.sequence >= 2,
+                  "telemetry stream", "%d documents" % len(received))
+        except ItscamError as e:
+            check(False, "telemetry stream", str(e))
+    finally:
+        rest.close()
 
     # Nothing listens on port 1: fails fast and leaves no thread behind
     client = ItscamClient()

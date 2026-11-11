@@ -55,7 +55,7 @@ make compat-check                            # API/ABI against the last release 
 | `codegen` | The generated REST types match [`tools/codegen/spec`](../tools/codegen). |
 | `java7` | The Java wrapper compiles with a real JDK 7. |
 
-The smoke tests check the same things in every language: the version, REST login, a typed REST read (a non-ASCII string and an integer, which catches both encoding and struct layout mismatches), a 404 mapped to the "invalid parameter" error, a CGI snapshot with its JPEG plate metadata, and a binary-client connection that fails fast. A feature added to the SDK adds its check to the stand-in and to every language's smoke test, in the same pull request.
+The smoke tests check the same things in every language: the version, REST login, a typed REST read (a non-ASCII string and an integer, which catches both encoding and struct layout mismatches), a 404 mapped to the "invalid parameter" error, a CGI snapshot with its JPEG plate metadata, a binary-client connection that fails fast, and the system telemetry, read once and streamed. A feature added to the SDK adds its check to the stand-in and to every language's smoke test, in the same pull request.
 
 ## The compatibility contract
 

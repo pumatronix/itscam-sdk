@@ -22,7 +22,7 @@ function check(ok, name, detail) {
     if (!ok) failures++;
 }
 
-function main() {
+async function main() {
     const host = process.env.ITSCAM_TEST_HOST || "127.0.0.1";
     const port = Number(process.env.ITSCAM_TEST_PORT || 18080);
     console.log(`Node.js ${process.version} smoke against ${host}:${port}`);
@@ -77,6 +77,34 @@ function main() {
         cgi.close();
     }
 
+    const telemetryRest = new itscam.ItscamRestClient();
+    try {
+        telemetryRest.setBaseUrl(host, port, "http");
+        telemetryRest.login("admin", "1234");
+        try {
+            const health = telemetryRest.getSystemTelemetry().health;
+            const ok = !!health && health.status === "warning" && (health.issues || []).length === 1 &&
+                health.issues[0].id === "storageFull";
+            check(ok, "telemetry read", `health ${health && health.status}`);
+        } catch (e) {
+            check(false, "telemetry read", e.message);
+        }
+
+        // The stand-in pushes every 200 ms; callbacks run on this event loop
+        let received = 0;
+        try {
+            telemetryRest.startTelemetryStream(() => { received++; });
+            for (let i = 0; i < 100 && received < 2; i++) await new Promise((r) => setTimeout(r, 50));
+            await telemetryRest.stopTelemetryStream();
+            const latest = telemetryRest.latestTelemetry();
+            check(received >= 2 && !!latest && latest.sequence >= 2, "telemetry stream", `${received} documents`);
+        } catch (e) {
+            check(false, "telemetry stream", e.message);
+        }
+    } finally {
+        telemetryRest.close();
+    }
+
     // Nothing listens on port 1: fails fast and leaves no thread behind
     const client = new itscam.ItscamClient();
     try {
@@ -92,4 +120,4 @@ function main() {
     return failures ? 1 : 0;
 }
 
-process.exitCode = main();
+main().then((code) => { process.exitCode = code; }, (e) => { console.error(e); process.exitCode = 1; });

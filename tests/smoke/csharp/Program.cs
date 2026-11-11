@@ -8,6 +8,7 @@
 
 using System;
 using System.Reflection;
+using System.Threading;
 using System.Threading.Tasks;
 using Pumatronix.Itscam;
 
@@ -80,6 +81,34 @@ internal static class Program
                       "cgi snapshot + jpeg plate", plates.Count > 0 ? plates[0].Plate : "no plate");
             }
             catch (ItscamException e) { Check(false, "cgi snapshot + jpeg plate", e.Message); }
+        }
+
+        using (var rest = new ItscamRestClient())
+        {
+            rest.SetBaseUrl(host, port, "http");
+            await rest.LoginAsync("admin", "1234");
+            try
+            {
+                var health = (await rest.GetSystemTelemetryAsync()).Health;
+                var ok = health != null && health.Status == "warning" && health.Issues != null &&
+                         health.Issues.Count == 1 && health.Issues[0].Id == "storageFull";
+                Check(ok, "telemetry read", $"health {health?.Status}");
+            }
+            catch (ItscamException e) { Check(false, "telemetry read", e.Message); }
+
+            // The stand-in pushes every 200 ms
+            var received = 0;
+            rest.TelemetryReceived += (_, update) => Interlocked.Increment(ref received);
+            try
+            {
+                rest.StartTelemetryStream();
+                for (var i = 0; i < 100 && Volatile.Read(ref received) < 2; i++) await Task.Delay(50);
+                rest.StopTelemetryStream();
+                var latest = rest.LatestTelemetry();
+                Check(received >= 2 && latest != null && latest.Sequence >= 2,
+                      "telemetry stream", $"{received} documents");
+            }
+            catch (ItscamException e) { Check(false, "telemetry stream", e.Message); }
         }
 
         // Nothing listens on port 1: fails fast and leaves no thread behind

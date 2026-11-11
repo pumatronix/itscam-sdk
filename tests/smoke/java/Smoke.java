@@ -14,15 +14,19 @@ import com.pumatronix.itscam.CgiImage;
 import com.pumatronix.itscam.ErrorCode;
 import com.pumatronix.itscam.ItscamCgiClient;
 import com.pumatronix.itscam.ItscamClient;
+import com.pumatronix.itscam.ItscamConsumer;
 import com.pumatronix.itscam.ItscamException;
 import com.pumatronix.itscam.ItscamInvalidParameterException;
 import com.pumatronix.itscam.ItscamRestClient;
 import com.pumatronix.itscam.Sdk;
+import com.pumatronix.itscam.TelemetryUpdate;
 import com.pumatronix.itscam.jpeg.JpegMetadata;
 import com.pumatronix.itscam.jpeg.PlateRecognition;
 import com.pumatronix.itscam.resttypes.ProfileConfig;
+import com.pumatronix.itscam.resttypes.SystemTelemetry;
 
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public final class Smoke {
     private static int failures;
@@ -38,7 +42,7 @@ public final class Smoke {
         return v == null || v.isEmpty() ? fallback : v;
     }
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws InterruptedException {
         String host = env("ITSCAM_TEST_HOST", "127.0.0.1");
         int port = Integer.parseInt(env("ITSCAM_TEST_PORT", "18080"));
         System.out.println("Java " + System.getProperty("java.version") + " smoke ("
@@ -96,6 +100,40 @@ public final class Smoke {
             }
         } finally {
             cgi.close();
+        }
+
+        ItscamRestClient telemetryRest = new ItscamRestClient();
+        try {
+            telemetryRest.setBaseUrl(host, port, "http");
+            telemetryRest.login("admin", "1234", 10000);
+            try {
+                SystemTelemetry telemetry = telemetryRest.getSystemTelemetry(10000);
+                check("warning".equals(telemetry.getHealthStatus())
+                                && String.valueOf(telemetry.get("health")).contains("storageFull"),
+                        "telemetry read", "health " + telemetry.getHealthStatus());
+            } catch (ItscamException e) {
+                check(false, "telemetry read", e.getMessage());
+            }
+
+            // The stand-in pushes every 200 ms
+            final AtomicInteger received = new AtomicInteger();
+            try {
+                telemetryRest.startTelemetryStream(new ItscamConsumer<TelemetryUpdate>() {
+                    @Override
+                    public void accept(TelemetryUpdate update) {
+                        received.incrementAndGet();
+                    }
+                }, 0);
+                for (int i = 0; i < 100 && received.get() < 2; i++) Thread.sleep(50);
+                telemetryRest.stopTelemetryStream();
+                TelemetryUpdate latest = telemetryRest.latestTelemetry();
+                check(received.get() >= 2 && latest != null && latest.sequence() >= 2,
+                        "telemetry stream", received.get() + " documents");
+            } catch (ItscamException e) {
+                check(false, "telemetry stream", e.getMessage());
+            }
+        } finally {
+            telemetryRest.close();
         }
 
         // Nothing listens on port 1: fails fast and leaves no thread behind
