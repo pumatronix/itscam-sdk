@@ -1,0 +1,24 @@
+# The images tools/verify/verify.sh runs the smoke tests in: one line per
+# image and platform, with the digest of that platform's manifest.
+#
+#   <image:tag> <platform> <digest>
+#
+# Pinned so that every run tests in the same environments, and so that
+# nothing has to be looked up: registries limit anonymous lookups, and a CI
+# run made enough of them to fail.  The digest is the same in every registry
+# (tools/verify/common.sh tries a mirror, then Docker Hub).
+#
+# To change an image or add one: remove its lines, run `make verify`, and add
+# the lines it prints.
+debian:buster linux/arm/v7 sha256:81cd707548e590cc6db6f230af43bfb4009adb77c7dedbf1f0f53bb08259dafb
+debian:buster linux/arm64 sha256:fba020fe61e2b15959ef887ea67c7fc61f77943d074889debe8d92e29402191f
+node:16-slim linux/amd64 sha256:549225012a87d35a483af278699980776fc0bca0990a60ad3fd9a303904de32f
+node:16-slim linux/arm64 sha256:49341b72e602d81a41735219b593b7201661f700a9c9385b7b5b0b5381ef8cc5
+node:20-bookworm-slim linux/arm/v7 sha256:a5c7b0e67eabfca458e26ab8950dee727a72c25a1e3452b516172e145021557e
+python:3.7-slim linux/amd64 sha256:ffd28e36ef37b3a4a24f6a771a48d7c5499ea42d6309ac911a3f699e122060be
+python:3.7-slim linux/arm/v7 sha256:84c0e98b39d2b0a3d9fe083103e3815d4fcbf4fc19a6036fed3567b4fb08f3ec
+python:3.7-slim linux/arm64 sha256:5035afd8de57d811fdd95d6a7b02c70a1a2876c553e6db72c70f0334895d8d30
+ubuntu:16.04 linux/amd64 sha256:a3785f78ab8547ae2710c89e627783cfa7ee7824d3468cae6835c9f4eae23ff7
+ubuntu:16.04 linux/arm/v7 sha256:5c33df0beb44570500a6b44f64106321ad9b7510eea35120e9180f55164752b7
+ubuntu:16.04 linux/arm64 sha256:f4c51ba054967fd4b06715f1b67078efbe9ca152e8be98d8f3c1f4d08c6042f8
+ubuntu:18.04 linux/amd64 sha256:dca176c9663a7ba4c1f0e710986f5a25e672842963d95b960191e2d9f7185ebe

@@ -125,6 +125,17 @@ is statically linked and designed to run continuously until interrupted.
 ./itscam_trigger_recorder 192.168.254.254 ./images -q 95 -r 1000
 ```
 
+### itscam_telemetry_example
+
+Reads the state of the whole camera once (`getSystemTelemetry`), then follows
+the documents the camera pushes for a while (`startTelemetryStream`).
+
+**Usage:**
+
+```bash
+./itscam_telemetry_example <camera_ip> <username> <password> [--seconds N] [--https] [--insecure]
+```
+
 ### itscam_snapshot_to_freeflow
 
 Demonstrates switching between the two main ITSCAM operational modes:
@@ -229,4 +240,5 @@ examples/
   itscam_rest_example.cpp         REST API example
   itscam_trigger_recorder.cpp     Trigger recorder (static linked)
   itscam_snapshot_to_freeflow.cpp Snapshot-to-freeflow swap example
+  itscam_telemetry_example.cpp    System telemetry: polling and stream
 ```

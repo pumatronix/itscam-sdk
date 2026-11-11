@@ -185,6 +185,16 @@ declare module '@pumatronix/itscam-sdk' {
     export type JsonValue = string | number | boolean | null
         | { [k: string]: JsonValue } | JsonValue[];
 
+    /** One telemetry document pushed by the camera. */
+    export interface TelemetryUpdate {
+        /** 1 for the stream's first document, then +1, across reconnections. */
+        sequence: number;
+        /** When it arrived, in Unix milliseconds. */
+        receivedAtMs: number;
+        /** The document, as GET /api/system/telemetry returns it. */
+        document: { [key: string]: JsonValue };
+    }
+
     export class ItscamRestClient {
         constructor();
         close(): void;
@@ -212,6 +222,16 @@ declare module '@pumatronix/itscam-sdk' {
         putAsync(path: string, body: JsonValue, timeoutMs?: number): Promise<JsonValue>;
         postAsync(path: string, body: JsonValue, timeoutMs?: number): Promise<JsonValue>;
         deleteAsync(path: string, timeoutMs?: number): Promise<JsonValue>;
+
+        // System telemetry (GET /api/system/telemetry, /api/statusws push)
+        getSystemTelemetry(timeoutMs?: number): JsonValue;
+        getSystemTelemetryAsync(timeoutMs?: number): Promise<JsonValue>;
+        startTelemetryStream(onUpdate?: ((update: TelemetryUpdate) => void) | null,
+                             timeoutMs?: number): void;
+        stopTelemetryStream(): Promise<void>;
+        isTelemetryStreamRunning(): boolean;
+        isTelemetryStreamConnected(): boolean;
+        latestTelemetry(): TelemetryUpdate | null;
 
         // Typed helpers (raw JSON)
         getProfiles(timeoutMs?: number): JsonValue;

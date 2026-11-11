@@ -79,8 +79,15 @@ CXXFLAGS_COMMON := -std=c++17 -O2 -fPIC -Wall -Wextra
 # so this is normally always enabled.  We still guard on the presence of
 # the headers so out-of-tree consumers that prune the vendored sources
 # still get a working (HTTP-only) build.
+#
+# httplib.h includes mbedTLS headers, so the C++ sources must see the same
+# mbedTLS configuration as the vendored C sources (MBEDTLS_CFLAGS_COMMON):
+# without it the two disagree on struct layouts, and verifying a server
+# certificate's hostname crashes.
 ifneq (,$(wildcard $(MBEDTLS_INC)/mbedtls/ssl.h))
-    TLS_DEFINES := -DCPPHTTPLIB_MBEDTLS_SUPPORT
+    TLS_DEFINES := -DCPPHTTPLIB_MBEDTLS_SUPPORT \
+        -DMBEDTLS_USER_CONFIG_FILE='"itscam_mbedtls_config.h"' \
+        -I$(MBEDTLS_DIR)
 else
     TLS_DEFINES :=
 endif
@@ -94,7 +101,11 @@ CXXFLAGS_WINDOWS := $(CXXFLAGS_COMMON) $(TLS_DEFINES) -DWIN32 -D_WIN32 \
 
 # mbedTLS C compile flags.  The custom user config lives next to the
 # vendored sources, so we add $(MBEDTLS_DIR) to the include path.
-MBEDTLS_CFLAGS_COMMON := -O2 -fvisibility=hidden \
+# -fno-strict-aliasing: GCC 5.4 for ARMv7, which builds the release library,
+# miscompiles gcm.c under strict aliasing at -O2: every AES-GCM record failed
+# its tag check, so no TLS handshake completed on ARMv7.  For every file and
+# target: the same latent fault in another one would be as silent.
+MBEDTLS_CFLAGS_COMMON := -O2 -fno-strict-aliasing -fvisibility=hidden \
     -DMBEDTLS_USER_CONFIG_FILE='"itscam_mbedtls_config.h"' \
     -I$(MBEDTLS_INC) -I$(MBEDTLS_DIR)
 MBEDTLS_CFLAGS_LINUX   := $(MBEDTLS_CFLAGS_COMMON) -fPIC
@@ -110,7 +121,20 @@ GLIBC_FLOOR_LINUX_ARM64 ?= 2.23
 CHECK_GLIBC := $(REPO_ROOT)/tools/check-glibc.sh
 
 # Linker flags
-LDFLAGS_LINUX   := -shared
+#
+# The Linux shared library carries its own libstdc++ and libgcc, as the
+# Windows DLL does, with their symbols kept local: it needs only glibc, so an
+# application links it with any toolchain, whatever libstdc++ that has (see
+# docs/compatibility.md).  STATIC_RUNTIME=0 links them dynamically instead,
+# for a toolchain without libstdc++.a.
+STATIC_RUNTIME  ?= 1
+# Only the C API and the itscam namespace are exported (see the map)
+EXPORT_MAP      := itscam_sdk.map
+LDFLAGS_LINUX   := -shared -Wl,--version-script=$(EXPORT_MAP)
+ifeq ($(STATIC_RUNTIME),1)
+LDFLAGS_LINUX   += -static-libstdc++ -static-libgcc -Wl,--exclude-libs,ALL
+CHECK_GLIBC_ARGS := --no-cxx-runtime
+endif
 LDLIBS_LINUX    := -lpthread
 # bcrypt is required by mbedTLS' Windows RNG.  Static link libgcc and
 # libstdc++ to avoid DLL dependencies; native Win32 threading is used.
@@ -118,6 +142,12 @@ LDFLAGS_WINDOWS := -shared -lws2_32 -lbcrypt -lcrypt32 -static-libgcc -static-li
 
 # Include paths
 INCLUDES := -I. -Ic_api -I$(3RDPARTY_DIR) -I$(MBEDTLS_INC)
+
+# The compiler records the headers each object includes (.d files beside
+# the objects), so that changing a header rebuilds what uses it: generated
+# ones too (the REST types, the version), which otherwise left a library
+# built from mixed versions of them
+DEPFLAGS := -MMD -MP
 
 # ============================================================================
 #  Source files
@@ -207,9 +237,9 @@ linux-all: linux linux-arm linux-arm64
 
 # --- linux-x64 ---------------------------------------------------------------
 
-$(LIB_LINUX_SO): $(OBJS_LINUX)
+$(LIB_LINUX_SO): $(OBJS_LINUX) $(EXPORT_MAP)
 	@echo "Linking libitscam_sdk.so (linux-x64)..."
-	@$(CXX_LINUX) $(LDFLAGS) $(LDFLAGS_LINUX) -Wl,-soname,$(LIB_LINUX_SONAME) -o $(LIB_LINUX_REAL) $^ $(LDLIBS_LINUX)
+	@$(CXX_LINUX) $(LDFLAGS) $(LDFLAGS_LINUX) -Wl,-soname,$(LIB_LINUX_SONAME) -o $(LIB_LINUX_REAL) $(filter %.o,$^) $(LDLIBS_LINUX)
 	@ln -sf libitscam_sdk.so.$(SDK_LIB_VERSION) $(BUILD_DIR_LINUX)/$(LIB_LINUX_SONAME)
 	@ln -sf libitscam_sdk.so.$(SDK_LIB_VERSION) $(LIB_LINUX_SO)
 
@@ -220,18 +250,18 @@ $(LIB_LINUX_A): $(OBJS_LINUX)
 $(BUILD_DIR_LINUX)/%.o: %.cpp
 	@mkdir -p $(dir $@)
 	@echo "Compiling (linux-x64): $<"
-	@$(CXX_LINUX) $(CXXFLAGS_LINUX) $(INCLUDES) -c $< -o $@
+	@$(CXX_LINUX) $(CXXFLAGS_LINUX) $(INCLUDES) $(DEPFLAGS) -c $< -o $@
 
 $(BUILD_DIR_LINUX)/mbedtls/%.o: $(MBEDTLS_DIR)/library/%.c
 	@mkdir -p $(dir $@)
 	@echo "Compiling (mbedtls/linux-x64): $<"
-	@$(CC_LINUX) $(MBEDTLS_CFLAGS_LINUX) -c $< -o $@
+	@$(CC_LINUX) $(MBEDTLS_CFLAGS_LINUX) $(DEPFLAGS) -c $< -o $@
 
 # --- linux-arm (ARMv7-A hard-float, gnueabihf) ------------------------------
 
-$(LIB_LINUX_ARM_SO): $(OBJS_LINUX_ARM)
+$(LIB_LINUX_ARM_SO): $(OBJS_LINUX_ARM) $(EXPORT_MAP)
 	@echo "Linking libitscam_sdk.so (linux-arm)..."
-	@$(CXX_LINUX_ARM) $(LDFLAGS) $(LDFLAGS_LINUX) -Wl,-soname,$(LIB_LINUX_SONAME) -o $(LIB_LINUX_ARM_REAL) $^ $(LDLIBS_LINUX)
+	@$(CXX_LINUX_ARM) $(LDFLAGS) $(LDFLAGS_LINUX) -Wl,-soname,$(LIB_LINUX_SONAME) -o $(LIB_LINUX_ARM_REAL) $(filter %.o,$^) $(LDLIBS_LINUX)
 	@ln -sf libitscam_sdk.so.$(SDK_LIB_VERSION) $(BUILD_DIR_LINUX_ARM)/$(LIB_LINUX_SONAME)
 	@ln -sf libitscam_sdk.so.$(SDK_LIB_VERSION) $(LIB_LINUX_ARM_SO)
 
@@ -242,18 +272,18 @@ $(LIB_LINUX_ARM_A): $(OBJS_LINUX_ARM)
 $(BUILD_DIR_LINUX_ARM)/%.o: %.cpp
 	@mkdir -p $(dir $@)
 	@echo "Compiling (linux-arm): $<"
-	@$(CXX_LINUX_ARM) $(CXXFLAGS_LINUX) $(INCLUDES) -c $< -o $@
+	@$(CXX_LINUX_ARM) $(CXXFLAGS_LINUX) $(INCLUDES) $(DEPFLAGS) -c $< -o $@
 
 $(BUILD_DIR_LINUX_ARM)/mbedtls/%.o: $(MBEDTLS_DIR)/library/%.c
 	@mkdir -p $(dir $@)
 	@echo "Compiling (mbedtls/linux-arm): $<"
-	@$(CC_LINUX_ARM) $(MBEDTLS_CFLAGS_LINUX) -c $< -o $@
+	@$(CC_LINUX_ARM) $(MBEDTLS_CFLAGS_LINUX) $(DEPFLAGS) -c $< -o $@
 
 # --- linux-arm64 (ARMv8, aarch64) -------------------------------------------
 
-$(LIB_LINUX_ARM64_SO): $(OBJS_LINUX_ARM64)
+$(LIB_LINUX_ARM64_SO): $(OBJS_LINUX_ARM64) $(EXPORT_MAP)
 	@echo "Linking libitscam_sdk.so (linux-arm64)..."
-	@$(CXX_LINUX_ARM64) $(LDFLAGS) $(LDFLAGS_LINUX) -Wl,-soname,$(LIB_LINUX_SONAME) -o $(LIB_LINUX_ARM64_REAL) $^ $(LDLIBS_LINUX)
+	@$(CXX_LINUX_ARM64) $(LDFLAGS) $(LDFLAGS_LINUX) -Wl,-soname,$(LIB_LINUX_SONAME) -o $(LIB_LINUX_ARM64_REAL) $(filter %.o,$^) $(LDLIBS_LINUX)
 	@ln -sf libitscam_sdk.so.$(SDK_LIB_VERSION) $(BUILD_DIR_LINUX_ARM64)/$(LIB_LINUX_SONAME)
 	@ln -sf libitscam_sdk.so.$(SDK_LIB_VERSION) $(LIB_LINUX_ARM64_SO)
 
@@ -264,12 +294,12 @@ $(LIB_LINUX_ARM64_A): $(OBJS_LINUX_ARM64)
 $(BUILD_DIR_LINUX_ARM64)/%.o: %.cpp
 	@mkdir -p $(dir $@)
 	@echo "Compiling (linux-arm64): $<"
-	@$(CXX_LINUX_ARM64) $(CXXFLAGS_LINUX) $(INCLUDES) -c $< -o $@
+	@$(CXX_LINUX_ARM64) $(CXXFLAGS_LINUX) $(INCLUDES) $(DEPFLAGS) -c $< -o $@
 
 $(BUILD_DIR_LINUX_ARM64)/mbedtls/%.o: $(MBEDTLS_DIR)/library/%.c
 	@mkdir -p $(dir $@)
 	@echo "Compiling (mbedtls/linux-arm64): $<"
-	@$(CC_LINUX_ARM64) $(MBEDTLS_CFLAGS_LINUX) -c $< -o $@
+	@$(CC_LINUX_ARM64) $(MBEDTLS_CFLAGS_LINUX) $(DEPFLAGS) -c $< -o $@
 
 check-cross-armhf:
 	@command -v $(CXX_LINUX_ARM) > /dev/null || \
@@ -290,16 +320,20 @@ check-cross-arm64:
 # Use the per-arch targets after a build, or `check-glibc` to validate
 # everything that exists under build/.
 
-check-glibc-linux:
-	@if [ -f $(LIB_LINUX_REAL) ]; then $(CHECK_GLIBC) $(LIB_LINUX_REAL) $(GLIBC_FLOOR_LINUX); fi
+check-glibc-linux: $(LIB_LINUX_SO)
+	@$(CHECK_GLIBC) $(LIB_LINUX_REAL) $(GLIBC_FLOOR_LINUX) $(CHECK_GLIBC_ARGS)
 
-check-glibc-linux-arm:
-	@if [ -f $(LIB_LINUX_ARM_REAL) ]; then $(CHECK_GLIBC) $(LIB_LINUX_ARM_REAL) $(GLIBC_FLOOR_LINUX_ARM); fi
+check-glibc-linux-arm: $(LIB_LINUX_ARM_SO)
+	@$(CHECK_GLIBC) $(LIB_LINUX_ARM_REAL) $(GLIBC_FLOOR_LINUX_ARM) $(CHECK_GLIBC_ARGS)
 
-check-glibc-linux-arm64:
-	@if [ -f $(LIB_LINUX_ARM64_REAL) ]; then $(CHECK_GLIBC) $(LIB_LINUX_ARM64_REAL) $(GLIBC_FLOOR_LINUX_ARM64); fi
+check-glibc-linux-arm64: $(LIB_LINUX_ARM64_SO)
+	@$(CHECK_GLIBC) $(LIB_LINUX_ARM64_REAL) $(GLIBC_FLOOR_LINUX_ARM64) $(CHECK_GLIBC_ARGS)
 
-check-glibc: check-glibc-linux check-glibc-linux-arm check-glibc-linux-arm64
+# Checks the libraries already built: a target's toolchain may be missing
+check-glibc:
+	@if [ -f $(LIB_LINUX_REAL) ]; then $(CHECK_GLIBC) $(LIB_LINUX_REAL) $(GLIBC_FLOOR_LINUX) $(CHECK_GLIBC_ARGS); fi
+	@if [ -f $(LIB_LINUX_ARM_REAL) ]; then $(CHECK_GLIBC) $(LIB_LINUX_ARM_REAL) $(GLIBC_FLOOR_LINUX_ARM) $(CHECK_GLIBC_ARGS); fi
+	@if [ -f $(LIB_LINUX_ARM64_REAL) ]; then $(CHECK_GLIBC) $(LIB_LINUX_ARM64_REAL) $(GLIBC_FLOOR_LINUX_ARM64) $(CHECK_GLIBC_ARGS); fi
 
 # ============================================================================
 #  Windows build (cross-compile, win32 + win64)
@@ -330,22 +364,22 @@ $(LIB_WIN_X86_STATIC): $(OBJS_WIN_X86)
 $(BUILD_DIR_WIN_X64)/%.o: %.cpp
 	@mkdir -p $(dir $@)
 	@echo "Compiling (win-x64): $<"
-	@$(CXX_WIN_X64) $(CXXFLAGS_WINDOWS) $(INCLUDES) -c $< -o $@
+	@$(CXX_WIN_X64) $(CXXFLAGS_WINDOWS) $(INCLUDES) $(DEPFLAGS) -c $< -o $@
 
 $(BUILD_DIR_WIN_X86)/%.o: %.cpp
 	@mkdir -p $(dir $@)
 	@echo "Compiling (win-x86): $<"
-	@$(CXX_WIN_X86) $(CXXFLAGS_WINDOWS) $(INCLUDES) -c $< -o $@
+	@$(CXX_WIN_X86) $(CXXFLAGS_WINDOWS) $(INCLUDES) $(DEPFLAGS) -c $< -o $@
 
 $(BUILD_DIR_WIN_X64)/mbedtls/%.o: $(MBEDTLS_DIR)/library/%.c
 	@mkdir -p $(dir $@)
 	@echo "Compiling (mbedtls/win-x64): $<"
-	@$(CC_WIN_X64) $(MBEDTLS_CFLAGS_WINDOWS) -c $< -o $@
+	@$(CC_WIN_X64) $(MBEDTLS_CFLAGS_WINDOWS) $(DEPFLAGS) -c $< -o $@
 
 $(BUILD_DIR_WIN_X86)/mbedtls/%.o: $(MBEDTLS_DIR)/library/%.c
 	@mkdir -p $(dir $@)
 	@echo "Compiling (mbedtls/win-x86): $<"
-	@$(CC_WIN_X86) $(MBEDTLS_CFLAGS_WINDOWS) -c $< -o $@
+	@$(CC_WIN_X86) $(MBEDTLS_CFLAGS_WINDOWS) $(DEPFLAGS) -c $< -o $@
 
 check-mingw-x64:
 	@which $(CXX_WIN_X64) > /dev/null || (echo "Error: x86_64 MinGW not found. Install mingw-w64." && exit 1)
@@ -384,6 +418,9 @@ install: linux
 #  Cleanup
 # ============================================================================
 
+# Header dependencies recorded by DEPFLAGS
+-include $(shell find $(BUILD_DIR) -name '*.d' 2>/dev/null)
+
 clean:
 	@echo "Cleaning build artifacts..."
 	@rm -rf $(BUILD_DIR_LINUX) $(BUILD_DIR_LINUX_ARM) $(BUILD_DIR_LINUX_ARM64) \
@@ -418,9 +455,11 @@ help:
 	@echo "                          (default: /opt/cross/armhf/bin)"
 	@echo "  ARM64_TOOLCHAIN_PATH    Bin dir for aarch64 cross-compiler"
 	@echo "                          (default: /opt/cross/arm64/bin)"
-	@echo "  GLIBC_FLOOR_LINUX       Max allowed GLIBC for linux-x64 (default: 2.27)"
-	@echo "  GLIBC_FLOOR_LINUX_ARM   Max allowed GLIBC for linux-arm (default: 2.28)"
-	@echo "  GLIBC_FLOOR_LINUX_ARM64 Max allowed GLIBC for linux-arm64 (default: 2.28)"
+	@echo "  GLIBC_FLOOR_LINUX       Max allowed GLIBC for linux-x64 (default: 2.23)"
+	@echo "  GLIBC_FLOOR_LINUX_ARM   Max allowed GLIBC for linux-arm (default: 2.23)"
+	@echo "  GLIBC_FLOOR_LINUX_ARM64 Max allowed GLIBC for linux-arm64 (default: 2.23)"
+	@echo "  STATIC_RUNTIME          1: link libstdc++/libgcc into the .so (default)"
+	@echo "                          0: depend on the target's libstdc++.so"
 	@echo ""
 	@echo "Notes:"
 	@echo "  HTTPS support is built in - mbedTLS sources are vendored under"

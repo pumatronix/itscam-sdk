@@ -35,9 +35,15 @@
 //     RestApiClientConfig data = nlohmann::json::parse(jsonString);
 //     RestApiClientStatus data = nlohmann::json::parse(jsonString);
 //     Licenses data = nlohmann::json::parse(jsonString);
+//     SystemTelemetry data = nlohmann::json::parse(jsonString);
 
 #pragma once
 
+#if defined(optional_USES_STD_OPTIONAL) && optional_USES_STD_OPTIONAL
+#error "Include itscam_sdk.h before anything that selects the standard optional in optional-lite"
+#endif
+#undef optional_CONFIG_SELECT_OPTIONAL
+#define optional_CONFIG_SELECT_OPTIONAL optional_OPTIONAL_NONSTD
 #include <nonstd/optional.hpp>
 #include <nlohmann/json.hpp>
 
@@ -764,7 +770,7 @@ namespace rest_types {
         int64_t port;
     };
 
-    enum class Type : int { JSON };
+    enum class Type : int { FORM_URLENCODED, JPEG, JSON, RAW, XML };
 
     struct Part {
         std::string data;
@@ -821,11 +827,25 @@ namespace rest_types {
      * REST API Client service configuration
      */
     struct RestApiClientConfig {
+        /**
+         * Name of the auxiliary camera whose detections are attached to the request (empty to
+         * disable)
+         */
+        nonstd::optional<std::string> aux_camera_name;
         Body body;
+        /**
+         * HTTP status codes for which a failed request is discarded right away, without retries and
+         * without being persisted for a later resend
+         */
+        nonstd::optional<std::vector<int64_t>> discard_status_codes;
         bool enabled;
         std::vector<Header> headers;
         Jpeg jpeg;
         Method method;
+        /**
+         * Minimum transfer speed in bytes per second before the request is aborted
+         */
+        nonstd::optional<int64_t> min_speed;
         Persistency persistency;
         int64_t retries;
         bool send_individual_requests;
@@ -882,6 +902,472 @@ namespace rest_types {
     struct Licenses {
         nonstd::optional<Analytics> analytics;
         nonstd::optional<DeviceId> device_id;
+    };
+
+    struct TelemetryCameraFps {
+        nonstd::optional<double> mjpeg;
+    };
+
+    struct TelemetryCameraProfile {
+        nonstd::optional<int64_t> id;
+        nonstd::optional<std::string> name;
+    };
+
+    struct TelemetryCamera {
+        /**
+         * Camera service initialization failures, by error type
+         */
+        nonstd::optional<std::map<std::string, int64_t>> failure_counts;
+        nonstd::optional<TelemetryCameraFps> fps;
+        /**
+         * Whether the camera delivers images
+         */
+        nonstd::optional<bool> pipeline_ready;
+        nonstd::optional<TelemetryCameraProfile> profile;
+        /**
+         * Whether the camera service answered
+         */
+        nonstd::optional<bool> reachable;
+    };
+
+    struct TelemetryClient {
+        nonstd::optional<std::string> ip;
+        nonstd::optional<int64_t> port;
+        /**
+         * Unix time it connected, in seconds
+         */
+        nonstd::optional<int64_t> since;
+    };
+
+    struct TelemetryConnections {
+        nonstd::optional<std::vector<TelemetryClient>> clients;
+        nonstd::optional<int64_t> count;
+    };
+
+    struct TelemetryDevice {
+        /**
+         * itscam450, itscam600, itscam
+         */
+        nonstd::optional<std::string> family;
+        nonstd::optional<std::string> firmware_version;
+        nonstd::optional<std::string> model;
+    };
+
+    /**
+     * Last test, or why the last scheduled one was skipped (FlashTestRun fields when it ran)
+     */
+    struct FlashTestAttempt {
+        nonstd::optional<double> delta;
+        nonstd::optional<int64_t> out;
+        /**
+         * pass, weak, fail, inconclusive
+         */
+        nonstd::optional<std::string> outcome;
+        nonstd::optional<std::string> reason;
+        /**
+         * pipelineNotReady, busy, noFlashInProfile or irFilterClosed
+         */
+        nonstd::optional<std::string> skipped;
+        nonstd::optional<int64_t> time;
+    };
+
+    /**
+     * Light the output adds at one exposure, learned from its passing runs
+     */
+    struct FlashTestBaseline {
+        nonstd::optional<double> delta;
+        nonstd::optional<int64_t> gain;
+        nonstd::optional<int64_t> power;
+        nonstd::optional<int64_t> runs;
+        nonstd::optional<int64_t> shutter;
+    };
+
+    /**
+     * One test of a flash output
+     */
+    struct FlashTestRun {
+        /**
+         * Mean luma without flash
+         */
+        nonstd::optional<double> ambient;
+        /**
+         * Luma (0-255) the flash added
+         */
+        nonstd::optional<double> delta;
+        /**
+         * Gain, in millibels
+         */
+        nonstd::optional<int64_t> gain;
+        /**
+         * Luma difference between the captures without flash
+         */
+        nonstd::optional<double> noise;
+        /**
+         * Flash output, as in the profiles
+         */
+        nonstd::optional<int64_t> out;
+        /**
+         * pass, weak, fail, inconclusive
+         */
+        nonstd::optional<std::string> outcome;
+        /**
+         * Flash power, in percent
+         */
+        nonstd::optional<int64_t> power;
+        /**
+         * Why it was inconclusive (motion, saturated, ambient, noise, weakSignal, capture,
+         * flashNotApplied)
+         */
+        nonstd::optional<std::string> reason;
+        /**
+         * Shutter, in microseconds
+         */
+        nonstd::optional<int64_t> shutter;
+        /**
+         * Unix time, in seconds
+         */
+        nonstd::optional<int64_t> time;
+        /**
+         * Part of the image that neither moved nor saturated
+         */
+        nonstd::optional<double> usable_fraction;
+    };
+
+    struct FlashTestOutput {
+        nonstd::optional<FlashTestBaseline> baseline;
+        nonstd::optional<double> confidence;
+        nonstd::optional<FlashTestRun> last_conclusive_run;
+        nonstd::optional<FlashTestRun> last_run;
+        nonstd::optional<int64_t> out;
+        /**
+         * ok, degraded, failed, unknown
+         */
+        nonstd::optional<std::string> status;
+    };
+
+    /**
+     * Flash configuration that looks wrong (not a failure)
+     */
+    struct FlashTestWarning {
+        /**
+         * noFlashConfigured, flashWithIrFilterClosed, flashOutputCannotFlash, flashOutputNotFlash,
+         * irPassWithoutFlash
+         */
+        nonstd::optional<std::string> id;
+        nonstd::optional<int64_t> out;
+        nonstd::optional<int64_t> profile;
+        nonstd::optional<std::string> profile_name;
+        /**
+         * warning, info
+         */
+        nonstd::optional<std::string> severity;
+    };
+
+    /**
+     * Every intervalMinutes, while no triggers come in (or after five intervals skipped in a
+     * row, as on constant trigger), the camera takes three diagnostic captures (without, with
+     * and without flash) that no client receives, and measures the light one flash output of
+     * the current profile adds. Each output's status comes from its recent conclusive runs, and
+     * its confidence (0 to 1) grows with agreeing runs and fades a day after the last one.
+     */
+    struct FlashTestStatus {
+        nonstd::optional<double> confidence;
+        nonstd::optional<bool> enabled;
+        nonstd::optional<int64_t> interval_minutes;
+        nonstd::optional<FlashTestAttempt> last_attempt;
+        nonstd::optional<std::vector<FlashTestOutput>> outputs;
+        /**
+         * Worst status of the outputs tested (ok, degraded, failed, unknown)
+         */
+        nonstd::optional<std::string> status;
+        nonstd::optional<std::vector<FlashTestWarning>> warnings;
+    };
+
+    /**
+     * Something that needs attention: id, severity and message, plus the details of its kind.
+     */
+    struct TelemetryHealthIssue {
+        /**
+         * restApiClientError
+         */
+        nonstd::optional<int64_t> client_id;
+        /**
+         * restApiClientError
+         */
+        nonstd::optional<int64_t> code;
+        /**
+         * flashFailed, flashDegraded
+         */
+        nonstd::optional<double> confidence;
+        /**
+         * storageFull (disk or sdCard)
+         */
+        nonstd::optional<std::string> device;
+        /**
+         * cameraServiceDown, cameraServiceUnreachable, cameraServiceInitError, pipelineNotReady,
+         * serviceDown, storageFull, memoryHigh, flashFailed, flashDegraded, itscamproDisconnected,
+         * linceLoginFailed, restApiClientError, or a flash configuration warning
+         * (noFlashConfigured, flashWithIrFilterClosed, flashOutputCannotFlash, flashOutputNotFlash,
+         * irPassWithoutFlash)
+         */
+        std::string id;
+        /**
+         * English text, for logs; use id to show it
+         */
+        std::string message;
+        /**
+         * Flash output (flash issues and warnings)
+         */
+        nonstd::optional<int64_t> out;
+        /**
+         * Flash configuration warnings
+         */
+        nonstd::optional<int64_t> profile;
+        /**
+         * Flash configuration warnings
+         */
+        nonstd::optional<std::string> profile_name;
+        /**
+         * serviceDown
+         */
+        nonstd::optional<std::string> service;
+        /**
+         * info, warning, critical
+         */
+        std::string severity;
+        /**
+         * itscamproDisconnected, linceLoginFailed
+         */
+        nonstd::optional<std::string> status;
+        /**
+         * storageFull, memoryHigh
+         */
+        nonstd::optional<double> used_pct;
+    };
+
+    struct TelemetryHealth {
+        nonstd::optional<std::vector<TelemetryHealthIssue>> issues;
+        /**
+         * Most severe issue; info issues leave it ok (ok, warning, critical)
+         */
+        nonstd::optional<std::string> status;
+    };
+
+    /**
+     * Null when the service doesn't run on this camera
+     */
+    struct TelemetryIntegration {
+        nonstd::optional<bool> enabled;
+        /**
+         * ITSCAM PRO: CONNECTED, CONNECT_START, DISCONNECTED, DISCONNECT_START, DISABLED or
+         * UNKNOWN. Lince: loginSuccess, notInitialized, loginError, discoveryError or
+         * undefinedError.
+         */
+        nonstd::optional<std::string> status;
+    };
+
+    struct TelemetryRestApiClient {
+        /**
+         * 0 when fine, 1 template error, 2 request error
+         */
+        nonstd::optional<int64_t> code;
+        nonstd::optional<int64_t> disk_usage;
+        nonstd::optional<bool> enabled;
+        /**
+         * Requests saved to disk, waiting to be sent again
+         */
+        nonstd::optional<int64_t> file_count;
+        nonstd::optional<int64_t> id;
+        nonstd::optional<std::string> message;
+    };
+
+    struct TelemetryIntegrations {
+        nonstd::optional<TelemetryIntegration> itscampro;
+        nonstd::optional<TelemetryIntegration> lince;
+        nonstd::optional<std::vector<TelemetryRestApiClient>> rest_api_clients;
+    };
+
+    /**
+     * Status of the wired interfaces (by name, eth1...), the wireless and the mobile network,
+     * as in the network status websocket. Read every 10 s at most.
+     */
+    struct TelemetryNetwork {
+        nonstd::optional<std::map<std::string, nlohmann::json>> mobile;
+        nonstd::optional<std::map<std::string, nlohmann::json>> wifi;
+        nonstd::optional<std::map<std::string, nlohmann::json>> wired;
+    };
+
+    struct ProcessingCounters {
+        nonstd::optional<int64_t> captures;
+        nonstd::optional<int64_t> captures_with_plates;
+        /**
+         * Classifier detections, summed over the captures
+         */
+        nonstd::optional<int64_t> objects;
+        /**
+         * Mean OCR time per exposure, null without OCR
+         */
+        nonstd::optional<double> ocr_average_ms;
+        /**
+         * Distinct plates read, summed over the captures
+         */
+        nonstd::optional<int64_t> plates;
+    };
+
+    struct ProcessingStatisticsWindow {
+        /**
+         * Part of the window the camera service ran
+         */
+        nonstd::optional<int64_t> covered_seconds;
+        nonstd::optional<int64_t> seconds;
+        nonstd::optional<ProcessingCounters> snapshot;
+        nonstd::optional<ProcessingCounters> total;
+        nonstd::optional<ProcessingCounters> trigger;
+    };
+
+    /**
+     * Captures processed in the last 10, 30 and 60 minutes. A capture is one trigger or
+     * snapshot request, counted once: its plates are the distinct texts OCR read across its
+     * exposures, its objects the classifier detections of the exposure with most of them.
+     */
+    struct ProcessingStatistics {
+        nonstd::optional<ProcessingStatisticsWindow> last10_minutes;
+        nonstd::optional<ProcessingStatisticsWindow> last30_minutes;
+        nonstd::optional<ProcessingStatisticsWindow> last60_minutes;
+    };
+
+    struct TelemetryCpu {
+        /**
+         * 1, 5 and 15 minutes
+         */
+        nonstd::optional<std::vector<double>> load_average;
+        /**
+         * Celsius
+         */
+        nonstd::optional<double> temperature;
+        /**
+         * Percent of all cores, since the previous reading (a few seconds)
+         */
+        nonstd::optional<double> usage;
+    };
+
+    struct TelemetryMemoryRam {
+        nonstd::optional<int64_t> total;
+        nonstd::optional<int64_t> used;
+        nonstd::optional<double> used_pct;
+    };
+
+    struct TelemetryMemorySwap {
+        nonstd::optional<int64_t> total;
+        nonstd::optional<int64_t> used;
+        nonstd::optional<double> used_pct;
+    };
+
+    /**
+     * Bytes
+     */
+    struct TelemetryMemory {
+        nonstd::optional<TelemetryMemoryRam> ram;
+        nonstd::optional<TelemetryMemorySwap> swap;
+    };
+
+    struct TelemetryStorageDevice {
+        nonstd::optional<std::string> device;
+        nonstd::optional<std::string> mount_point;
+        /**
+         * Bytes
+         */
+        nonstd::optional<int64_t> total;
+        /**
+         * Bytes, null when not mounted
+         */
+        nonstd::optional<int64_t> used;
+        nonstd::optional<double> used_pct;
+    };
+
+    struct TelemetryStorage {
+        nonstd::optional<TelemetryStorageDevice> disk;
+        nonstd::optional<TelemetryStorageDevice> sd_card;
+    };
+
+    struct TelemetryUptime {
+        /**
+         * Unix time, in seconds
+         */
+        nonstd::optional<int64_t> last_boot;
+        nonstd::optional<int64_t> seconds;
+    };
+
+    struct TelemetryResources {
+        nonstd::optional<TelemetryCpu> cpu;
+        /**
+         * Bytes
+         */
+        nonstd::optional<TelemetryMemory> memory;
+        nonstd::optional<TelemetryStorage> storage;
+        nonstd::optional<TelemetryUptime> uptime;
+    };
+
+    struct TelemetryService {
+        /**
+         * systemd active state (active, activating, failed, inactive...)
+         */
+        nonstd::optional<std::string> active;
+        /**
+         * Started at boot; the others start on demand (media-server, by socket)
+         */
+        nonstd::optional<bool> enabled;
+        /**
+         * camera-daemon only, empty when it started fine
+         */
+        nonstd::optional<std::string> initialization_error;
+        /**
+         * Automatic restarts since boot
+         */
+        nonstd::optional<int64_t> restarts;
+        /**
+         * Unix time it became active, in seconds
+         */
+        nonstd::optional<int64_t> since;
+        nonstd::optional<std::string> sub;
+    };
+
+    /**
+     * State of the whole equipment. A part that can't be read in time is null. Times are unix
+     * seconds unless stated otherwise.
+     */
+    struct SystemTelemetry {
+        nonstd::optional<TelemetryCamera> camera;
+        /**
+         * Clients connected now: to the Cougar and ITSCAM (pumatronix) protocols, local ones
+         * included (absent when the camera service doesn't answer), and to the CGI endpoints
+         * (trigger, mjpegvideo, snapshot, lastframe), those of this web interface excluded.
+         */
+        nonstd::optional<std::map<std::string, TelemetryConnections>> connections;
+        nonstd::optional<TelemetryDevice> device;
+        nonstd::optional<FlashTestStatus> flash_test;
+        nonstd::optional<TelemetryHealth> health;
+        nonstd::optional<TelemetryIntegrations> integrations;
+        /**
+         * Status of the wired interfaces (by name, eth1...), the wireless and the mobile network,
+         * as in the network status websocket. Read every 10 s at most.
+         */
+        nonstd::optional<TelemetryNetwork> network;
+        nonstd::optional<ProcessingStatistics> processing;
+        nonstd::optional<TelemetryResources> resources;
+        /**
+         * systemd units by name (camera-daemon, webapp, records, redis, media-server), those
+         * present on the model
+         */
+        nonstd::optional<std::map<std::string, TelemetryService>> services;
+        /**
+         * When it was read, ISO 8601 UTC
+         */
+        nonstd::optional<std::string> timestamp;
+        /**
+         * Format version; fields are only added within a version
+         */
+        nonstd::optional<int64_t> version;
     };
 }
 }
@@ -1158,6 +1644,99 @@ namespace rest_types {
     void from_json(json const & j, Licenses & x);
     void to_json(json & j, Licenses const & x);
 
+    void from_json(json const & j, TelemetryCameraFps & x);
+    void to_json(json & j, TelemetryCameraFps const & x);
+
+    void from_json(json const & j, TelemetryCameraProfile & x);
+    void to_json(json & j, TelemetryCameraProfile const & x);
+
+    void from_json(json const & j, TelemetryCamera & x);
+    void to_json(json & j, TelemetryCamera const & x);
+
+    void from_json(json const & j, TelemetryClient & x);
+    void to_json(json & j, TelemetryClient const & x);
+
+    void from_json(json const & j, TelemetryConnections & x);
+    void to_json(json & j, TelemetryConnections const & x);
+
+    void from_json(json const & j, TelemetryDevice & x);
+    void to_json(json & j, TelemetryDevice const & x);
+
+    void from_json(json const & j, FlashTestAttempt & x);
+    void to_json(json & j, FlashTestAttempt const & x);
+
+    void from_json(json const & j, FlashTestBaseline & x);
+    void to_json(json & j, FlashTestBaseline const & x);
+
+    void from_json(json const & j, FlashTestRun & x);
+    void to_json(json & j, FlashTestRun const & x);
+
+    void from_json(json const & j, FlashTestOutput & x);
+    void to_json(json & j, FlashTestOutput const & x);
+
+    void from_json(json const & j, FlashTestWarning & x);
+    void to_json(json & j, FlashTestWarning const & x);
+
+    void from_json(json const & j, FlashTestStatus & x);
+    void to_json(json & j, FlashTestStatus const & x);
+
+    void from_json(json const & j, TelemetryHealthIssue & x);
+    void to_json(json & j, TelemetryHealthIssue const & x);
+
+    void from_json(json const & j, TelemetryHealth & x);
+    void to_json(json & j, TelemetryHealth const & x);
+
+    void from_json(json const & j, TelemetryIntegration & x);
+    void to_json(json & j, TelemetryIntegration const & x);
+
+    void from_json(json const & j, TelemetryRestApiClient & x);
+    void to_json(json & j, TelemetryRestApiClient const & x);
+
+    void from_json(json const & j, TelemetryIntegrations & x);
+    void to_json(json & j, TelemetryIntegrations const & x);
+
+    void from_json(json const & j, TelemetryNetwork & x);
+    void to_json(json & j, TelemetryNetwork const & x);
+
+    void from_json(json const & j, ProcessingCounters & x);
+    void to_json(json & j, ProcessingCounters const & x);
+
+    void from_json(json const & j, ProcessingStatisticsWindow & x);
+    void to_json(json & j, ProcessingStatisticsWindow const & x);
+
+    void from_json(json const & j, ProcessingStatistics & x);
+    void to_json(json & j, ProcessingStatistics const & x);
+
+    void from_json(json const & j, TelemetryCpu & x);
+    void to_json(json & j, TelemetryCpu const & x);
+
+    void from_json(json const & j, TelemetryMemoryRam & x);
+    void to_json(json & j, TelemetryMemoryRam const & x);
+
+    void from_json(json const & j, TelemetryMemorySwap & x);
+    void to_json(json & j, TelemetryMemorySwap const & x);
+
+    void from_json(json const & j, TelemetryMemory & x);
+    void to_json(json & j, TelemetryMemory const & x);
+
+    void from_json(json const & j, TelemetryStorageDevice & x);
+    void to_json(json & j, TelemetryStorageDevice const & x);
+
+    void from_json(json const & j, TelemetryStorage & x);
+    void to_json(json & j, TelemetryStorage const & x);
+
+    void from_json(json const & j, TelemetryUptime & x);
+    void to_json(json & j, TelemetryUptime const & x);
+
+    void from_json(json const & j, TelemetryResources & x);
+    void to_json(json & j, TelemetryResources const & x);
+
+    void from_json(json const & j, TelemetryService & x);
+    void to_json(json & j, TelemetryService const & x);
+
+    void from_json(json const & j, SystemTelemetry & x);
+    void to_json(json & j, SystemTelemetry const & x);
+
     void from_json(json const & j, Mode & x);
     void to_json(json & j, Mode const & x);
 
@@ -1264,6 +1843,37 @@ namespace rest_types {
     json to_partial_json(Analytics const & x);
     json to_partial_json(DeviceId const & x);
     json to_partial_json(Licenses const & x);
+    json to_partial_json(TelemetryCameraFps const & x);
+    json to_partial_json(TelemetryCameraProfile const & x);
+    json to_partial_json(TelemetryCamera const & x);
+    json to_partial_json(TelemetryClient const & x);
+    json to_partial_json(TelemetryConnections const & x);
+    json to_partial_json(TelemetryDevice const & x);
+    json to_partial_json(FlashTestAttempt const & x);
+    json to_partial_json(FlashTestBaseline const & x);
+    json to_partial_json(FlashTestRun const & x);
+    json to_partial_json(FlashTestOutput const & x);
+    json to_partial_json(FlashTestWarning const & x);
+    json to_partial_json(FlashTestStatus const & x);
+    json to_partial_json(TelemetryHealthIssue const & x);
+    json to_partial_json(TelemetryHealth const & x);
+    json to_partial_json(TelemetryIntegration const & x);
+    json to_partial_json(TelemetryRestApiClient const & x);
+    json to_partial_json(TelemetryIntegrations const & x);
+    json to_partial_json(TelemetryNetwork const & x);
+    json to_partial_json(ProcessingCounters const & x);
+    json to_partial_json(ProcessingStatisticsWindow const & x);
+    json to_partial_json(ProcessingStatistics const & x);
+    json to_partial_json(TelemetryCpu const & x);
+    json to_partial_json(TelemetryMemoryRam const & x);
+    json to_partial_json(TelemetryMemorySwap const & x);
+    json to_partial_json(TelemetryMemory const & x);
+    json to_partial_json(TelemetryStorageDevice const & x);
+    json to_partial_json(TelemetryStorage const & x);
+    json to_partial_json(TelemetryUptime const & x);
+    json to_partial_json(TelemetryResources const & x);
+    json to_partial_json(TelemetryService const & x);
+    json to_partial_json(SystemTelemetry const & x);
 
     inline void from_json(json const & j, Exposition& x) {
         x.preferred_shutter = get_stack_optional<int64_t>(j, "preferredShutter");
@@ -2529,11 +3139,14 @@ namespace rest_types {
     }
 
     inline void from_json(json const & j, RestApiClientConfig& x) {
+        x.aux_camera_name = get_stack_optional<std::string>(j, "auxCameraName");
         x.body = j.at("body").get<Body>();
+        x.discard_status_codes = get_stack_optional<std::vector<int64_t>>(j, "discardStatusCodes");
         x.enabled = j.at("enabled").get<bool>();
         x.headers = j.at("headers").get<std::vector<Header>>();
         x.jpeg = j.at("jpeg").get<Jpeg>();
         x.method = j.at("method").get<Method>();
+        x.min_speed = get_stack_optional<int64_t>(j, "minSpeed");
         x.persistency = j.at("persistency").get<Persistency>();
         x.retries = j.at("retries").get<int64_t>();
         x.send_individual_requests = j.at("sendIndividualRequests").get<bool>();
@@ -2545,11 +3158,14 @@ namespace rest_types {
 
     inline void to_json(json & j, RestApiClientConfig const & x) {
         j = json::object();
+        j["auxCameraName"] = x.aux_camera_name;
         j["body"] = x.body;
+        j["discardStatusCodes"] = x.discard_status_codes;
         j["enabled"] = x.enabled;
         j["headers"] = x.headers;
         j["jpeg"] = x.jpeg;
         j["method"] = x.method;
+        j["minSpeed"] = x.min_speed;
         j["persistency"] = x.persistency;
         j["retries"] = x.retries;
         j["sendIndividualRequests"] = x.send_individual_requests;
@@ -2651,6 +3267,503 @@ namespace rest_types {
         j["deviceId"] = x.device_id;
     }
 
+    inline void from_json(json const & j, TelemetryCameraFps& x) {
+        x.mjpeg = get_stack_optional<double>(j, "mjpeg");
+    }
+
+    inline void to_json(json & j, TelemetryCameraFps const & x) {
+        j = json::object();
+        j["mjpeg"] = x.mjpeg;
+    }
+
+    inline void from_json(json const & j, TelemetryCameraProfile& x) {
+        x.id = get_stack_optional<int64_t>(j, "id");
+        x.name = get_stack_optional<std::string>(j, "name");
+    }
+
+    inline void to_json(json & j, TelemetryCameraProfile const & x) {
+        j = json::object();
+        j["id"] = x.id;
+        j["name"] = x.name;
+    }
+
+    inline void from_json(json const & j, TelemetryCamera& x) {
+        x.failure_counts = get_stack_optional<std::map<std::string, int64_t>>(j, "failureCounts");
+        x.fps = get_stack_optional<TelemetryCameraFps>(j, "fps");
+        x.pipeline_ready = get_stack_optional<bool>(j, "pipelineReady");
+        x.profile = get_stack_optional<TelemetryCameraProfile>(j, "profile");
+        x.reachable = get_stack_optional<bool>(j, "reachable");
+    }
+
+    inline void to_json(json & j, TelemetryCamera const & x) {
+        j = json::object();
+        j["failureCounts"] = x.failure_counts;
+        j["fps"] = x.fps;
+        j["pipelineReady"] = x.pipeline_ready;
+        j["profile"] = x.profile;
+        j["reachable"] = x.reachable;
+    }
+
+    inline void from_json(json const & j, TelemetryClient& x) {
+        x.ip = get_stack_optional<std::string>(j, "ip");
+        x.port = get_stack_optional<int64_t>(j, "port");
+        x.since = get_stack_optional<int64_t>(j, "since");
+    }
+
+    inline void to_json(json & j, TelemetryClient const & x) {
+        j = json::object();
+        j["ip"] = x.ip;
+        j["port"] = x.port;
+        j["since"] = x.since;
+    }
+
+    inline void from_json(json const & j, TelemetryConnections& x) {
+        x.clients = get_stack_optional<std::vector<TelemetryClient>>(j, "clients");
+        x.count = get_stack_optional<int64_t>(j, "count");
+    }
+
+    inline void to_json(json & j, TelemetryConnections const & x) {
+        j = json::object();
+        j["clients"] = x.clients;
+        j["count"] = x.count;
+    }
+
+    inline void from_json(json const & j, TelemetryDevice& x) {
+        x.family = get_stack_optional<std::string>(j, "family");
+        x.firmware_version = get_stack_optional<std::string>(j, "firmwareVersion");
+        x.model = get_stack_optional<std::string>(j, "model");
+    }
+
+    inline void to_json(json & j, TelemetryDevice const & x) {
+        j = json::object();
+        j["family"] = x.family;
+        j["firmwareVersion"] = x.firmware_version;
+        j["model"] = x.model;
+    }
+
+    inline void from_json(json const & j, FlashTestAttempt& x) {
+        x.delta = get_stack_optional<double>(j, "delta");
+        x.out = get_stack_optional<int64_t>(j, "out");
+        x.outcome = get_stack_optional<std::string>(j, "outcome");
+        x.reason = get_stack_optional<std::string>(j, "reason");
+        x.skipped = get_stack_optional<std::string>(j, "skipped");
+        x.time = get_stack_optional<int64_t>(j, "time");
+    }
+
+    inline void to_json(json & j, FlashTestAttempt const & x) {
+        j = json::object();
+        j["delta"] = x.delta;
+        j["out"] = x.out;
+        j["outcome"] = x.outcome;
+        j["reason"] = x.reason;
+        j["skipped"] = x.skipped;
+        j["time"] = x.time;
+    }
+
+    inline void from_json(json const & j, FlashTestBaseline& x) {
+        x.delta = get_stack_optional<double>(j, "delta");
+        x.gain = get_stack_optional<int64_t>(j, "gain");
+        x.power = get_stack_optional<int64_t>(j, "power");
+        x.runs = get_stack_optional<int64_t>(j, "runs");
+        x.shutter = get_stack_optional<int64_t>(j, "shutter");
+    }
+
+    inline void to_json(json & j, FlashTestBaseline const & x) {
+        j = json::object();
+        j["delta"] = x.delta;
+        j["gain"] = x.gain;
+        j["power"] = x.power;
+        j["runs"] = x.runs;
+        j["shutter"] = x.shutter;
+    }
+
+    inline void from_json(json const & j, FlashTestRun& x) {
+        x.ambient = get_stack_optional<double>(j, "ambient");
+        x.delta = get_stack_optional<double>(j, "delta");
+        x.gain = get_stack_optional<int64_t>(j, "gain");
+        x.noise = get_stack_optional<double>(j, "noise");
+        x.out = get_stack_optional<int64_t>(j, "out");
+        x.outcome = get_stack_optional<std::string>(j, "outcome");
+        x.power = get_stack_optional<int64_t>(j, "power");
+        x.reason = get_stack_optional<std::string>(j, "reason");
+        x.shutter = get_stack_optional<int64_t>(j, "shutter");
+        x.time = get_stack_optional<int64_t>(j, "time");
+        x.usable_fraction = get_stack_optional<double>(j, "usableFraction");
+    }
+
+    inline void to_json(json & j, FlashTestRun const & x) {
+        j = json::object();
+        j["ambient"] = x.ambient;
+        j["delta"] = x.delta;
+        j["gain"] = x.gain;
+        j["noise"] = x.noise;
+        j["out"] = x.out;
+        j["outcome"] = x.outcome;
+        j["power"] = x.power;
+        j["reason"] = x.reason;
+        j["shutter"] = x.shutter;
+        j["time"] = x.time;
+        j["usableFraction"] = x.usable_fraction;
+    }
+
+    inline void from_json(json const & j, FlashTestOutput& x) {
+        x.baseline = get_stack_optional<FlashTestBaseline>(j, "baseline");
+        x.confidence = get_stack_optional<double>(j, "confidence");
+        x.last_conclusive_run = get_stack_optional<FlashTestRun>(j, "lastConclusiveRun");
+        x.last_run = get_stack_optional<FlashTestRun>(j, "lastRun");
+        x.out = get_stack_optional<int64_t>(j, "out");
+        x.status = get_stack_optional<std::string>(j, "status");
+    }
+
+    inline void to_json(json & j, FlashTestOutput const & x) {
+        j = json::object();
+        j["baseline"] = x.baseline;
+        j["confidence"] = x.confidence;
+        j["lastConclusiveRun"] = x.last_conclusive_run;
+        j["lastRun"] = x.last_run;
+        j["out"] = x.out;
+        j["status"] = x.status;
+    }
+
+    inline void from_json(json const & j, FlashTestWarning& x) {
+        x.id = get_stack_optional<std::string>(j, "id");
+        x.out = get_stack_optional<int64_t>(j, "out");
+        x.profile = get_stack_optional<int64_t>(j, "profile");
+        x.profile_name = get_stack_optional<std::string>(j, "profileName");
+        x.severity = get_stack_optional<std::string>(j, "severity");
+    }
+
+    inline void to_json(json & j, FlashTestWarning const & x) {
+        j = json::object();
+        j["id"] = x.id;
+        j["out"] = x.out;
+        j["profile"] = x.profile;
+        j["profileName"] = x.profile_name;
+        j["severity"] = x.severity;
+    }
+
+    inline void from_json(json const & j, FlashTestStatus& x) {
+        x.confidence = get_stack_optional<double>(j, "confidence");
+        x.enabled = get_stack_optional<bool>(j, "enabled");
+        x.interval_minutes = get_stack_optional<int64_t>(j, "intervalMinutes");
+        x.last_attempt = get_stack_optional<FlashTestAttempt>(j, "lastAttempt");
+        x.outputs = get_stack_optional<std::vector<FlashTestOutput>>(j, "outputs");
+        x.status = get_stack_optional<std::string>(j, "status");
+        x.warnings = get_stack_optional<std::vector<FlashTestWarning>>(j, "warnings");
+    }
+
+    inline void to_json(json & j, FlashTestStatus const & x) {
+        j = json::object();
+        j["confidence"] = x.confidence;
+        j["enabled"] = x.enabled;
+        j["intervalMinutes"] = x.interval_minutes;
+        j["lastAttempt"] = x.last_attempt;
+        j["outputs"] = x.outputs;
+        j["status"] = x.status;
+        j["warnings"] = x.warnings;
+    }
+
+    inline void from_json(json const & j, TelemetryHealthIssue& x) {
+        x.client_id = get_stack_optional<int64_t>(j, "clientId");
+        x.code = get_stack_optional<int64_t>(j, "code");
+        x.confidence = get_stack_optional<double>(j, "confidence");
+        x.device = get_stack_optional<std::string>(j, "device");
+        x.id = j.at("id").get<std::string>();
+        x.message = j.at("message").get<std::string>();
+        x.out = get_stack_optional<int64_t>(j, "out");
+        x.profile = get_stack_optional<int64_t>(j, "profile");
+        x.profile_name = get_stack_optional<std::string>(j, "profileName");
+        x.service = get_stack_optional<std::string>(j, "service");
+        x.severity = j.at("severity").get<std::string>();
+        x.status = get_stack_optional<std::string>(j, "status");
+        x.used_pct = get_stack_optional<double>(j, "usedPct");
+    }
+
+    inline void to_json(json & j, TelemetryHealthIssue const & x) {
+        j = json::object();
+        j["clientId"] = x.client_id;
+        j["code"] = x.code;
+        j["confidence"] = x.confidence;
+        j["device"] = x.device;
+        j["id"] = x.id;
+        j["message"] = x.message;
+        j["out"] = x.out;
+        j["profile"] = x.profile;
+        j["profileName"] = x.profile_name;
+        j["service"] = x.service;
+        j["severity"] = x.severity;
+        j["status"] = x.status;
+        j["usedPct"] = x.used_pct;
+    }
+
+    inline void from_json(json const & j, TelemetryHealth& x) {
+        x.issues = get_stack_optional<std::vector<TelemetryHealthIssue>>(j, "issues");
+        x.status = get_stack_optional<std::string>(j, "status");
+    }
+
+    inline void to_json(json & j, TelemetryHealth const & x) {
+        j = json::object();
+        j["issues"] = x.issues;
+        j["status"] = x.status;
+    }
+
+    inline void from_json(json const & j, TelemetryIntegration& x) {
+        x.enabled = get_stack_optional<bool>(j, "enabled");
+        x.status = get_stack_optional<std::string>(j, "status");
+    }
+
+    inline void to_json(json & j, TelemetryIntegration const & x) {
+        j = json::object();
+        j["enabled"] = x.enabled;
+        j["status"] = x.status;
+    }
+
+    inline void from_json(json const & j, TelemetryRestApiClient& x) {
+        x.code = get_stack_optional<int64_t>(j, "code");
+        x.disk_usage = get_stack_optional<int64_t>(j, "diskUsage");
+        x.enabled = get_stack_optional<bool>(j, "enabled");
+        x.file_count = get_stack_optional<int64_t>(j, "fileCount");
+        x.id = get_stack_optional<int64_t>(j, "id");
+        x.message = get_stack_optional<std::string>(j, "message");
+    }
+
+    inline void to_json(json & j, TelemetryRestApiClient const & x) {
+        j = json::object();
+        j["code"] = x.code;
+        j["diskUsage"] = x.disk_usage;
+        j["enabled"] = x.enabled;
+        j["fileCount"] = x.file_count;
+        j["id"] = x.id;
+        j["message"] = x.message;
+    }
+
+    inline void from_json(json const & j, TelemetryIntegrations& x) {
+        x.itscampro = get_stack_optional<TelemetryIntegration>(j, "itscampro");
+        x.lince = get_stack_optional<TelemetryIntegration>(j, "lince");
+        x.rest_api_clients = get_stack_optional<std::vector<TelemetryRestApiClient>>(j, "restApiClients");
+    }
+
+    inline void to_json(json & j, TelemetryIntegrations const & x) {
+        j = json::object();
+        j["itscampro"] = x.itscampro;
+        j["lince"] = x.lince;
+        j["restApiClients"] = x.rest_api_clients;
+    }
+
+    inline void from_json(json const & j, TelemetryNetwork& x) {
+        x.mobile = get_stack_optional<std::map<std::string, nlohmann::json>>(j, "mobile");
+        x.wifi = get_stack_optional<std::map<std::string, nlohmann::json>>(j, "wifi");
+        x.wired = get_stack_optional<std::map<std::string, nlohmann::json>>(j, "wired");
+    }
+
+    inline void to_json(json & j, TelemetryNetwork const & x) {
+        j = json::object();
+        j["mobile"] = x.mobile;
+        j["wifi"] = x.wifi;
+        j["wired"] = x.wired;
+    }
+
+    inline void from_json(json const & j, ProcessingCounters& x) {
+        x.captures = get_stack_optional<int64_t>(j, "captures");
+        x.captures_with_plates = get_stack_optional<int64_t>(j, "capturesWithPlates");
+        x.objects = get_stack_optional<int64_t>(j, "objects");
+        x.ocr_average_ms = get_stack_optional<double>(j, "ocrAverageMs");
+        x.plates = get_stack_optional<int64_t>(j, "plates");
+    }
+
+    inline void to_json(json & j, ProcessingCounters const & x) {
+        j = json::object();
+        j["captures"] = x.captures;
+        j["capturesWithPlates"] = x.captures_with_plates;
+        j["objects"] = x.objects;
+        j["ocrAverageMs"] = x.ocr_average_ms;
+        j["plates"] = x.plates;
+    }
+
+    inline void from_json(json const & j, ProcessingStatisticsWindow& x) {
+        x.covered_seconds = get_stack_optional<int64_t>(j, "coveredSeconds");
+        x.seconds = get_stack_optional<int64_t>(j, "seconds");
+        x.snapshot = get_stack_optional<ProcessingCounters>(j, "snapshot");
+        x.total = get_stack_optional<ProcessingCounters>(j, "total");
+        x.trigger = get_stack_optional<ProcessingCounters>(j, "trigger");
+    }
+
+    inline void to_json(json & j, ProcessingStatisticsWindow const & x) {
+        j = json::object();
+        j["coveredSeconds"] = x.covered_seconds;
+        j["seconds"] = x.seconds;
+        j["snapshot"] = x.snapshot;
+        j["total"] = x.total;
+        j["trigger"] = x.trigger;
+    }
+
+    inline void from_json(json const & j, ProcessingStatistics& x) {
+        x.last10_minutes = get_stack_optional<ProcessingStatisticsWindow>(j, "last10Minutes");
+        x.last30_minutes = get_stack_optional<ProcessingStatisticsWindow>(j, "last30Minutes");
+        x.last60_minutes = get_stack_optional<ProcessingStatisticsWindow>(j, "last60Minutes");
+    }
+
+    inline void to_json(json & j, ProcessingStatistics const & x) {
+        j = json::object();
+        j["last10Minutes"] = x.last10_minutes;
+        j["last30Minutes"] = x.last30_minutes;
+        j["last60Minutes"] = x.last60_minutes;
+    }
+
+    inline void from_json(json const & j, TelemetryCpu& x) {
+        x.load_average = get_stack_optional<std::vector<double>>(j, "loadAverage");
+        x.temperature = get_stack_optional<double>(j, "temperature");
+        x.usage = get_stack_optional<double>(j, "usage");
+    }
+
+    inline void to_json(json & j, TelemetryCpu const & x) {
+        j = json::object();
+        j["loadAverage"] = x.load_average;
+        j["temperature"] = x.temperature;
+        j["usage"] = x.usage;
+    }
+
+    inline void from_json(json const & j, TelemetryMemoryRam& x) {
+        x.total = get_stack_optional<int64_t>(j, "total");
+        x.used = get_stack_optional<int64_t>(j, "used");
+        x.used_pct = get_stack_optional<double>(j, "usedPct");
+    }
+
+    inline void to_json(json & j, TelemetryMemoryRam const & x) {
+        j = json::object();
+        j["total"] = x.total;
+        j["used"] = x.used;
+        j["usedPct"] = x.used_pct;
+    }
+
+    inline void from_json(json const & j, TelemetryMemorySwap& x) {
+        x.total = get_stack_optional<int64_t>(j, "total");
+        x.used = get_stack_optional<int64_t>(j, "used");
+        x.used_pct = get_stack_optional<double>(j, "usedPct");
+    }
+
+    inline void to_json(json & j, TelemetryMemorySwap const & x) {
+        j = json::object();
+        j["total"] = x.total;
+        j["used"] = x.used;
+        j["usedPct"] = x.used_pct;
+    }
+
+    inline void from_json(json const & j, TelemetryMemory& x) {
+        x.ram = get_stack_optional<TelemetryMemoryRam>(j, "ram");
+        x.swap = get_stack_optional<TelemetryMemorySwap>(j, "swap");
+    }
+
+    inline void to_json(json & j, TelemetryMemory const & x) {
+        j = json::object();
+        j["ram"] = x.ram;
+        j["swap"] = x.swap;
+    }
+
+    inline void from_json(json const & j, TelemetryStorageDevice& x) {
+        x.device = get_stack_optional<std::string>(j, "device");
+        x.mount_point = get_stack_optional<std::string>(j, "mountPoint");
+        x.total = get_stack_optional<int64_t>(j, "total");
+        x.used = get_stack_optional<int64_t>(j, "used");
+        x.used_pct = get_stack_optional<double>(j, "usedPct");
+    }
+
+    inline void to_json(json & j, TelemetryStorageDevice const & x) {
+        j = json::object();
+        j["device"] = x.device;
+        j["mountPoint"] = x.mount_point;
+        j["total"] = x.total;
+        j["used"] = x.used;
+        j["usedPct"] = x.used_pct;
+    }
+
+    inline void from_json(json const & j, TelemetryStorage& x) {
+        x.disk = get_stack_optional<TelemetryStorageDevice>(j, "disk");
+        x.sd_card = get_stack_optional<TelemetryStorageDevice>(j, "sdCard");
+    }
+
+    inline void to_json(json & j, TelemetryStorage const & x) {
+        j = json::object();
+        j["disk"] = x.disk;
+        j["sdCard"] = x.sd_card;
+    }
+
+    inline void from_json(json const & j, TelemetryUptime& x) {
+        x.last_boot = get_stack_optional<int64_t>(j, "lastBoot");
+        x.seconds = get_stack_optional<int64_t>(j, "seconds");
+    }
+
+    inline void to_json(json & j, TelemetryUptime const & x) {
+        j = json::object();
+        j["lastBoot"] = x.last_boot;
+        j["seconds"] = x.seconds;
+    }
+
+    inline void from_json(json const & j, TelemetryResources& x) {
+        x.cpu = get_stack_optional<TelemetryCpu>(j, "cpu");
+        x.memory = get_stack_optional<TelemetryMemory>(j, "memory");
+        x.storage = get_stack_optional<TelemetryStorage>(j, "storage");
+        x.uptime = get_stack_optional<TelemetryUptime>(j, "uptime");
+    }
+
+    inline void to_json(json & j, TelemetryResources const & x) {
+        j = json::object();
+        j["cpu"] = x.cpu;
+        j["memory"] = x.memory;
+        j["storage"] = x.storage;
+        j["uptime"] = x.uptime;
+    }
+
+    inline void from_json(json const & j, TelemetryService& x) {
+        x.active = get_stack_optional<std::string>(j, "active");
+        x.enabled = get_stack_optional<bool>(j, "enabled");
+        x.initialization_error = get_stack_optional<std::string>(j, "initializationError");
+        x.restarts = get_stack_optional<int64_t>(j, "restarts");
+        x.since = get_stack_optional<int64_t>(j, "since");
+        x.sub = get_stack_optional<std::string>(j, "sub");
+    }
+
+    inline void to_json(json & j, TelemetryService const & x) {
+        j = json::object();
+        j["active"] = x.active;
+        j["enabled"] = x.enabled;
+        j["initializationError"] = x.initialization_error;
+        j["restarts"] = x.restarts;
+        j["since"] = x.since;
+        j["sub"] = x.sub;
+    }
+
+    inline void from_json(json const & j, SystemTelemetry& x) {
+        x.camera = get_stack_optional<TelemetryCamera>(j, "camera");
+        x.connections = get_stack_optional<std::map<std::string, TelemetryConnections>>(j, "connections");
+        x.device = get_stack_optional<TelemetryDevice>(j, "device");
+        x.flash_test = get_stack_optional<FlashTestStatus>(j, "flashTest");
+        x.health = get_stack_optional<TelemetryHealth>(j, "health");
+        x.integrations = get_stack_optional<TelemetryIntegrations>(j, "integrations");
+        x.network = get_stack_optional<TelemetryNetwork>(j, "network");
+        x.processing = get_stack_optional<ProcessingStatistics>(j, "processing");
+        x.resources = get_stack_optional<TelemetryResources>(j, "resources");
+        x.services = get_stack_optional<std::map<std::string, TelemetryService>>(j, "services");
+        x.timestamp = get_stack_optional<std::string>(j, "timestamp");
+        x.version = get_stack_optional<int64_t>(j, "version");
+    }
+
+    inline void to_json(json & j, SystemTelemetry const & x) {
+        j = json::object();
+        j["camera"] = x.camera;
+        j["connections"] = x.connections;
+        j["device"] = x.device;
+        j["flashTest"] = x.flash_test;
+        j["health"] = x.health;
+        j["integrations"] = x.integrations;
+        j["network"] = x.network;
+        j["processing"] = x.processing;
+        j["resources"] = x.resources;
+        j["services"] = x.services;
+        j["timestamp"] = x.timestamp;
+        j["version"] = x.version;
+    }
+
     inline void from_json(json const & j, Mode & x) {
         if (j == "disabled") x = Mode::DISABLED;
         else if (j == "fast") x = Mode::FAST;
@@ -2670,13 +3783,21 @@ namespace rest_types {
     }
 
     inline void from_json(json const & j, Type & x) {
-        if (j == "json") x = Type::JSON;
+        if (j == "form-urlencoded") x = Type::FORM_URLENCODED;
+        else if (j == "jpeg") x = Type::JPEG;
+        else if (j == "json") x = Type::JSON;
+        else if (j == "raw") x = Type::RAW;
+        else if (j == "xml") x = Type::XML;
         else { throw std::runtime_error("Input JSON does not conform to schema!"); }
     }
 
     inline void to_json(json & j, Type const & x) {
         switch (x) {
+            case Type::FORM_URLENCODED: j = "form-urlencoded"; break;
+            case Type::JPEG: j = "jpeg"; break;
             case Type::JSON: j = "json"; break;
+            case Type::RAW: j = "raw"; break;
+            case Type::XML: j = "xml"; break;
             default: throw std::runtime_error("Unexpected value in enumeration \"Type\": " + std::to_string(static_cast<int>(x)));
         }
     }
@@ -3492,11 +4613,14 @@ namespace rest_types {
 
     inline json to_partial_json(RestApiClientConfig const & x) {
         json j = json::object();
+        if (x.aux_camera_name) j["auxCameraName"] = *x.aux_camera_name;
         j["body"] = to_partial_json(x.body);
+        if (x.discard_status_codes) j["discardStatusCodes"] = *x.discard_status_codes;
         j["enabled"] = x.enabled;
         j["headers"] = x.headers;
         j["jpeg"] = to_partial_json(x.jpeg);
         j["method"] = x.method;
+        if (x.min_speed) j["minSpeed"] = *x.min_speed;
         j["persistency"] = to_partial_json(x.persistency);
         j["retries"] = x.retries;
         j["sendIndividualRequests"] = x.send_individual_requests;
@@ -3559,6 +4683,321 @@ namespace rest_types {
         json j = json::object();
         if (x.analytics) j["analytics"] = to_partial_json(*x.analytics);
         if (x.device_id) j["deviceId"] = to_partial_json(*x.device_id);
+        return j;
+    }
+
+    inline json to_partial_json(TelemetryCameraFps const & x) {
+        json j = json::object();
+        if (x.mjpeg) j["mjpeg"] = *x.mjpeg;
+        return j;
+    }
+
+    inline json to_partial_json(TelemetryCameraProfile const & x) {
+        json j = json::object();
+        if (x.id) j["id"] = *x.id;
+        if (x.name) j["name"] = *x.name;
+        return j;
+    }
+
+    inline json to_partial_json(TelemetryCamera const & x) {
+        json j = json::object();
+        if (x.failure_counts) j["failureCounts"] = *x.failure_counts;
+        if (x.fps) j["fps"] = to_partial_json(*x.fps);
+        if (x.pipeline_ready) j["pipelineReady"] = *x.pipeline_ready;
+        if (x.profile) j["profile"] = to_partial_json(*x.profile);
+        if (x.reachable) j["reachable"] = *x.reachable;
+        return j;
+    }
+
+    inline json to_partial_json(TelemetryClient const & x) {
+        json j = json::object();
+        if (x.ip) j["ip"] = *x.ip;
+        if (x.port) j["port"] = *x.port;
+        if (x.since) j["since"] = *x.since;
+        return j;
+    }
+
+    inline json to_partial_json(TelemetryConnections const & x) {
+        json j = json::object();
+        if (x.clients) {
+            json arr = json::array();
+            for (auto const & e : *x.clients) arr.push_back(to_partial_json(e));
+            j["clients"] = std::move(arr);
+        }
+        if (x.count) j["count"] = *x.count;
+        return j;
+    }
+
+    inline json to_partial_json(TelemetryDevice const & x) {
+        json j = json::object();
+        if (x.family) j["family"] = *x.family;
+        if (x.firmware_version) j["firmwareVersion"] = *x.firmware_version;
+        if (x.model) j["model"] = *x.model;
+        return j;
+    }
+
+    inline json to_partial_json(FlashTestAttempt const & x) {
+        json j = json::object();
+        if (x.delta) j["delta"] = *x.delta;
+        if (x.out) j["out"] = *x.out;
+        if (x.outcome) j["outcome"] = *x.outcome;
+        if (x.reason) j["reason"] = *x.reason;
+        if (x.skipped) j["skipped"] = *x.skipped;
+        if (x.time) j["time"] = *x.time;
+        return j;
+    }
+
+    inline json to_partial_json(FlashTestBaseline const & x) {
+        json j = json::object();
+        if (x.delta) j["delta"] = *x.delta;
+        if (x.gain) j["gain"] = *x.gain;
+        if (x.power) j["power"] = *x.power;
+        if (x.runs) j["runs"] = *x.runs;
+        if (x.shutter) j["shutter"] = *x.shutter;
+        return j;
+    }
+
+    inline json to_partial_json(FlashTestRun const & x) {
+        json j = json::object();
+        if (x.ambient) j["ambient"] = *x.ambient;
+        if (x.delta) j["delta"] = *x.delta;
+        if (x.gain) j["gain"] = *x.gain;
+        if (x.noise) j["noise"] = *x.noise;
+        if (x.out) j["out"] = *x.out;
+        if (x.outcome) j["outcome"] = *x.outcome;
+        if (x.power) j["power"] = *x.power;
+        if (x.reason) j["reason"] = *x.reason;
+        if (x.shutter) j["shutter"] = *x.shutter;
+        if (x.time) j["time"] = *x.time;
+        if (x.usable_fraction) j["usableFraction"] = *x.usable_fraction;
+        return j;
+    }
+
+    inline json to_partial_json(FlashTestOutput const & x) {
+        json j = json::object();
+        if (x.baseline) j["baseline"] = to_partial_json(*x.baseline);
+        if (x.confidence) j["confidence"] = *x.confidence;
+        if (x.last_conclusive_run) j["lastConclusiveRun"] = to_partial_json(*x.last_conclusive_run);
+        if (x.last_run) j["lastRun"] = to_partial_json(*x.last_run);
+        if (x.out) j["out"] = *x.out;
+        if (x.status) j["status"] = *x.status;
+        return j;
+    }
+
+    inline json to_partial_json(FlashTestWarning const & x) {
+        json j = json::object();
+        if (x.id) j["id"] = *x.id;
+        if (x.out) j["out"] = *x.out;
+        if (x.profile) j["profile"] = *x.profile;
+        if (x.profile_name) j["profileName"] = *x.profile_name;
+        if (x.severity) j["severity"] = *x.severity;
+        return j;
+    }
+
+    inline json to_partial_json(FlashTestStatus const & x) {
+        json j = json::object();
+        if (x.confidence) j["confidence"] = *x.confidence;
+        if (x.enabled) j["enabled"] = *x.enabled;
+        if (x.interval_minutes) j["intervalMinutes"] = *x.interval_minutes;
+        if (x.last_attempt) j["lastAttempt"] = to_partial_json(*x.last_attempt);
+        if (x.outputs) {
+            json arr = json::array();
+            for (auto const & e : *x.outputs) arr.push_back(to_partial_json(e));
+            j["outputs"] = std::move(arr);
+        }
+        if (x.status) j["status"] = *x.status;
+        if (x.warnings) {
+            json arr = json::array();
+            for (auto const & e : *x.warnings) arr.push_back(to_partial_json(e));
+            j["warnings"] = std::move(arr);
+        }
+        return j;
+    }
+
+    inline json to_partial_json(TelemetryHealthIssue const & x) {
+        json j = json::object();
+        if (x.client_id) j["clientId"] = *x.client_id;
+        if (x.code) j["code"] = *x.code;
+        if (x.confidence) j["confidence"] = *x.confidence;
+        if (x.device) j["device"] = *x.device;
+        j["id"] = x.id;
+        j["message"] = x.message;
+        if (x.out) j["out"] = *x.out;
+        if (x.profile) j["profile"] = *x.profile;
+        if (x.profile_name) j["profileName"] = *x.profile_name;
+        if (x.service) j["service"] = *x.service;
+        j["severity"] = x.severity;
+        if (x.status) j["status"] = *x.status;
+        if (x.used_pct) j["usedPct"] = *x.used_pct;
+        return j;
+    }
+
+    inline json to_partial_json(TelemetryHealth const & x) {
+        json j = json::object();
+        if (x.issues) {
+            json arr = json::array();
+            for (auto const & e : *x.issues) arr.push_back(to_partial_json(e));
+            j["issues"] = std::move(arr);
+        }
+        if (x.status) j["status"] = *x.status;
+        return j;
+    }
+
+    inline json to_partial_json(TelemetryIntegration const & x) {
+        json j = json::object();
+        if (x.enabled) j["enabled"] = *x.enabled;
+        if (x.status) j["status"] = *x.status;
+        return j;
+    }
+
+    inline json to_partial_json(TelemetryRestApiClient const & x) {
+        json j = json::object();
+        if (x.code) j["code"] = *x.code;
+        if (x.disk_usage) j["diskUsage"] = *x.disk_usage;
+        if (x.enabled) j["enabled"] = *x.enabled;
+        if (x.file_count) j["fileCount"] = *x.file_count;
+        if (x.id) j["id"] = *x.id;
+        if (x.message) j["message"] = *x.message;
+        return j;
+    }
+
+    inline json to_partial_json(TelemetryIntegrations const & x) {
+        json j = json::object();
+        if (x.itscampro) j["itscampro"] = to_partial_json(*x.itscampro);
+        if (x.lince) j["lince"] = to_partial_json(*x.lince);
+        if (x.rest_api_clients) {
+            json arr = json::array();
+            for (auto const & e : *x.rest_api_clients) arr.push_back(to_partial_json(e));
+            j["restApiClients"] = std::move(arr);
+        }
+        return j;
+    }
+
+    inline json to_partial_json(TelemetryNetwork const & x) {
+        json j = json::object();
+        if (x.mobile) j["mobile"] = *x.mobile;
+        if (x.wifi) j["wifi"] = *x.wifi;
+        if (x.wired) j["wired"] = *x.wired;
+        return j;
+    }
+
+    inline json to_partial_json(ProcessingCounters const & x) {
+        json j = json::object();
+        if (x.captures) j["captures"] = *x.captures;
+        if (x.captures_with_plates) j["capturesWithPlates"] = *x.captures_with_plates;
+        if (x.objects) j["objects"] = *x.objects;
+        if (x.ocr_average_ms) j["ocrAverageMs"] = *x.ocr_average_ms;
+        if (x.plates) j["plates"] = *x.plates;
+        return j;
+    }
+
+    inline json to_partial_json(ProcessingStatisticsWindow const & x) {
+        json j = json::object();
+        if (x.covered_seconds) j["coveredSeconds"] = *x.covered_seconds;
+        if (x.seconds) j["seconds"] = *x.seconds;
+        if (x.snapshot) j["snapshot"] = to_partial_json(*x.snapshot);
+        if (x.total) j["total"] = to_partial_json(*x.total);
+        if (x.trigger) j["trigger"] = to_partial_json(*x.trigger);
+        return j;
+    }
+
+    inline json to_partial_json(ProcessingStatistics const & x) {
+        json j = json::object();
+        if (x.last10_minutes) j["last10Minutes"] = to_partial_json(*x.last10_minutes);
+        if (x.last30_minutes) j["last30Minutes"] = to_partial_json(*x.last30_minutes);
+        if (x.last60_minutes) j["last60Minutes"] = to_partial_json(*x.last60_minutes);
+        return j;
+    }
+
+    inline json to_partial_json(TelemetryCpu const & x) {
+        json j = json::object();
+        if (x.load_average) j["loadAverage"] = *x.load_average;
+        if (x.temperature) j["temperature"] = *x.temperature;
+        if (x.usage) j["usage"] = *x.usage;
+        return j;
+    }
+
+    inline json to_partial_json(TelemetryMemoryRam const & x) {
+        json j = json::object();
+        if (x.total) j["total"] = *x.total;
+        if (x.used) j["used"] = *x.used;
+        if (x.used_pct) j["usedPct"] = *x.used_pct;
+        return j;
+    }
+
+    inline json to_partial_json(TelemetryMemorySwap const & x) {
+        json j = json::object();
+        if (x.total) j["total"] = *x.total;
+        if (x.used) j["used"] = *x.used;
+        if (x.used_pct) j["usedPct"] = *x.used_pct;
+        return j;
+    }
+
+    inline json to_partial_json(TelemetryMemory const & x) {
+        json j = json::object();
+        if (x.ram) j["ram"] = to_partial_json(*x.ram);
+        if (x.swap) j["swap"] = to_partial_json(*x.swap);
+        return j;
+    }
+
+    inline json to_partial_json(TelemetryStorageDevice const & x) {
+        json j = json::object();
+        if (x.device) j["device"] = *x.device;
+        if (x.mount_point) j["mountPoint"] = *x.mount_point;
+        if (x.total) j["total"] = *x.total;
+        if (x.used) j["used"] = *x.used;
+        if (x.used_pct) j["usedPct"] = *x.used_pct;
+        return j;
+    }
+
+    inline json to_partial_json(TelemetryStorage const & x) {
+        json j = json::object();
+        if (x.disk) j["disk"] = to_partial_json(*x.disk);
+        if (x.sd_card) j["sdCard"] = to_partial_json(*x.sd_card);
+        return j;
+    }
+
+    inline json to_partial_json(TelemetryUptime const & x) {
+        json j = json::object();
+        if (x.last_boot) j["lastBoot"] = *x.last_boot;
+        if (x.seconds) j["seconds"] = *x.seconds;
+        return j;
+    }
+
+    inline json to_partial_json(TelemetryResources const & x) {
+        json j = json::object();
+        if (x.cpu) j["cpu"] = to_partial_json(*x.cpu);
+        if (x.memory) j["memory"] = to_partial_json(*x.memory);
+        if (x.storage) j["storage"] = to_partial_json(*x.storage);
+        if (x.uptime) j["uptime"] = to_partial_json(*x.uptime);
+        return j;
+    }
+
+    inline json to_partial_json(TelemetryService const & x) {
+        json j = json::object();
+        if (x.active) j["active"] = *x.active;
+        if (x.enabled) j["enabled"] = *x.enabled;
+        if (x.initialization_error) j["initializationError"] = *x.initialization_error;
+        if (x.restarts) j["restarts"] = *x.restarts;
+        if (x.since) j["since"] = *x.since;
+        if (x.sub) j["sub"] = *x.sub;
+        return j;
+    }
+
+    inline json to_partial_json(SystemTelemetry const & x) {
+        json j = json::object();
+        if (x.camera) j["camera"] = to_partial_json(*x.camera);
+        if (x.connections) j["connections"] = *x.connections;
+        if (x.device) j["device"] = to_partial_json(*x.device);
+        if (x.flash_test) j["flashTest"] = to_partial_json(*x.flash_test);
+        if (x.health) j["health"] = to_partial_json(*x.health);
+        if (x.integrations) j["integrations"] = to_partial_json(*x.integrations);
+        if (x.network) j["network"] = to_partial_json(*x.network);
+        if (x.processing) j["processing"] = to_partial_json(*x.processing);
+        if (x.resources) j["resources"] = to_partial_json(*x.resources);
+        if (x.services) j["services"] = *x.services;
+        if (x.timestamp) j["timestamp"] = *x.timestamp;
+        if (x.version) j["version"] = *x.version;
         return j;
     }
 

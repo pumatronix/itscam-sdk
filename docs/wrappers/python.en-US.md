@@ -129,6 +129,22 @@ with ItscamRestClient() as rest:
 
 The full POCO module is also available as `itscam.rest_types` for explicit imports.
 
+### System telemetry
+
+```python
+t = rest.get_system_telemetry()                # polling
+
+def on_update(update):
+    typed = update.telemetry()                 # update.document: dict
+
+rest.start_telemetry_stream(on_update)
+# ...
+rest.stop_telemetry_stream()
+last = rest.latest_telemetry()                 # None before the first
+```
+
+The callback runs on the SDK's callback pool; do not block. Details of the document and the stream in [`docs/api/rest-client.en-US.md`](../api/rest-client.en-US.md#system-telemetry).
+
 ## Binary client usage
 
 ```python
@@ -150,6 +166,7 @@ Ready-to-run scripts under [`src/wrappers/python/examples/`](../../src/wrappers/
 | ---------------------------------------- | ---------------------------------- |
 | `capture_example.py <host>`              | Binary client capture loop.        |
 | `rest_example.py <host> <user> <pass>`   | REST login + read configuration.   |
+| `telemetry_example.py <host> <user> <pass>` | System telemetry: polling and stream. |
 | `cgi_snapshot_example.py <host> [...]`   | CGI lastframe + snapshot + MJPEG.  |
 
 The CGI example accepts optional `--user`/`--password` flags; without them it talks to the camera anonymously.

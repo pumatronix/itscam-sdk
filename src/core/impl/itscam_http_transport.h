@@ -121,17 +121,19 @@ public:
                     uint16_t           port   = 0,
                     const std::string& scheme = "http");
 
-    const std::string& host()   const;
-    uint16_t           port()   const;
-    const std::string& scheme() const;
-    bool               isHttps() const;
-    bool               configured() const;
+    // Settings may change while other threads use the transport: these
+    // return copies
+    std::string host()   const;
+    uint16_t    port()   const;
+    std::string scheme() const;
+    bool        isHttps() const;
+    bool        configured() const;
 
     // ----- Authentication -------------------------------------------------
 
     void setBearerToken(const std::string& token);
     void clearBearerToken();
-    const std::string& bearerToken() const;
+    std::string bearerToken() const;
 
     void setBasicAuth(const std::string& user,
                       const std::string& password);
@@ -144,7 +146,7 @@ public:
     void setVerifyServerCertificate(bool verify);
     void setClientCertificate(const std::string& certPem,
                               const std::string& keyPem);
-    const TlsConfig& tlsConfig() const;
+    TlsConfig tlsConfig() const;
 
     // ----- Logging --------------------------------------------------------
 
@@ -197,6 +199,28 @@ public:
                                    uint32_t timeoutMs,
                                    ContentReceiver receiver,
                                    StreamCancel& cancel);
+
+    // ----- WebSocket --------------------------------------------------------
+
+    /// Called with each message of a WebSocket.  Return false to close it.
+    using MessageReceiver = std::function<bool(const std::string& message)>;
+
+    /// Open a WebSocket (RFC 6455) on @p path -- ws:// or wss:// as the
+    /// base URL's scheme, with the transport's authentication and TLS
+    /// settings -- and pass each message to @p receiver, on the calling
+    /// thread, until it ends.  @p onOpen runs once the server accepted it.
+    ///
+    /// When nothing arrives for timeoutMs / 2 the server is pinged (it must
+    /// answer), and after timeoutMs of silence the connection is dropped.
+    /// Returns success when the receiver or @p cancel closed it, otherwise
+    /// the error that ended it: the server closed it (Disconnected), it went
+    /// silent (Timeout), it refused the handshake (NotAuthenticated on HTTP
+    /// 401, ...) or the connection failed.
+    Result<void> webSocket(const std::string& path,
+                           uint32_t timeoutMs,
+                           const std::function<void()>& onOpen,
+                           MessageReceiver receiver,
+                           StreamCancel& cancel);
 
 private:
     struct Impl;

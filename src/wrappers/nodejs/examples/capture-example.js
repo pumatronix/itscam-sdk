@@ -11,10 +11,14 @@
  */
 'use strict';
 
+const fs = require('fs');
 const path = require('path');
 const { setTimeout: sleep } = require('timers/promises');
-const { ItscamClient, getNativeLibraryVersion } =
-    require(path.join(__dirname, '..', 'src'));
+// The source tree's wrapper, or the installed package (release tarball:
+// npm install <platform>/nodejs/pumatronix-itscam-sdk-<version>.tgz)
+const sdkSource = path.join(__dirname, '..', 'src');
+const { ItscamClient, getNativeLibraryVersion } = require(
+    fs.existsSync(path.join(sdkSource, 'index.js')) ? sdkSource : '@pumatronix/itscam-sdk');
 
 async function main() {
     if (process.argv.length < 3) {

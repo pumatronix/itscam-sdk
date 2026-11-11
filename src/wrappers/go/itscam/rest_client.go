@@ -27,6 +27,9 @@ package itscam
 #cgo static,windows LDFLAGS: ${SRCDIR}/../../../core/build/win-x64/libitscam_sdk_static.a -lws2_32 -lbcrypt -lcrypt32 -lstdc++ -lm -static
 #include <stdlib.h>
 #include "../../../core/c_api/itscam_rest_client_c.h"
+
+// Forward declaration for the Go callback (without const to match cgo export).
+extern void itscamTelemetryGoCallback(ITSCAM_TelemetryUpdate* update, void* userData);
 */
 import "C"
 import (
@@ -34,15 +37,27 @@ import (
 	"errors"
 	"fmt"
 	"runtime"
+	"runtime/cgo"
 	"sync"
+	"sync/atomic"
 	"unsafe"
 )
 
 // RestClient is the Go wrapper for ItscamRestClient.
+//
+// mu serializes the calls, but stopping the telemetry stream
+// (StopTelemetryStream, Close) waits for the telemetry callback, which may
+// call methods of this client: those native calls run without mu.
 type RestClient struct {
 	handle *C.ITSCAM_RestClient
 	mu     sync.Mutex
 	closed bool
+
+	telemetryCb       atomic.Pointer[TelemetryCallback] // read by the callback pool
+	telemetryHandle   cgo.Handle
+	telemetryUserData unsafe.Pointer // C memory holding telemetryHandle, see newStreamUserData
+	telemetryRunning  bool
+	stopsInProgress   int
 }
 
 // NewRestClient creates a new REST client.
@@ -59,16 +74,30 @@ func NewRestClient() (*RestClient, error) {
 // Close releases the client.  Safe to call multiple times.
 func (r *RestClient) Close() error {
 	r.mu.Lock()
-	defer r.mu.Unlock()
 	if r.closed {
+		r.mu.Unlock()
 		return nil
 	}
 	r.closed = true
-	if r.handle != nil {
-		C.ITSCAM_RestClient_destroy(r.handle)
-		r.handle = nil
-	}
+	handle := r.handle
+	r.handle = nil
+	telemetryHandle, telemetryUserData := r.telemetryHandle, r.telemetryUserData
+	r.telemetryHandle, r.telemetryUserData = 0, nil
+	r.telemetryRunning = false
+	r.telemetryCb.Store(nil)
 	runtime.SetFinalizer(r, nil)
+	stopping := r.stopsInProgress > 0
+	r.mu.Unlock()
+
+	// Without mu: destroying stops the telemetry stream and waits for its
+	// callback (see RestClient).  The last StopTelemetryStream in progress
+	// destroys the handle once its stop returns.
+	if handle != nil && !stopping {
+		C.ITSCAM_RestClient_destroy(handle)
+	}
+	if telemetryHandle != 0 {
+		releaseStream(telemetryHandle, telemetryUserData)
+	}
 	return nil
 }
 
@@ -788,6 +817,211 @@ func (r *RestClient) GetLicenses(timeoutMs uint32) (Licenses, error) {
 	}
 	var out Licenses
 	return out, decodeInto(body, &out)
+}
+
+// ============================================================================
+//  System telemetry
+//    GET       /api/system/telemetry            (read it once)
+//    WebSocket /api/statusws?format=telemetry   (pushed every 5 s)
+// ============================================================================
+
+// codeDisconnected is ITSCAM_ERROR_DISCONNECTED.
+const codeDisconnected = 6
+
+// TelemetryUpdate is one telemetry document pushed by the camera.
+type TelemetryUpdate struct {
+	// Sequence is 1 for the stream's first document, then one more for each,
+	// across reconnections.
+	Sequence uint64
+	// ReceivedAtMs is when it arrived, in Unix milliseconds.
+	ReceivedAtMs int64
+	// Document is the document, as GET /api/system/telemetry returns it.
+	Document json.RawMessage
+}
+
+// Telemetry decodes the document into the typed SystemTelemetry.
+func (u TelemetryUpdate) Telemetry() (SystemTelemetry, error) {
+	var out SystemTelemetry
+	return out, decodeInto(string(u.Document), &out)
+}
+
+// TelemetryCallback receives each telemetry document on the SDK's callback
+// pool; do not block in it.
+type TelemetryCallback func(TelemetryUpdate)
+
+// GetSystemTelemetry reads GET /api/system/telemetry: the state of the
+// whole camera.  The camera reads it at most every 2 s.
+func (r *RestClient) GetSystemTelemetry(timeoutMs uint32) (SystemTelemetry, error) {
+	// The native error text is per thread
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+	r.mu.Lock()
+	var out *C.ITSCAM_String
+	rc := C.ITSCAM_RestClient_getSystemTelemetry(r.handle,
+		C.uint32_t(timeoutMs), &out)
+	r.mu.Unlock()
+	body := takeString(out)
+	if err := errorFromCode(int(rc)); err != nil {
+		if rc == C.ITSCAM_ERROR_NULL_HANDLE {
+			return SystemTelemetry{}, err
+		}
+		return SystemTelemetry{}, fmt.Errorf("%w: %s", err, C.GoString(C.ITSCAM_getLastError()))
+	}
+	var t SystemTelemetry
+	return t, decodeInto(body, &t)
+}
+
+// StartTelemetryStream receives the telemetry the camera pushes: one
+// document at once, then one every 5 s.  The stream runs on its own thread
+// and reconnects by itself (1 s, doubling up to 30 s) with the client's
+// current token.  cb runs for each document on the SDK's callback pool; one
+// that falls behind gets the latest documents.  It may stop or restart the
+// stream, or close the client.  With a nil cb the stream only keeps the
+// latest document (LatestTelemetry).  timeoutMs is the silence after which
+// the connection is dropped and reopened (0 selects 15000).
+func (r *RestClient) StartTelemetryStream(cb TelemetryCallback, timeoutMs uint32) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.handle == nil {
+		return errors.New("client closed")
+	}
+	if r.telemetryRunning {
+		return errors.New("telemetry stream already running")
+	}
+	// A stop in progress would stop the new stream
+	if r.stopsInProgress > 0 {
+		return errors.New("telemetry stream still stopping")
+	}
+	var native C.ITSCAM_TelemetryCallback
+	if cb != nil {
+		r.telemetryCb.Store(&cb)
+		r.telemetryHandle = cgo.NewHandle(r)
+		r.telemetryUserData = newStreamUserData(r.telemetryHandle)
+		native = (C.ITSCAM_TelemetryCallback)(C.itscamTelemetryGoCallback)
+	}
+	rc := C.ITSCAM_RestClient_startTelemetryStream(r.handle, native,
+		r.telemetryUserData, C.uint32_t(timeoutMs))
+	if err := errorFromCode(int(rc)); err != nil {
+		if r.telemetryHandle != 0 {
+			releaseStream(r.telemetryHandle, r.telemetryUserData)
+		}
+		r.telemetryHandle, r.telemetryUserData = 0, nil
+		r.telemetryCb.Store(nil)
+		return err
+	}
+	r.telemetryRunning = true
+	return nil
+}
+
+// StopTelemetryStream stops the stream and returns once no telemetry
+// callback runs: no document follows, not even one already queued.  From
+// the telemetry callback, it returns at once.  Safe to call when no stream
+// is running.
+func (r *RestClient) StopTelemetryStream() {
+	r.mu.Lock()
+	if r.handle == nil {
+		r.mu.Unlock()
+		return
+	}
+	handle := r.handle
+	telemetryHandle, telemetryUserData := r.telemetryHandle, r.telemetryUserData
+	r.telemetryHandle, r.telemetryUserData = 0, nil
+	r.telemetryRunning = false
+	r.stopsInProgress++
+	r.telemetryCb.Store(nil)
+	r.mu.Unlock()
+
+	// Without mu: this waits for the telemetry callback (see RestClient).
+	// The callback may call Close meanwhile, which then leaves the handle to
+	// the last stop to destroy.
+	C.ITSCAM_RestClient_stopTelemetryStream(handle)
+	if telemetryHandle != 0 {
+		releaseStream(telemetryHandle, telemetryUserData)
+	}
+
+	r.mu.Lock()
+	r.stopsInProgress--
+	last := r.closed && r.stopsInProgress == 0
+	r.mu.Unlock()
+	if last {
+		C.ITSCAM_RestClient_destroy(handle)
+	}
+}
+
+// IsTelemetryStreamRunning reports whether the stream was started and not
+// stopped.
+func (r *RestClient) IsTelemetryStreamRunning() bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.handle == nil || r.stopsInProgress > 0 {
+		return false
+	}
+	return C.ITSCAM_RestClient_isTelemetryStreamRunning(r.handle) != 0
+}
+
+// IsTelemetryStreamConnected reports whether the stream is connected to the
+// camera.
+func (r *RestClient) IsTelemetryStreamConnected() bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.handle == nil {
+		return false
+	}
+	return C.ITSCAM_RestClient_isTelemetryStreamConnected(r.handle) != 0
+}
+
+// LatestTelemetry returns the last document the stream received, also after
+// it stopped (check ReceivedAtMs to tell how old it is); ok is false before
+// the first one.
+func (r *RestClient) LatestTelemetry() (update TelemetryUpdate, ok bool, err error) {
+	r.mu.Lock()
+	var sequence C.uint64_t
+	var receivedAt C.int64_t
+	var out *C.ITSCAM_String
+	rc := C.ITSCAM_RestClient_latestTelemetry(r.handle, &sequence,
+		&receivedAt, &out)
+	r.mu.Unlock()
+	body := takeString(out)
+	if int(rc) == codeDisconnected {
+		return TelemetryUpdate{}, false, nil
+	}
+	if err := errorFromCode(int(rc)); err != nil {
+		return TelemetryUpdate{}, false, err
+	}
+	return TelemetryUpdate{
+		Sequence:     uint64(sequence),
+		ReceivedAtMs: int64(receivedAt),
+		Document:     json.RawMessage(body),
+	}, true, nil
+}
+
+//export itscamTelemetryGoCallback
+func itscamTelemetryGoCallback(update *C.ITSCAM_TelemetryUpdate, userData unsafe.Pointer) {
+	if update == nil || userData == nil {
+		return
+	}
+	h := cgo.Handle(*(*C.uintptr_t)(userData))
+	client, ok := h.Value().(*RestClient)
+	if !ok {
+		return
+	}
+	cb := client.telemetryCb.Load()
+	if cb == nil {
+		return
+	}
+	var document []byte
+	if update.json != nil && update.jsonLen > 0 {
+		document = C.GoBytes(unsafe.Pointer(update.json), C.int(update.jsonLen))
+	}
+	defer func() {
+		// Never let a panic cross back into native code.
+		_ = recover()
+	}()
+	(*cb)(TelemetryUpdate{
+		Sequence:     uint64(update.sequence),
+		ReceivedAtMs: int64(update.receivedAtMs),
+		Document:     json.RawMessage(document),
+	})
 }
 
 // ============================================================================

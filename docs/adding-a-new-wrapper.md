@@ -93,6 +93,7 @@ Use os Java/Node.js wrappers como referência. Cada item é obrigatório (ou exp
 - [ ] **Profiles (binary):** `getActiveProfileId`, `setActiveProfile`, `listProfiles`.
 - [ ] **REST verbs:** `httpGet`, `httpPut`, `httpPost`, `httpDelete`, `patchJson`. **Setters tipados são o caminho preferencial para writes** — usam serialização parcial (fields não setados são omitidos do body PUT). O `patchJson` genérico permanece disponível para payloads não tipados ou endpoints sem typed helper.
 - [ ] **REST typed helpers:** Pelo menos `getProfiles`, `getOcrConfig`/`setOcrConfig`, `getAnalyticsConfig`/`setAnalyticsConfig`, `getClassifierConfig`/`setClassifierConfig`, `getLanesConfig`/`setLanesConfig`, `getItscamproConfig`/`setItscamproConfig`, `getVolatileInfo`. Decidir se retorna struct/typed (preferido se a linguagem tem POCOs com codegen, veja §6.6) ou JSON cru.
+- [ ] **REST telemetry:** `getSystemTelemetry`, `startTelemetryStream`/`stopTelemetryStream`, `isTelemetryStreamRunning`, `isTelemetryStreamConnected`, `latestTelemetry`.
 - [ ] **CGI:** `getLastFrame`, `getSnapshot`, `startMjpegStream`/`stopMjpegStream`, `forceTrigger`, `reboot`.
 - [ ] **TLS configuration:** `setBaseUrl(host, port, scheme)`, `setCaCertFile`, `setCaCertData`, `setVerifyServerCertificate`, `setClientCertificate` (em REST e CGI).
 - [ ] **System utilities:** `getVersion`, `getSystemLocalTime`, `getSystemUtcTime`, `getEpochTime`, `getEpochTimeMs`, `getLastError`, `setCallbackThreads`.
@@ -106,7 +107,7 @@ Use os Java/Node.js wrappers como referência. Cada item é obrigatório (ou exp
 
 ### 6.3 Callbacks / streaming
 
-- [ ] Callbacks (`onTriggerImage`, `onSnapshotImage`, `onConnectionState`, `onDisconnect`, `onLog`, `startMjpegStream`) **sempre** entregues no pool de callbacks do SDK: em ordem e um por vez por client, nunca na thread da chamada que os produziu, sem lock do SDK pego. Um callback pode chamar qualquer função do seu client.
+- [ ] Callbacks (`onTriggerImage`, `onSnapshotImage`, `onConnectionState`, `onDisconnect`, `onLog`, `startMjpegStream`, `startTelemetryStream`) **sempre** entregues no pool de callbacks do SDK: em ordem e um por vez por client, nunca na thread da chamada que os produziu, sem lock do SDK pego. Um callback pode chamar qualquer função do seu client.
 - [ ] Documente: **não bloqueie callbacks**: um callback bloqueado segura uma thread do pool e atrasa os callbacks seguintes do seu client. Marshalling (queue / channel / dispatcher) é responsabilidade do user.
 - [ ] Mantenha referências fortes para os trampolines/callback objects para impedir GC enquanto native está chamando. Veja `_callbackRefs` em Node, `callbacks` map em Java/Python, `_streamDelegate` em C#.
 - [ ] Libere essas referências só depois que `ITSCAM_Client_destroy()` retornar: ele espera até nenhum callback estar rodando ou poder começar. Os setters que substituem um callback, `ITSCAM_CgiClient_stopMjpegStream()` e `ITSCAM_CgiClient_destroy()` também esperam o callback em andamento. Se a FFI roda callbacks numa outra thread que pode ser a de quem chama (Node.js / Koffi os roda na thread do JS), faça essas chamadas de uma worker thread (`.async` do Koffi), ou instale cada callback nativo uma vez e troque o destino do lado do wrapper, como fazem os wrappers de Node e Go: instalar um primeiro callback não espera nada. Pelo mesmo motivo, nunca segure durante essas chamadas um lock que callbacks (ou os métodos que eles chamam) possam pegar, como o mutex do próprio client: marque o client como fechado sob o lock, solte-o e só então destrua.
@@ -207,6 +208,8 @@ Antes de abrir o PR adicionando o wrapper novo:
 - [ ] `make all` passa (build de tudo + wrapper novo).
 - [ ] `make docker-all` passa (mesmo, dentro do Docker; reproduzível para CI).
 - [ ] `make codegen-check` passa, se o wrapper participa do codegen.
+- [ ] Um smoke test em `tests/smoke/<linguagem>/` faz as mesmas verificações que os outros ([`tests/README.md`](../tests/README.md)), o `tools/verify/verify.sh` compila e executa ele em toda arquitetura que a linguagem suporta, e o `tools/compat/check-compat.sh` lista a API pública do wrapper.
+- [ ] `make verify` passa ([`compatibility.md`](compatibility.md)), e a versão mais antiga suportada da linguagem está na tabela.
 - [ ] `make regression-examples CAMERA_IP=<ip>` passa contra uma câmera viva — incluindo o capture/rest/cgi examples do wrapper novo.
 - [ ] Versão é gerada por `tools/version/gen-version.sh` (ou tem fallback hardcoded em `0.0.0` enquanto a integração de versão não foi feita; deixe um TODO na shell script).
 - [ ] PR mention `AGENTS.md` se algum wrapper rule mudou (ex.: novos error codes que precisam ser refletidos em todos os wrappers).

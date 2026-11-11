@@ -1,0 +1,33 @@
+# Exported symbols that are not part of the ABI, whatever the release:
+# libabigail suppression specifications, read by abidiff in
+# tools/compat/check-compat.sh along with abi.suppr.  Unlike abi.suppr, this
+# file is permanent: it describes code no application can reference, so
+# changing it doesn't break anyone.  Every entry says why.
+
+# The clients' private implementation (pimpl): the headers declare
+# `struct Impl;` only, so no application can call into it
+[suppress_function]
+  name_regexp = ^itscam::[A-Za-z]+::Impl::
+
+# Thread entry points instantiated for the library's own lambdas: a lambda's
+# type is unique to the library, so no application can name the instance
+[suppress_function]
+  name_regexp = ^itscam::os::Thread::threadEntry<.*::<lambda
+
+# Inline templates of the generated REST types (itscam_rest_types.h):
+# every application instantiates its own copies
+[suppress_function]
+  name_regexp = ^itscam::rest_types::get_(stack|heap)_optional<
+
+# The library's internals (itscam::detail, declared in impl/ headers that
+# aren't shipped; the public headers' detail helpers are inline templates)
+[suppress_function]
+  name_regexp = ^itscam::detail::
+
+# The generated REST types' serializers are inline functions of the header
+# (itscam_rest_types.h): every application compiles its own copy, so the
+# library's copy changing, or the compiler inlining it differently, breaks
+# nothing.  A change in a type they serialize still shows on the API
+# functions that pass the type.
+[suppress_function]
+  name_regexp = ^itscam::rest_types::(from_json|to_json|to_partial_json)$

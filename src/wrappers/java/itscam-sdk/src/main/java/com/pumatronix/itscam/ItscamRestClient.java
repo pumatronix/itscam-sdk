@@ -32,12 +32,17 @@ import com.pumatronix.itscam.resttypes.RestApiClientConfig;
 import com.pumatronix.itscam.resttypes.RestApiClientStatus;
 import com.pumatronix.itscam.resttypes.RestObject;
 import com.pumatronix.itscam.resttypes.StreamConfig;
+import com.pumatronix.itscam.resttypes.SystemTelemetry;
 import com.pumatronix.itscam.resttypes.VehicleIndicatorConfig;
 import com.sun.jna.Pointer;
+import com.sun.jna.ptr.LongByReference;
 import com.sun.jna.ptr.PointerByReference;
 
+import java.util.Collections;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Future;
 
 /**
@@ -87,6 +92,36 @@ public final class ItscamRestClient implements AutoCloseable {
     private final NativeHandle handle;
     private volatile String apiPrefix = "/api";
 
+    // Clients with a telemetry stream: a stream keeps its client, whose
+    // native callback must outlive it, from being collected
+    private static final Set<ItscamRestClient> STREAMING =
+            Collections.newSetFromMap(
+                    new ConcurrentHashMap<ItscamRestClient, Boolean>());
+
+    // Guarded by this.  stopTelemetryStream() releases the monitor while it
+    // waits for the telemetry callback, which may call this client.
+    private volatile ItscamConsumer<TelemetryUpdate> telemetryConsumer;
+    private int telemetryStopsInProgress;
+
+    // One native callback for the client's whole life: a telemetry callback
+    // may stop the stream or close the client while it runs.
+    private final ItscamLibrary.TelemetryCallback telemetryCallback =
+            new ItscamLibrary.TelemetryCallback() {
+        @Override
+        public void invoke(ItscamLibrary.ITSCAMTelemetryUpdate update,
+                           Pointer userData) {
+            ItscamConsumer<TelemetryUpdate> onUpdate = telemetryConsumer;
+            if (update == null || onUpdate == null || handle.isClosed()) return;
+            String json = update.json == null ? "" : update.json.getString(0, "UTF-8");
+            try {
+                onUpdate.accept(new TelemetryUpdate(update.sequence,
+                        update.receivedAtMs, json));
+            } catch (Throwable ignored) {
+                /* never let exceptions cross into native code */
+            }
+        }
+    };
+
     public ItscamRestClient() {
         this.lib = NativeLibrary.get();
         Pointer h = lib.ITSCAM_RestClient_create();
@@ -104,12 +139,27 @@ public final class ItscamRestClient implements AutoCloseable {
     }
 
     /**
-     * Releases the client.  Calls still running on other threads end
-     * normally, and the native client is released after the last one.
+     * Stops the telemetry stream and releases the client.  No telemetry
+     * callback starts once this is called.  Calls still running on other
+     * threads end normally, and the native client is released after the
+     * last one.
      */
     @Override
     public void close() {
-        handle.close(null);
+        handle.close(new NativeHandle.Closer() {
+            @Override
+            public void beforeDestroy(Pointer h) {
+                // The handle is closed already, so a later start fails; one
+                // in progress holds the monitor until its stream has
+                // started, and the stop below ends it
+                synchronized (ItscamRestClient.this) {
+                    telemetryConsumer = null;
+                }
+                // Without the monitor: stopping waits for the telemetry callback
+                lib.ITSCAM_RestClient_stopTelemetryStream(h);
+                STREAMING.remove(ItscamRestClient.this);
+            }
+        });
     }
 
     public void setBaseUrl(String host, int port, String scheme) {
@@ -487,6 +537,142 @@ public final class ItscamRestClient implements AutoCloseable {
     }
 
     public Licenses getLicenses(int timeoutMs) { return new Licenses(httpGet(apiPath("/system/licenses"), timeoutMs)); }
+
+    // ====================================================================
+    //  System telemetry
+    //    GET       /api/system/telemetry            (read it once)
+    //    WebSocket /api/statusws?format=telemetry   (pushed every 5 s)
+    // ====================================================================
+
+    /**
+     * {@code GET /api/system/telemetry}: the state of the whole camera.  The
+     * camera reads it at most every 2 s: polling faster returns the same
+     * document.
+     */
+    public SystemTelemetry getSystemTelemetry(int timeoutMs) {
+        Pointer h = handle.acquire();
+        try {
+            PointerByReference out = new PointerByReference();
+            int rc = lib.ITSCAM_RestClient_getSystemTelemetry(h, timeoutMs, out);
+            String body = takeString(out.getValue());
+            ItscamException.throwIfFailed(rc, "getSystemTelemetry");
+            return new SystemTelemetry(body);
+        } finally {
+            handle.release();
+        }
+    }
+
+    /**
+     * Receive the telemetry the camera pushes: one document at once, then
+     * one every 5 s.  The stream runs on its own thread and reconnects by
+     * itself (1 s, doubling up to 30 s) with the client's current token.
+     *
+     * @param onUpdate  runs for each document on the SDK's callback pool;
+     *                  do not block in it.  One that falls behind gets the
+     *                  latest documents.  It may stop or restart the stream,
+     *                  or close the client.  With null, the stream only
+     *                  keeps the latest document ({@link #latestTelemetry()}).
+     * @param timeoutMs silence after which the connection is dropped and
+     *                  reopened (0 selects 15000)
+     */
+    public synchronized void startTelemetryStream(
+            ItscamConsumer<TelemetryUpdate> onUpdate, int timeoutMs) {
+        Pointer h = handle.acquire();
+        try {
+            if (lib.ITSCAM_RestClient_isTelemetryStreamRunning(h) != 0) {
+                throw new IllegalStateException("Telemetry stream already running");
+            }
+            // A stop in progress would stop the new stream
+            if (telemetryStopsInProgress > 0) {
+                throw new IllegalStateException("Telemetry stream still stopping");
+            }
+            telemetryConsumer = onUpdate;
+            STREAMING.add(this);
+            int rc = lib.ITSCAM_RestClient_startTelemetryStream(h,
+                    onUpdate == null ? null : telemetryCallback, null, timeoutMs);
+            if (rc != 0) {
+                telemetryConsumer = null;
+                STREAMING.remove(this);
+                ItscamException.throwIfFailed(rc, "startTelemetryStream");
+            }
+        } finally {
+            handle.release();
+        }
+    }
+
+    /**
+     * Stop the stream.  From another thread, this returns once no telemetry
+     * callback runs: no document follows, not even one already queued.
+     * From a telemetry callback, it returns at once.  Safe to call when no
+     * stream is running.
+     */
+    public void stopTelemetryStream() {
+        Pointer h = handle.tryAcquire();
+        if (h == null) return;
+        try {
+            synchronized (this) {
+                telemetryConsumer = null;
+                ++telemetryStopsInProgress;
+            }
+            try {
+                lib.ITSCAM_RestClient_stopTelemetryStream(h);
+            } finally {
+                synchronized (this) {
+                    --telemetryStopsInProgress;
+                    if (lib.ITSCAM_RestClient_isTelemetryStreamRunning(h) == 0) {
+                        STREAMING.remove(this);
+                    }
+                }
+            }
+        } finally {
+            handle.release();
+        }
+    }
+
+    /** Whether the stream was started and not stopped. */
+    public boolean isTelemetryStreamRunning() {
+        Pointer h = handle.tryAcquire();
+        if (h == null) return false;
+        try {
+            return lib.ITSCAM_RestClient_isTelemetryStreamRunning(h) != 0;
+        } finally {
+            handle.release();
+        }
+    }
+
+    /** Whether the stream is connected to the camera. */
+    public boolean isTelemetryStreamConnected() {
+        Pointer h = handle.tryAcquire();
+        if (h == null) return false;
+        try {
+            return lib.ITSCAM_RestClient_isTelemetryStreamConnected(h) != 0;
+        } finally {
+            handle.release();
+        }
+    }
+
+    /**
+     * The last document the stream received, also after it stopped (check
+     * {@link TelemetryUpdate#receivedAtMs()} to tell how old it is), or
+     * null before the first one.
+     */
+    public TelemetryUpdate latestTelemetry() {
+        Pointer h = handle.acquire();
+        try {
+            LongByReference sequence = new LongByReference();
+            LongByReference receivedAtMs = new LongByReference();
+            PointerByReference out = new PointerByReference();
+            int rc = lib.ITSCAM_RestClient_latestTelemetry(h, sequence,
+                    receivedAtMs, out);
+            String body = takeString(out.getValue());
+            if (rc == ErrorCode.DISCONNECTED.value()) return null;
+            ItscamException.throwIfFailed(rc, "latestTelemetry");
+            return new TelemetryUpdate(sequence.getValue(),
+                    receivedAtMs.getValue(), body);
+        } finally {
+            handle.release();
+        }
+    }
 
     private String apiPath(String tail) {
         return apiPrefix + tail;

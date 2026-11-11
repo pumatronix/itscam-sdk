@@ -3660,6 +3660,11 @@ bool set_server_cert_file(ctx_t ctx, const char *cert_path,
                           const char *key_path, const char *password);
 bool set_client_ca_file(ctx_t ctx, const char *ca_file, const char *ca_dir);
 void set_verify_client(ctx_t ctx, bool require);
+#ifdef CPPHTTPLIB_MBEDTLS_SUPPORT
+// Local patch: verify the peer's chain without failing the handshake, and
+// record the result for get_verify_result() (see SSLClient::initialize_ssl)
+void set_verify_optional(ctx_t ctx);
+#endif
 
 // Session management
 session_t create_session(ctx_t ctx, socket_t sock);
@@ -14285,7 +14290,11 @@ inline bool SSLClient::initialize_ssl(Socket &socket, Error &error) {
   // For IP addresses with verification enabled, use OPTIONAL mode since
   // MbedTLS requires hostname for VERIFY_REQUIRED.
   if (is_ip && server_certificate_verification_) {
-    set_verify_client(ctx_, false);
+    // Local patch: this was set_verify_client(ctx_, false), which selects
+    // VERIFY_NONE: Mbed TLS then skips the chain and leaves the verify
+    // result at 0, so the checks after the handshake accepted any
+    // certificate naming the IP address, trusted or not.
+    set_verify_optional(ctx_);
   } else {
     set_verify_client(ctx_, server_certificate_verification_);
   }
@@ -16483,6 +16492,14 @@ inline void set_verify_client(ctx_t ctx, bool require) {
                                                ? MBEDTLS_SSL_VERIFY_OPTIONAL
                                                : MBEDTLS_SSL_VERIFY_NONE);
   }
+}
+
+// Local patch (see the declaration)
+inline void set_verify_optional(ctx_t ctx) {
+  if (!ctx) { return; }
+  auto mctx = static_cast<impl::MbedTlsContext *>(ctx);
+  mctx->verify_client = false;
+  mbedtls_ssl_conf_authmode(&mctx->conf, MBEDTLS_SSL_VERIFY_OPTIONAL);
 }
 
 inline session_t create_session(ctx_t ctx, socket_t sock) {

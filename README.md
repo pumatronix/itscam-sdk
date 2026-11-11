@@ -40,6 +40,7 @@ Escolha uma linha pelo **que você quer fazer** e uma coluna pela **linguagem do
 | Binary capture / triggers (real time, TCP 60000) | [`itscam_sdk_example.cpp`](src/examples/itscam_sdk_example.cpp) | [`BinaryCaptureExample/Program.cs`](src/wrappers/csharp/examples/BinaryCaptureExample/Program.cs) | [`capture_example.py`](src/wrappers/python/examples/capture_example.py) | [`capture_example.go`](src/wrappers/go/examples/capture_example.go) | [`CaptureExample.java`](src/wrappers/java/examples/src/main/java/com/pumatronix/itscam/examples/CaptureExample.java) | [`capture-example.js`](src/wrappers/nodejs/examples/capture-example.js) |
 | Trigger-burst recorder to disk | [`itscam_trigger_recorder.cpp`](src/examples/itscam_trigger_recorder.cpp) | -- | -- | -- | -- | -- |
 | Equipment / REST configuration (login required) | [`itscam_rest_example.cpp`](src/examples/itscam_rest_example.cpp) | [`CaptureExample/Program.cs`](src/wrappers/csharp/examples/CaptureExample/Program.cs), [`ProfileConfigExample/Program.cs`](src/wrappers/csharp/examples/ProfileConfigExample/Program.cs) | [`rest_example.py`](src/wrappers/python/examples/rest_example.py) | [`rest_example.go`](src/wrappers/go/examples/rest_example.go) | [`RestExample.java`](src/wrappers/java/examples/src/main/java/com/pumatronix/itscam/examples/RestExample.java) | [`rest-example.js`](src/wrappers/nodejs/examples/rest-example.js) |
+| System telemetry (polling + push stream, login required) | [`itscam_telemetry_example.cpp`](src/examples/itscam_telemetry_example.cpp) | [`TelemetryExample/Program.cs`](src/wrappers/csharp/examples/TelemetryExample/Program.cs) | [`telemetry_example.py`](src/wrappers/python/examples/telemetry_example.py) | [`telemetry_example.go`](src/wrappers/go/examples/telemetry_example.go) | [`TelemetryExample.java`](src/wrappers/java/examples/src/main/java/com/pumatronix/itscam/examples/TelemetryExample.java) | [`telemetry-example.js`](src/wrappers/nodejs/examples/telemetry-example.js) |
 | CGI snapshot / lastframe / MJPEG (auth optional) | [`itscam_cgi_example.cpp`](src/examples/itscam_cgi_example.cpp) | [`CaptureExample/Program.cs`](src/wrappers/csharp/examples/CaptureExample/Program.cs) | [`cgi_snapshot_example.py`](src/wrappers/python/examples/cgi_snapshot_example.py) | [`cgi_snapshot_example.go`](src/wrappers/go/examples/cgi_snapshot_example.go) | [`CgiSnapshotExample.java`](src/wrappers/java/examples/src/main/java/com/pumatronix/itscam/examples/CgiSnapshotExample.java) | [`cgi-snapshot-example.js`](src/wrappers/nodejs/examples/cgi-snapshot-example.js) |
 | Snapshot ↔ Freeflow swap (CGI + REST + RAC + voting) | [`itscam_snapshot_to_freeflow.cpp`](src/examples/itscam_snapshot_to_freeflow.cpp) | -- | [`snapshot_to_freeflow_example.py`](src/wrappers/python/examples/snapshot_to_freeflow_example.py) | -- | -- | -- |
 | HTTPS / TLS (REST + CGI, mbedTLS) | [`itscam_rest_example.cpp`](src/examples/itscam_rest_example.cpp) (`--https`) | [`CaptureExample/Program.cs`](src/wrappers/csharp/examples/CaptureExample/Program.cs) (`--https`) | [`cgi_snapshot_example.py`](src/wrappers/python/examples/cgi_snapshot_example.py) (`--https`) | [`cgi_snapshot_example.go`](src/wrappers/go/examples/cgi_snapshot_example.go) (`--https`) | [`RestExample.java`](src/wrappers/java/examples/src/main/java/com/pumatronix/itscam/examples/RestExample.java) (`--https`) | [`rest-example.js`](src/wrappers/nodejs/examples/rest-example.js) (`--https`) |
@@ -174,10 +175,12 @@ Este README é intencionalmente direto. A documentação completa fica em [`docs
 
 ## Platform support
 
-| Platform | Architectures | Toolchain |
-| -------- | ------------- | --------- |
-| Linux | x86_64, ARMv7, ARM64 | GCC / Clang |
-| Windows | x86_64 | MinGW-w64 |
+| Plataforma | Arquiteturas | Exige no alvo | Aplicações compilam com |
+| ---------- | ------------ | ------------- | ----------------------- |
+| Linux | x86_64, ARMv7, ARM64 | glibc 2.23+ (sem libstdc++) | GCC 5+ / Clang, C++14 ou C++17, C99; CMake 3.10+ |
+| Windows | x86_64, x86 | nada | MinGW-w64 |
+
+Toda plataforma é compilada e testada pelo `make verify`: [Compatibilidade e verificação](docs/compatibility.md). Para compilar o SDK com o seu toolchain ou como subprojeto CMake: [Usando o SDK pelo CMake](docs/cmake.md).
 
 ## Licença e contato
 

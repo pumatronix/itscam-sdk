@@ -12,6 +12,14 @@
 #include <algorithm>
 #include <vector>
 
+// A host may end a pool thread inside a callback: Python calls pthread_exit()
+// on a thread that wants the interpreter while it shuts down.  glibc unwinds
+// it with abi::__forced_unwind, which must not be swallowed.
+#if defined(__GLIBCXX__) && defined(__linux__)
+#include <cxxabi.h>
+#define ITSCAM_FORCED_UNWIND 1
+#endif
+
 #ifdef _WIN32
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -125,7 +133,26 @@ private:
             auto queue = std::move(mReady.front());
             mReady.pop_front();
             lk.unlock();
-            queue->runNext();
+            {
+                // A thread the host ends inside a callback leaves the pool
+                struct Leave {
+                    CallbackPool& pool;
+                    bool returned;
+                    ~Leave() {
+                        if (returned) return;
+                        LockGuard<Mutex> g(pool.mMtx);
+                        --pool.mThreads;
+                        // schedule() still counted this thread: a queue it
+                        // put back may have no other thread to run it
+                        if (pool.mReady.size() > pool.mIdle &&
+                            pool.mThreads < pool.mMax) {
+                            pool.startThread();
+                        }
+                    }
+                } leave{*this, false};
+                queue->runNext();
+                leave.returned = true;
+            }
             queue.reset();  // may delete the queue: without mMtx
             lk.lock();
         }
@@ -222,9 +249,23 @@ void CallbackQueue::runNext() {
     tCurrent = this;
     try {
         item.fn();
-    } catch (...) {
+    }
+#ifdef ITSCAM_FORCED_UNWIND
+    catch (abi::__forced_unwind&) {
+        // The host ends this thread inside the callback: end the callback, so
+        // that its waiters and the queue's next callbacks go on, then let the
+        // thread unwind
+        finishCallback(item, outer);
+        throw;
+    }
+#endif
+    catch (...) {
         // A callback must not take the pool thread down
     }
+    finishCallback(item, outer);
+}
+
+void CallbackQueue::finishCallback(Item& item, const CallbackQueue* outer) {
     item.fn = nullptr;  // releases what it holds before waiters resume
     tCurrent = outer;
 
@@ -236,7 +277,7 @@ void CallbackQueue::runNext() {
         more = !mClosed && !mItems.empty();
         if (!more) mScheduled = false;
     }
-    // Always succeeds: this thread is in the pool
+    // Another pool thread runs the next ones when this one is leaving
     if (more) CallbackPool::instance().schedule(shared_from_this());
 }
 

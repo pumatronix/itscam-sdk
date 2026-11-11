@@ -47,6 +47,8 @@ const DEFAULT_SPEC = path.join(TOOL_DIR, "spec", "default.yaml")
 // Phase 2: remaining equipment configs (FTP, Lince, vehicle indicator,
 // protocols, profile transitioner, lanes, IO, REST API client, licenses,
 // image sign).
+// Monitoring: the system telemetry (resources, services, connections,
+// processing statistics, flash test, health).
 const PHASE1_SCHEMAS = [
   "ProfileConfig",
   "OcrConfig",
@@ -72,6 +74,8 @@ const PHASE1_SCHEMAS = [
   "RestApiClientConfig",
   "RestApiClientStatus",
   "Licenses",
+  // Monitoring -------------------------------------------------------------
+  "SystemTelemetry",
 ]
 
 const NOTICE_HEAD = [
@@ -152,6 +156,7 @@ const TARGETS = [
     },
     outRel: "src/wrappers/go/itscam/rest_types.go",
     notice: NOTICE_HEAD,
+    postProcess: keepGoJpegStructName,
   },
 ]
 
@@ -170,10 +175,25 @@ function fixCppOptionalInit(text) {
 
 /// quicktype emits C++17 std::optional, but the SDK still supports old
 /// libstdc++ targets such as GCC 5.4 on Ubuntu 16.04 where <optional> is
-/// absent. Use the vendored nonstd::optional shim instead.
+/// absent. Use the vendored nonstd::optional shim instead, always its own
+/// implementation: under C++17 it would otherwise select std::optional, whose
+/// layout differs from a library built without C++17 (same size, so a C++17
+/// application reads wrong values from it).
 function useVendoredCppOptional(text) {
   return text
-    .replace(/#include <optional>/g, "#include <nonstd/optional.hpp>")
+    .replace(
+      /#include <optional>/g,
+      [
+        // Before selecting ours: optional_USES_STD_OPTIONAL reads the setting
+        // when it is used, and the include guard keeps the earlier choice
+        "#if defined(optional_USES_STD_OPTIONAL) && optional_USES_STD_OPTIONAL",
+        '#error "Include itscam_sdk.h before anything that selects the standard optional in optional-lite"',
+        "#endif",
+        "#undef optional_CONFIG_SELECT_OPTIONAL",
+        "#define optional_CONFIG_SELECT_OPTIONAL optional_OPTIONAL_NONSTD",
+        "#include <nonstd/optional.hpp>",
+      ].join("\n")
+    )
     .replace(/std::optional/g, "nonstd::optional")
     .replace(/std::nullopt/g, "nonstd::nullopt")
     .replace(/std::make_optional/g, "nonstd::make_optional")
@@ -316,6 +336,17 @@ function fixCSharpNullableGetString(text) {
     /var value = reader\.GetString\(\);/g,
     "var value = reader.GetString()!;"
   )
+}
+
+/// The "jpeg" body part type makes quicktype name a constant JPEG and rename
+/// the JPEG struct, which existing code uses, to JPEGClass.  Keep the struct's
+/// name and name the constant after its type.
+function keepGoJpegStructName(text) {
+  return text
+    .replace(/^(\s*)JPEG( +)Type = "jpeg"/m, (_, indent, pad) =>
+      `${indent}JPEGType${" ".repeat(Math.max(1, pad.length - 4))}Type = "jpeg"`)
+    .replace(/^type JPEGClass struct/m, "type JPEG struct")
+    .replace(/\bJPEGClass( +)/g, (_, pad) => `JPEG${" ".repeat(pad.length + 5)}`)
 }
 
 /// Drop the `DateOnlyConverter` and `TimeOnlyConverter` classes that quicktype

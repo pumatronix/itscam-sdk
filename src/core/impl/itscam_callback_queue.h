@@ -76,6 +76,9 @@ private:
         Kind kind = Kind::Event;
     };
 
+    /// Marks the callback in progress done and schedules the next one
+    void finishCallback(Item& item, const CallbackQueue* outer);
+
     os::Mutex                  mMtx;
     os::ConditionVariable      mCv;       // signalled when a callback returns
     std::deque<Item>           mItems;

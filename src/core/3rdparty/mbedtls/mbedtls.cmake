@@ -36,7 +36,11 @@ else()
         ${MBEDTLS_CONFIG_DIR})
     target_compile_definitions(itscam_mbedtls_objects PUBLIC
         MBEDTLS_USER_CONFIG_FILE="itscam_mbedtls_config.h")
-    if(WIN32)
-        target_link_libraries(itscam_mbedtls_objects INTERFACE bcrypt)
+    # As src/core/Makefile: GCC 5.4 for ARMv7 miscompiles gcm.c under strict
+    # aliasing, and every AES-GCM record then fails its tag check
+    if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(itscam_mbedtls_objects PRIVATE -fno-strict-aliasing)
     endif()
+    # Its Windows RNG needs bcrypt, which itscam_sdk links (an OBJECT
+    # library can't link anything before CMake 3.12)
 endif()

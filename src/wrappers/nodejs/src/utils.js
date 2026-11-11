@@ -16,8 +16,10 @@ const { throwIfFailed } = require('./errors');
 function takeString(stringHandle) {
     if (!stringHandle) return '';
     try {
+        // koffi already decodes a `const char *` result into a string
         const cstr = fns.String_data(stringHandle);
-        return cstr ? koffi.decode(cstr, 'string') : '';
+        if (!cstr) return '';
+        return typeof cstr === 'string' ? cstr : koffi.decode(cstr, 'string');
     } finally {
         fns.String_destroy(stringHandle);
     }

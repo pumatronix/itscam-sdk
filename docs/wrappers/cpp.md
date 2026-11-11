@@ -73,7 +73,7 @@ make examples       # binários C++ em src/examples/build/
 make docker-all     # tudo dentro da builder image (recomendado)
 ```
 
-Os ARMs usam os toolchains Arm GNU-A 8.3-2019.03 (`/opt/cross/{armhf,arm64}` na imagem Docker oficial). Defina `ARMHF_TOOLCHAIN_PATH` e `ARM64_TOOLCHAIN_PATH` se eles estiverem em outro lugar.
+As bibliotecas ARM do release são compiladas contra a glibc 2.23 e levam o próprio runtime C++, então as aplicações linkam com qualquer toolchain ARM com glibc 2.23 ou mais nova: os cross compilers do Ubuntu ou do Debian, os toolchains Arm GNU-A (`/opt/cross/{armhf,arm64}` na imagem Docker oficial; defina `ARMHF_TOOLCHAIN_PATH` e `ARM64_TOOLCHAIN_PATH` se estiverem em outro lugar) ou o de um SDK de firmware. Veja [`compatibility.md`](../compatibility.md). Para compilar o próprio SDK com o seu toolchain, use o CMake ([`cmake.md`](../cmake.md)).
 
 Para linkar contra o source tree, use os headers em `src/core/` e os artefatos em `src/core/build/linux/`:
 
@@ -181,6 +181,19 @@ auto raw = rest.httpGet("/api/equipment/misc/readonly/volatile").value();
 
 Detalhe completo (typed helpers com serialização parcial, escape hatch genérico e quando usar `httpGet` / `httpPut`) em [docs/api/rest-client.md](../api/rest-client.md).
 
+### Telemetria do sistema
+
+```cpp
+auto t = rest.getSystemTelemetry();            // polling
+rest.startTelemetryStream([](const TelemetryUpdate& update) {
+    auto typed = update.telemetry();           // update.document: JSON
+});
+rest.stopTelemetryStream();
+auto last = rest.latestTelemetry();
+```
+
+O callback roda no pool de callbacks do SDK; não bloqueie. Detalhes do documento e do stream em [`docs/api/rest-client.md`](../api/rest-client.md#telemetria-do-sistema).
+
 ### Binary (Cougar TCP :60000)
 
 ```cpp
@@ -211,6 +224,7 @@ Em [`src/examples/`](../../src/examples/):
 | ---------------------------------------------------------------------------------------------- | -------------------------------------------------- |
 | [`itscam_sdk_example.cpp`](../../src/examples/itscam_sdk_example.cpp)                          | Binary client connect + capture + eventos.         |
 | [`itscam_rest_example.cpp`](../../src/examples/itscam_rest_example.cpp)                        | REST login + leitura de configuration.             |
+| [`itscam_telemetry_example.cpp`](../../src/examples/itscam_telemetry_example.cpp)              | Telemetria do sistema: polling e stream.           |
 | [`itscam_cgi_example.cpp`](../../src/examples/itscam_cgi_example.cpp)                          | CGI lastframe + snapshot + MJPEG (auth opcional).  |
 | [`itscam_trigger_recorder.cpp`](../../src/examples/itscam_trigger_recorder.cpp)                | Trigger burst recorder em disco (binary client).   |
 

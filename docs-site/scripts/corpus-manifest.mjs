@@ -22,16 +22,20 @@ const EXAMPLE_GLOBS = [
   "src/examples/itscam_rest_example.cpp",
   "src/examples/itscam_cgi_example.cpp",
   "src/examples/itscam_trigger_recorder.cpp",
+  "src/examples/itscam_telemetry_example.cpp",
   "src/examples/README.md",
   "src/wrappers/python/examples/capture_example.py",
   "src/wrappers/python/examples/rest_example.py",
   "src/wrappers/python/examples/cgi_snapshot_example.py",
+  "src/wrappers/python/examples/telemetry_example.py",
   "src/wrappers/go/examples/capture_example.go",
   "src/wrappers/go/examples/rest_example.go",
   "src/wrappers/go/examples/cgi_snapshot_example.go",
+  "src/wrappers/go/examples/telemetry_example.go",
   "src/wrappers/csharp/examples/CaptureExample/Program.cs",
   "src/wrappers/csharp/examples/MjpegGrabberExample/Program.cs",
   "src/wrappers/csharp/examples/SoftwareTriggerSnapshotExample/Program.cs",
+  "src/wrappers/csharp/examples/TelemetryExample/Program.cs",
 ];
 
 const CPP_API_REF_DIR = join(

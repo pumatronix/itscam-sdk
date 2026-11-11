@@ -7,7 +7,7 @@
 # Generated from an OpenAPI 3.0 snapshot of the ITSCAM camera webapp.
 # Edit tools/codegen/codegen.mjs and rerun, do not patch this output.
 from dataclasses import dataclass
-from typing import Optional, Any, List, TypeVar, Type, cast, Callable
+from typing import Optional, Any, List, Dict, TypeVar, Type, cast, Callable
 from enum import Enum
 
 
@@ -67,6 +67,11 @@ def from_list(f: Callable[[Any], T], x: Any) -> List[T]:
 def from_str(x: Any) -> str:
     assert isinstance(x, str)
     return x
+
+
+def from_dict(f: Callable[[Any], T], x: Any) -> Dict[str, T]:
+    assert isinstance(x, dict)
+    return { k: f(v) for (k, v) in x.items() }
 
 
 @dataclass
@@ -2397,7 +2402,11 @@ class IoBasic:
 
 
 class TypeEnum(Enum):
+    FORM_URLENCODED = "form-urlencoded"
+    JPEG = "jpeg"
     JSON = "json"
+    RAW = "raw"
+    XML = "xml"
 
 
 @dataclass
@@ -2600,6 +2609,16 @@ class RESTAPIClientConfig:
     timeout: int
     tls: TLS
     url: URL
+    aux_camera_name: Optional[str] = None
+    """Name of the auxiliary camera whose detections are attached to the request (empty to
+    disable)
+    """
+    discard_status_codes: Optional[List[int]] = None
+    """HTTP status codes for which a failed request is discarded right away, without retries and
+    without being persisted for a later resend
+    """
+    min_speed: Optional[int] = None
+    """Minimum transfer speed in bytes per second before the request is aborted"""
 
     @staticmethod
     def from_dict(obj: Any) -> 'RESTAPIClientConfig':
@@ -2616,7 +2635,10 @@ class RESTAPIClientConfig:
         timeout = from_int(obj.get("timeout"))
         tls = TLS.from_dict(obj.get("tls"))
         url = URL.from_dict(obj.get("url"))
-        return RESTAPIClientConfig(body, enabled, headers, jpeg, method, persistency, retries, send_individual_requests, send_without_ocr, timeout, tls, url)
+        aux_camera_name = from_union([from_str, from_none], obj.get("auxCameraName"))
+        discard_status_codes = from_union([lambda x: from_list(from_int, x), from_none], obj.get("discardStatusCodes"))
+        min_speed = from_union([from_int, from_none], obj.get("minSpeed"))
+        return RESTAPIClientConfig(body, enabled, headers, jpeg, method, persistency, retries, send_individual_requests, send_without_ocr, timeout, tls, url, aux_camera_name, discard_status_codes, min_speed)
 
     def to_dict(self) -> dict:
         result: dict = {}
@@ -2632,6 +2654,12 @@ class RESTAPIClientConfig:
         result["timeout"] = from_int(self.timeout)
         result["tls"] = to_class(TLS, self.tls)
         result["url"] = to_class(URL, self.url)
+        if self.aux_camera_name is not None:
+            result["auxCameraName"] = from_union([from_str, from_none], self.aux_camera_name)
+        if self.discard_status_codes is not None:
+            result["discardStatusCodes"] = from_union([lambda x: from_list(from_int, x), from_none], self.discard_status_codes)
+        if self.min_speed is not None:
+            result["minSpeed"] = from_union([from_int, from_none], self.min_speed)
         return result
 
 
@@ -2810,6 +2838,1118 @@ class Licenses:
             result["analytics"] = from_union([lambda x: to_class(Analytics, x), from_none], self.analytics)
         if self.device_id is not None:
             result["deviceId"] = from_union([lambda x: to_class(DeviceID, x), from_none], self.device_id)
+        return result
+
+
+@dataclass
+class TelemetryCameraFPS:
+    mjpeg: Optional[float] = None
+
+    @staticmethod
+    def from_dict(obj: Any) -> 'TelemetryCameraFPS':
+        assert isinstance(obj, dict)
+        mjpeg = from_union([from_float, from_none], obj.get("mjpeg"))
+        return TelemetryCameraFPS(mjpeg)
+
+    def to_dict(self) -> dict:
+        result: dict = {}
+        if self.mjpeg is not None:
+            result["mjpeg"] = from_union([to_float, from_none], self.mjpeg)
+        return result
+
+
+@dataclass
+class TelemetryCameraProfile:
+    id: Optional[int] = None
+    name: Optional[str] = None
+
+    @staticmethod
+    def from_dict(obj: Any) -> 'TelemetryCameraProfile':
+        assert isinstance(obj, dict)
+        id = from_union([from_int, from_none], obj.get("id"))
+        name = from_union([from_str, from_none], obj.get("name"))
+        return TelemetryCameraProfile(id, name)
+
+    def to_dict(self) -> dict:
+        result: dict = {}
+        if self.id is not None:
+            result["id"] = from_union([from_int, from_none], self.id)
+        if self.name is not None:
+            result["name"] = from_union([from_str, from_none], self.name)
+        return result
+
+
+@dataclass
+class TelemetryCamera:
+    failure_counts: Optional[Dict[str, int]] = None
+    """Camera service initialization failures, by error type"""
+
+    fps: Optional[TelemetryCameraFPS] = None
+    pipeline_ready: Optional[bool] = None
+    """Whether the camera delivers images"""
+
+    profile: Optional[TelemetryCameraProfile] = None
+    reachable: Optional[bool] = None
+    """Whether the camera service answered"""
+
+    @staticmethod
+    def from_dict(obj: Any) -> 'TelemetryCamera':
+        assert isinstance(obj, dict)
+        failure_counts = from_union([lambda x: from_dict(from_int, x), from_none], obj.get("failureCounts"))
+        fps = from_union([TelemetryCameraFPS.from_dict, from_none], obj.get("fps"))
+        pipeline_ready = from_union([from_bool, from_none], obj.get("pipelineReady"))
+        profile = from_union([TelemetryCameraProfile.from_dict, from_none], obj.get("profile"))
+        reachable = from_union([from_bool, from_none], obj.get("reachable"))
+        return TelemetryCamera(failure_counts, fps, pipeline_ready, profile, reachable)
+
+    def to_dict(self) -> dict:
+        result: dict = {}
+        if self.failure_counts is not None:
+            result["failureCounts"] = from_union([lambda x: from_dict(from_int, x), from_none], self.failure_counts)
+        if self.fps is not None:
+            result["fps"] = from_union([lambda x: to_class(TelemetryCameraFPS, x), from_none], self.fps)
+        if self.pipeline_ready is not None:
+            result["pipelineReady"] = from_union([from_bool, from_none], self.pipeline_ready)
+        if self.profile is not None:
+            result["profile"] = from_union([lambda x: to_class(TelemetryCameraProfile, x), from_none], self.profile)
+        if self.reachable is not None:
+            result["reachable"] = from_union([from_bool, from_none], self.reachable)
+        return result
+
+
+@dataclass
+class TelemetryClient:
+    ip: Optional[str] = None
+    port: Optional[int] = None
+    since: Optional[int] = None
+    """Unix time it connected, in seconds"""
+
+    @staticmethod
+    def from_dict(obj: Any) -> 'TelemetryClient':
+        assert isinstance(obj, dict)
+        ip = from_union([from_str, from_none], obj.get("ip"))
+        port = from_union([from_int, from_none], obj.get("port"))
+        since = from_union([from_int, from_none], obj.get("since"))
+        return TelemetryClient(ip, port, since)
+
+    def to_dict(self) -> dict:
+        result: dict = {}
+        if self.ip is not None:
+            result["ip"] = from_union([from_str, from_none], self.ip)
+        if self.port is not None:
+            result["port"] = from_union([from_int, from_none], self.port)
+        if self.since is not None:
+            result["since"] = from_union([from_int, from_none], self.since)
+        return result
+
+
+@dataclass
+class TelemetryConnections:
+    clients: Optional[List[TelemetryClient]] = None
+    count: Optional[int] = None
+
+    @staticmethod
+    def from_dict(obj: Any) -> 'TelemetryConnections':
+        assert isinstance(obj, dict)
+        clients = from_union([lambda x: from_list(TelemetryClient.from_dict, x), from_none], obj.get("clients"))
+        count = from_union([from_int, from_none], obj.get("count"))
+        return TelemetryConnections(clients, count)
+
+    def to_dict(self) -> dict:
+        result: dict = {}
+        if self.clients is not None:
+            result["clients"] = from_union([lambda x: from_list(lambda x: to_class(TelemetryClient, x), x), from_none], self.clients)
+        if self.count is not None:
+            result["count"] = from_union([from_int, from_none], self.count)
+        return result
+
+
+@dataclass
+class TelemetryDevice:
+    family: Optional[str] = None
+    """itscam450, itscam600, itscam"""
+
+    firmware_version: Optional[str] = None
+    model: Optional[str] = None
+
+    @staticmethod
+    def from_dict(obj: Any) -> 'TelemetryDevice':
+        assert isinstance(obj, dict)
+        family = from_union([from_str, from_none], obj.get("family"))
+        firmware_version = from_union([from_str, from_none], obj.get("firmwareVersion"))
+        model = from_union([from_str, from_none], obj.get("model"))
+        return TelemetryDevice(family, firmware_version, model)
+
+    def to_dict(self) -> dict:
+        result: dict = {}
+        if self.family is not None:
+            result["family"] = from_union([from_str, from_none], self.family)
+        if self.firmware_version is not None:
+            result["firmwareVersion"] = from_union([from_str, from_none], self.firmware_version)
+        if self.model is not None:
+            result["model"] = from_union([from_str, from_none], self.model)
+        return result
+
+
+@dataclass
+class FlashTestAttempt:
+    """Last test, or why the last scheduled one was skipped (FlashTestRun fields when it ran)"""
+
+    delta: Optional[float] = None
+    out: Optional[int] = None
+    outcome: Optional[str] = None
+    """pass, weak, fail, inconclusive"""
+
+    reason: Optional[str] = None
+    skipped: Optional[str] = None
+    """pipelineNotReady, busy, noFlashInProfile or irFilterClosed"""
+
+    time: Optional[int] = None
+
+    @staticmethod
+    def from_dict(obj: Any) -> 'FlashTestAttempt':
+        assert isinstance(obj, dict)
+        delta = from_union([from_float, from_none], obj.get("delta"))
+        out = from_union([from_int, from_none], obj.get("out"))
+        outcome = from_union([from_str, from_none], obj.get("outcome"))
+        reason = from_union([from_str, from_none], obj.get("reason"))
+        skipped = from_union([from_str, from_none], obj.get("skipped"))
+        time = from_union([from_int, from_none], obj.get("time"))
+        return FlashTestAttempt(delta, out, outcome, reason, skipped, time)
+
+    def to_dict(self) -> dict:
+        result: dict = {}
+        if self.delta is not None:
+            result["delta"] = from_union([to_float, from_none], self.delta)
+        if self.out is not None:
+            result["out"] = from_union([from_int, from_none], self.out)
+        if self.outcome is not None:
+            result["outcome"] = from_union([from_str, from_none], self.outcome)
+        if self.reason is not None:
+            result["reason"] = from_union([from_str, from_none], self.reason)
+        if self.skipped is not None:
+            result["skipped"] = from_union([from_str, from_none], self.skipped)
+        if self.time is not None:
+            result["time"] = from_union([from_int, from_none], self.time)
+        return result
+
+
+@dataclass
+class FlashTestBaseline:
+    """Light the output adds at one exposure, learned from its passing runs"""
+
+    delta: Optional[float] = None
+    gain: Optional[int] = None
+    power: Optional[int] = None
+    runs: Optional[int] = None
+    shutter: Optional[int] = None
+
+    @staticmethod
+    def from_dict(obj: Any) -> 'FlashTestBaseline':
+        assert isinstance(obj, dict)
+        delta = from_union([from_float, from_none], obj.get("delta"))
+        gain = from_union([from_int, from_none], obj.get("gain"))
+        power = from_union([from_int, from_none], obj.get("power"))
+        runs = from_union([from_int, from_none], obj.get("runs"))
+        shutter = from_union([from_int, from_none], obj.get("shutter"))
+        return FlashTestBaseline(delta, gain, power, runs, shutter)
+
+    def to_dict(self) -> dict:
+        result: dict = {}
+        if self.delta is not None:
+            result["delta"] = from_union([to_float, from_none], self.delta)
+        if self.gain is not None:
+            result["gain"] = from_union([from_int, from_none], self.gain)
+        if self.power is not None:
+            result["power"] = from_union([from_int, from_none], self.power)
+        if self.runs is not None:
+            result["runs"] = from_union([from_int, from_none], self.runs)
+        if self.shutter is not None:
+            result["shutter"] = from_union([from_int, from_none], self.shutter)
+        return result
+
+
+@dataclass
+class FlashTestRun:
+    """One test of a flash output"""
+
+    ambient: Optional[float] = None
+    """Mean luma without flash"""
+
+    delta: Optional[float] = None
+    """Luma (0-255) the flash added"""
+
+    gain: Optional[int] = None
+    """Gain, in millibels"""
+
+    noise: Optional[float] = None
+    """Luma difference between the captures without flash"""
+
+    out: Optional[int] = None
+    """Flash output, as in the profiles"""
+
+    outcome: Optional[str] = None
+    """pass, weak, fail, inconclusive"""
+
+    power: Optional[int] = None
+    """Flash power, in percent"""
+
+    reason: Optional[str] = None
+    """Why it was inconclusive (motion, saturated, ambient, noise, weakSignal, capture,
+    flashNotApplied)
+    """
+    shutter: Optional[int] = None
+    """Shutter, in microseconds"""
+
+    time: Optional[int] = None
+    """Unix time, in seconds"""
+
+    usable_fraction: Optional[float] = None
+    """Part of the image that neither moved nor saturated"""
+
+    @staticmethod
+    def from_dict(obj: Any) -> 'FlashTestRun':
+        assert isinstance(obj, dict)
+        ambient = from_union([from_float, from_none], obj.get("ambient"))
+        delta = from_union([from_float, from_none], obj.get("delta"))
+        gain = from_union([from_int, from_none], obj.get("gain"))
+        noise = from_union([from_float, from_none], obj.get("noise"))
+        out = from_union([from_int, from_none], obj.get("out"))
+        outcome = from_union([from_str, from_none], obj.get("outcome"))
+        power = from_union([from_int, from_none], obj.get("power"))
+        reason = from_union([from_str, from_none], obj.get("reason"))
+        shutter = from_union([from_int, from_none], obj.get("shutter"))
+        time = from_union([from_int, from_none], obj.get("time"))
+        usable_fraction = from_union([from_float, from_none], obj.get("usableFraction"))
+        return FlashTestRun(ambient, delta, gain, noise, out, outcome, power, reason, shutter, time, usable_fraction)
+
+    def to_dict(self) -> dict:
+        result: dict = {}
+        if self.ambient is not None:
+            result["ambient"] = from_union([to_float, from_none], self.ambient)
+        if self.delta is not None:
+            result["delta"] = from_union([to_float, from_none], self.delta)
+        if self.gain is not None:
+            result["gain"] = from_union([from_int, from_none], self.gain)
+        if self.noise is not None:
+            result["noise"] = from_union([to_float, from_none], self.noise)
+        if self.out is not None:
+            result["out"] = from_union([from_int, from_none], self.out)
+        if self.outcome is not None:
+            result["outcome"] = from_union([from_str, from_none], self.outcome)
+        if self.power is not None:
+            result["power"] = from_union([from_int, from_none], self.power)
+        if self.reason is not None:
+            result["reason"] = from_union([from_str, from_none], self.reason)
+        if self.shutter is not None:
+            result["shutter"] = from_union([from_int, from_none], self.shutter)
+        if self.time is not None:
+            result["time"] = from_union([from_int, from_none], self.time)
+        if self.usable_fraction is not None:
+            result["usableFraction"] = from_union([to_float, from_none], self.usable_fraction)
+        return result
+
+
+@dataclass
+class FlashTestOutput:
+    baseline: Optional[FlashTestBaseline] = None
+    confidence: Optional[float] = None
+    last_conclusive_run: Optional[FlashTestRun] = None
+    last_run: Optional[FlashTestRun] = None
+    out: Optional[int] = None
+    status: Optional[str] = None
+    """ok, degraded, failed, unknown"""
+
+    @staticmethod
+    def from_dict(obj: Any) -> 'FlashTestOutput':
+        assert isinstance(obj, dict)
+        baseline = from_union([FlashTestBaseline.from_dict, from_none], obj.get("baseline"))
+        confidence = from_union([from_float, from_none], obj.get("confidence"))
+        last_conclusive_run = from_union([FlashTestRun.from_dict, from_none], obj.get("lastConclusiveRun"))
+        last_run = from_union([FlashTestRun.from_dict, from_none], obj.get("lastRun"))
+        out = from_union([from_int, from_none], obj.get("out"))
+        status = from_union([from_str, from_none], obj.get("status"))
+        return FlashTestOutput(baseline, confidence, last_conclusive_run, last_run, out, status)
+
+    def to_dict(self) -> dict:
+        result: dict = {}
+        if self.baseline is not None:
+            result["baseline"] = from_union([lambda x: to_class(FlashTestBaseline, x), from_none], self.baseline)
+        if self.confidence is not None:
+            result["confidence"] = from_union([to_float, from_none], self.confidence)
+        if self.last_conclusive_run is not None:
+            result["lastConclusiveRun"] = from_union([lambda x: to_class(FlashTestRun, x), from_none], self.last_conclusive_run)
+        if self.last_run is not None:
+            result["lastRun"] = from_union([lambda x: to_class(FlashTestRun, x), from_none], self.last_run)
+        if self.out is not None:
+            result["out"] = from_union([from_int, from_none], self.out)
+        if self.status is not None:
+            result["status"] = from_union([from_str, from_none], self.status)
+        return result
+
+
+@dataclass
+class FlashTestWarning:
+    """Flash configuration that looks wrong (not a failure)"""
+
+    id: Optional[str] = None
+    """noFlashConfigured, flashWithIrFilterClosed, flashOutputCannotFlash, flashOutputNotFlash,
+    irPassWithoutFlash
+    """
+    out: Optional[int] = None
+    profile: Optional[int] = None
+    profile_name: Optional[str] = None
+    severity: Optional[str] = None
+    """warning, info"""
+
+    @staticmethod
+    def from_dict(obj: Any) -> 'FlashTestWarning':
+        assert isinstance(obj, dict)
+        id = from_union([from_str, from_none], obj.get("id"))
+        out = from_union([from_int, from_none], obj.get("out"))
+        profile = from_union([from_int, from_none], obj.get("profile"))
+        profile_name = from_union([from_str, from_none], obj.get("profileName"))
+        severity = from_union([from_str, from_none], obj.get("severity"))
+        return FlashTestWarning(id, out, profile, profile_name, severity)
+
+    def to_dict(self) -> dict:
+        result: dict = {}
+        if self.id is not None:
+            result["id"] = from_union([from_str, from_none], self.id)
+        if self.out is not None:
+            result["out"] = from_union([from_int, from_none], self.out)
+        if self.profile is not None:
+            result["profile"] = from_union([from_int, from_none], self.profile)
+        if self.profile_name is not None:
+            result["profileName"] = from_union([from_str, from_none], self.profile_name)
+        if self.severity is not None:
+            result["severity"] = from_union([from_str, from_none], self.severity)
+        return result
+
+
+@dataclass
+class FlashTestStatus:
+    """Every intervalMinutes, while no triggers come in (or after five intervals skipped in a
+    row, as on constant trigger), the camera takes three diagnostic captures (without, with
+    and without flash) that no client receives, and measures the light one flash output of
+    the current profile adds. Each output's status comes from its recent conclusive runs, and
+    its confidence (0 to 1) grows with agreeing runs and fades a day after the last one.
+    """
+    confidence: Optional[float] = None
+    enabled: Optional[bool] = None
+    interval_minutes: Optional[int] = None
+    last_attempt: Optional[FlashTestAttempt] = None
+    outputs: Optional[List[FlashTestOutput]] = None
+    status: Optional[str] = None
+    """Worst status of the outputs tested (ok, degraded, failed, unknown)"""
+
+    warnings: Optional[List[FlashTestWarning]] = None
+
+    @staticmethod
+    def from_dict(obj: Any) -> 'FlashTestStatus':
+        assert isinstance(obj, dict)
+        confidence = from_union([from_float, from_none], obj.get("confidence"))
+        enabled = from_union([from_bool, from_none], obj.get("enabled"))
+        interval_minutes = from_union([from_int, from_none], obj.get("intervalMinutes"))
+        last_attempt = from_union([FlashTestAttempt.from_dict, from_none], obj.get("lastAttempt"))
+        outputs = from_union([lambda x: from_list(FlashTestOutput.from_dict, x), from_none], obj.get("outputs"))
+        status = from_union([from_str, from_none], obj.get("status"))
+        warnings = from_union([lambda x: from_list(FlashTestWarning.from_dict, x), from_none], obj.get("warnings"))
+        return FlashTestStatus(confidence, enabled, interval_minutes, last_attempt, outputs, status, warnings)
+
+    def to_dict(self) -> dict:
+        result: dict = {}
+        if self.confidence is not None:
+            result["confidence"] = from_union([to_float, from_none], self.confidence)
+        if self.enabled is not None:
+            result["enabled"] = from_union([from_bool, from_none], self.enabled)
+        if self.interval_minutes is not None:
+            result["intervalMinutes"] = from_union([from_int, from_none], self.interval_minutes)
+        if self.last_attempt is not None:
+            result["lastAttempt"] = from_union([lambda x: to_class(FlashTestAttempt, x), from_none], self.last_attempt)
+        if self.outputs is not None:
+            result["outputs"] = from_union([lambda x: from_list(lambda x: to_class(FlashTestOutput, x), x), from_none], self.outputs)
+        if self.status is not None:
+            result["status"] = from_union([from_str, from_none], self.status)
+        if self.warnings is not None:
+            result["warnings"] = from_union([lambda x: from_list(lambda x: to_class(FlashTestWarning, x), x), from_none], self.warnings)
+        return result
+
+
+@dataclass
+class TelemetryHealthIssue:
+    """Something that needs attention: id, severity and message, plus the details of its kind."""
+
+    id: str
+    """cameraServiceDown, cameraServiceUnreachable, cameraServiceInitError, pipelineNotReady,
+    serviceDown, storageFull, memoryHigh, flashFailed, flashDegraded, itscamproDisconnected,
+    linceLoginFailed, restApiClientError, or a flash configuration warning
+    (noFlashConfigured, flashWithIrFilterClosed, flashOutputCannotFlash, flashOutputNotFlash,
+    irPassWithoutFlash)
+    """
+    message: str
+    """English text, for logs; use id to show it"""
+
+    severity: str
+    """info, warning, critical"""
+
+    client_id: Optional[int] = None
+    """restApiClientError"""
+
+    code: Optional[int] = None
+    """restApiClientError"""
+
+    confidence: Optional[float] = None
+    """flashFailed, flashDegraded"""
+
+    device: Optional[str] = None
+    """storageFull (disk or sdCard)"""
+
+    out: Optional[int] = None
+    """Flash output (flash issues and warnings)"""
+
+    profile: Optional[int] = None
+    """Flash configuration warnings"""
+
+    profile_name: Optional[str] = None
+    """Flash configuration warnings"""
+
+    service: Optional[str] = None
+    """serviceDown"""
+
+    status: Optional[str] = None
+    """itscamproDisconnected, linceLoginFailed"""
+
+    used_pct: Optional[float] = None
+    """storageFull, memoryHigh"""
+
+    @staticmethod
+    def from_dict(obj: Any) -> 'TelemetryHealthIssue':
+        assert isinstance(obj, dict)
+        id = from_str(obj.get("id"))
+        message = from_str(obj.get("message"))
+        severity = from_str(obj.get("severity"))
+        client_id = from_union([from_int, from_none], obj.get("clientId"))
+        code = from_union([from_int, from_none], obj.get("code"))
+        confidence = from_union([from_float, from_none], obj.get("confidence"))
+        device = from_union([from_str, from_none], obj.get("device"))
+        out = from_union([from_int, from_none], obj.get("out"))
+        profile = from_union([from_int, from_none], obj.get("profile"))
+        profile_name = from_union([from_str, from_none], obj.get("profileName"))
+        service = from_union([from_str, from_none], obj.get("service"))
+        status = from_union([from_str, from_none], obj.get("status"))
+        used_pct = from_union([from_float, from_none], obj.get("usedPct"))
+        return TelemetryHealthIssue(id, message, severity, client_id, code, confidence, device, out, profile, profile_name, service, status, used_pct)
+
+    def to_dict(self) -> dict:
+        result: dict = {}
+        result["id"] = from_str(self.id)
+        result["message"] = from_str(self.message)
+        result["severity"] = from_str(self.severity)
+        if self.client_id is not None:
+            result["clientId"] = from_union([from_int, from_none], self.client_id)
+        if self.code is not None:
+            result["code"] = from_union([from_int, from_none], self.code)
+        if self.confidence is not None:
+            result["confidence"] = from_union([to_float, from_none], self.confidence)
+        if self.device is not None:
+            result["device"] = from_union([from_str, from_none], self.device)
+        if self.out is not None:
+            result["out"] = from_union([from_int, from_none], self.out)
+        if self.profile is not None:
+            result["profile"] = from_union([from_int, from_none], self.profile)
+        if self.profile_name is not None:
+            result["profileName"] = from_union([from_str, from_none], self.profile_name)
+        if self.service is not None:
+            result["service"] = from_union([from_str, from_none], self.service)
+        if self.status is not None:
+            result["status"] = from_union([from_str, from_none], self.status)
+        if self.used_pct is not None:
+            result["usedPct"] = from_union([to_float, from_none], self.used_pct)
+        return result
+
+
+@dataclass
+class TelemetryHealth:
+    issues: Optional[List[TelemetryHealthIssue]] = None
+    status: Optional[str] = None
+    """Most severe issue; info issues leave it ok (ok, warning, critical)"""
+
+    @staticmethod
+    def from_dict(obj: Any) -> 'TelemetryHealth':
+        assert isinstance(obj, dict)
+        issues = from_union([lambda x: from_list(TelemetryHealthIssue.from_dict, x), from_none], obj.get("issues"))
+        status = from_union([from_str, from_none], obj.get("status"))
+        return TelemetryHealth(issues, status)
+
+    def to_dict(self) -> dict:
+        result: dict = {}
+        if self.issues is not None:
+            result["issues"] = from_union([lambda x: from_list(lambda x: to_class(TelemetryHealthIssue, x), x), from_none], self.issues)
+        if self.status is not None:
+            result["status"] = from_union([from_str, from_none], self.status)
+        return result
+
+
+@dataclass
+class TelemetryIntegration:
+    """Null when the service doesn't run on this camera"""
+
+    enabled: Optional[bool] = None
+    status: Optional[str] = None
+    """ITSCAM PRO: CONNECTED, CONNECT_START, DISCONNECTED, DISCONNECT_START, DISABLED or
+    UNKNOWN. Lince: loginSuccess, notInitialized, loginError, discoveryError or
+    undefinedError.
+    """
+
+    @staticmethod
+    def from_dict(obj: Any) -> 'TelemetryIntegration':
+        assert isinstance(obj, dict)
+        enabled = from_union([from_bool, from_none], obj.get("enabled"))
+        status = from_union([from_str, from_none], obj.get("status"))
+        return TelemetryIntegration(enabled, status)
+
+    def to_dict(self) -> dict:
+        result: dict = {}
+        if self.enabled is not None:
+            result["enabled"] = from_union([from_bool, from_none], self.enabled)
+        if self.status is not None:
+            result["status"] = from_union([from_str, from_none], self.status)
+        return result
+
+
+@dataclass
+class TelemetryRESTAPIClient:
+    code: Optional[int] = None
+    """0 when fine, 1 template error, 2 request error"""
+
+    disk_usage: Optional[int] = None
+    enabled: Optional[bool] = None
+    file_count: Optional[int] = None
+    """Requests saved to disk, waiting to be sent again"""
+
+    id: Optional[int] = None
+    message: Optional[str] = None
+
+    @staticmethod
+    def from_dict(obj: Any) -> 'TelemetryRESTAPIClient':
+        assert isinstance(obj, dict)
+        code = from_union([from_int, from_none], obj.get("code"))
+        disk_usage = from_union([from_int, from_none], obj.get("diskUsage"))
+        enabled = from_union([from_bool, from_none], obj.get("enabled"))
+        file_count = from_union([from_int, from_none], obj.get("fileCount"))
+        id = from_union([from_int, from_none], obj.get("id"))
+        message = from_union([from_str, from_none], obj.get("message"))
+        return TelemetryRESTAPIClient(code, disk_usage, enabled, file_count, id, message)
+
+    def to_dict(self) -> dict:
+        result: dict = {}
+        if self.code is not None:
+            result["code"] = from_union([from_int, from_none], self.code)
+        if self.disk_usage is not None:
+            result["diskUsage"] = from_union([from_int, from_none], self.disk_usage)
+        if self.enabled is not None:
+            result["enabled"] = from_union([from_bool, from_none], self.enabled)
+        if self.file_count is not None:
+            result["fileCount"] = from_union([from_int, from_none], self.file_count)
+        if self.id is not None:
+            result["id"] = from_union([from_int, from_none], self.id)
+        if self.message is not None:
+            result["message"] = from_union([from_str, from_none], self.message)
+        return result
+
+
+@dataclass
+class TelemetryIntegrations:
+    itscampro: Optional[TelemetryIntegration] = None
+    lince: Optional[TelemetryIntegration] = None
+    rest_api_clients: Optional[List[TelemetryRESTAPIClient]] = None
+
+    @staticmethod
+    def from_dict(obj: Any) -> 'TelemetryIntegrations':
+        assert isinstance(obj, dict)
+        itscampro = from_union([TelemetryIntegration.from_dict, from_none], obj.get("itscampro"))
+        lince = from_union([TelemetryIntegration.from_dict, from_none], obj.get("lince"))
+        rest_api_clients = from_union([lambda x: from_list(TelemetryRESTAPIClient.from_dict, x), from_none], obj.get("restApiClients"))
+        return TelemetryIntegrations(itscampro, lince, rest_api_clients)
+
+    def to_dict(self) -> dict:
+        result: dict = {}
+        if self.itscampro is not None:
+            result["itscampro"] = from_union([lambda x: to_class(TelemetryIntegration, x), from_none], self.itscampro)
+        if self.lince is not None:
+            result["lince"] = from_union([lambda x: to_class(TelemetryIntegration, x), from_none], self.lince)
+        if self.rest_api_clients is not None:
+            result["restApiClients"] = from_union([lambda x: from_list(lambda x: to_class(TelemetryRESTAPIClient, x), x), from_none], self.rest_api_clients)
+        return result
+
+
+@dataclass
+class TelemetryNetwork:
+    """Status of the wired interfaces (by name, eth1...), the wireless and the mobile network,
+    as in the network status websocket. Read every 10 s at most.
+    """
+    mobile: Optional[Dict[str, Any]] = None
+    wifi: Optional[Dict[str, Any]] = None
+    wired: Optional[Dict[str, Any]] = None
+
+    @staticmethod
+    def from_dict(obj: Any) -> 'TelemetryNetwork':
+        assert isinstance(obj, dict)
+        mobile = from_union([lambda x: from_dict(lambda x: x, x), from_none], obj.get("mobile"))
+        wifi = from_union([lambda x: from_dict(lambda x: x, x), from_none], obj.get("wifi"))
+        wired = from_union([lambda x: from_dict(lambda x: x, x), from_none], obj.get("wired"))
+        return TelemetryNetwork(mobile, wifi, wired)
+
+    def to_dict(self) -> dict:
+        result: dict = {}
+        if self.mobile is not None:
+            result["mobile"] = from_union([lambda x: from_dict(lambda x: x, x), from_none], self.mobile)
+        if self.wifi is not None:
+            result["wifi"] = from_union([lambda x: from_dict(lambda x: x, x), from_none], self.wifi)
+        if self.wired is not None:
+            result["wired"] = from_union([lambda x: from_dict(lambda x: x, x), from_none], self.wired)
+        return result
+
+
+@dataclass
+class ProcessingCounters:
+    captures: Optional[int] = None
+    captures_with_plates: Optional[int] = None
+    objects: Optional[int] = None
+    """Classifier detections, summed over the captures"""
+
+    ocr_average_ms: Optional[float] = None
+    """Mean OCR time per exposure, null without OCR"""
+
+    plates: Optional[int] = None
+    """Distinct plates read, summed over the captures"""
+
+    @staticmethod
+    def from_dict(obj: Any) -> 'ProcessingCounters':
+        assert isinstance(obj, dict)
+        captures = from_union([from_int, from_none], obj.get("captures"))
+        captures_with_plates = from_union([from_int, from_none], obj.get("capturesWithPlates"))
+        objects = from_union([from_int, from_none], obj.get("objects"))
+        ocr_average_ms = from_union([from_float, from_none], obj.get("ocrAverageMs"))
+        plates = from_union([from_int, from_none], obj.get("plates"))
+        return ProcessingCounters(captures, captures_with_plates, objects, ocr_average_ms, plates)
+
+    def to_dict(self) -> dict:
+        result: dict = {}
+        if self.captures is not None:
+            result["captures"] = from_union([from_int, from_none], self.captures)
+        if self.captures_with_plates is not None:
+            result["capturesWithPlates"] = from_union([from_int, from_none], self.captures_with_plates)
+        if self.objects is not None:
+            result["objects"] = from_union([from_int, from_none], self.objects)
+        if self.ocr_average_ms is not None:
+            result["ocrAverageMs"] = from_union([to_float, from_none], self.ocr_average_ms)
+        if self.plates is not None:
+            result["plates"] = from_union([from_int, from_none], self.plates)
+        return result
+
+
+@dataclass
+class ProcessingStatisticsWindow:
+    covered_seconds: Optional[int] = None
+    """Part of the window the camera service ran"""
+
+    seconds: Optional[int] = None
+    snapshot: Optional[ProcessingCounters] = None
+    total: Optional[ProcessingCounters] = None
+    trigger: Optional[ProcessingCounters] = None
+
+    @staticmethod
+    def from_dict(obj: Any) -> 'ProcessingStatisticsWindow':
+        assert isinstance(obj, dict)
+        covered_seconds = from_union([from_int, from_none], obj.get("coveredSeconds"))
+        seconds = from_union([from_int, from_none], obj.get("seconds"))
+        snapshot = from_union([ProcessingCounters.from_dict, from_none], obj.get("snapshot"))
+        total = from_union([ProcessingCounters.from_dict, from_none], obj.get("total"))
+        trigger = from_union([ProcessingCounters.from_dict, from_none], obj.get("trigger"))
+        return ProcessingStatisticsWindow(covered_seconds, seconds, snapshot, total, trigger)
+
+    def to_dict(self) -> dict:
+        result: dict = {}
+        if self.covered_seconds is not None:
+            result["coveredSeconds"] = from_union([from_int, from_none], self.covered_seconds)
+        if self.seconds is not None:
+            result["seconds"] = from_union([from_int, from_none], self.seconds)
+        if self.snapshot is not None:
+            result["snapshot"] = from_union([lambda x: to_class(ProcessingCounters, x), from_none], self.snapshot)
+        if self.total is not None:
+            result["total"] = from_union([lambda x: to_class(ProcessingCounters, x), from_none], self.total)
+        if self.trigger is not None:
+            result["trigger"] = from_union([lambda x: to_class(ProcessingCounters, x), from_none], self.trigger)
+        return result
+
+
+@dataclass
+class ProcessingStatistics:
+    """Captures processed in the last 10, 30 and 60 minutes. A capture is one trigger or
+    snapshot request, counted once: its plates are the distinct texts OCR read across its
+    exposures, its objects the classifier detections of the exposure with most of them.
+    """
+    last10_minutes: Optional[ProcessingStatisticsWindow] = None
+    last30_minutes: Optional[ProcessingStatisticsWindow] = None
+    last60_minutes: Optional[ProcessingStatisticsWindow] = None
+
+    @staticmethod
+    def from_dict(obj: Any) -> 'ProcessingStatistics':
+        assert isinstance(obj, dict)
+        last10_minutes = from_union([ProcessingStatisticsWindow.from_dict, from_none], obj.get("last10Minutes"))
+        last30_minutes = from_union([ProcessingStatisticsWindow.from_dict, from_none], obj.get("last30Minutes"))
+        last60_minutes = from_union([ProcessingStatisticsWindow.from_dict, from_none], obj.get("last60Minutes"))
+        return ProcessingStatistics(last10_minutes, last30_minutes, last60_minutes)
+
+    def to_dict(self) -> dict:
+        result: dict = {}
+        if self.last10_minutes is not None:
+            result["last10Minutes"] = from_union([lambda x: to_class(ProcessingStatisticsWindow, x), from_none], self.last10_minutes)
+        if self.last30_minutes is not None:
+            result["last30Minutes"] = from_union([lambda x: to_class(ProcessingStatisticsWindow, x), from_none], self.last30_minutes)
+        if self.last60_minutes is not None:
+            result["last60Minutes"] = from_union([lambda x: to_class(ProcessingStatisticsWindow, x), from_none], self.last60_minutes)
+        return result
+
+
+@dataclass
+class TelemetryCPU:
+    load_average: Optional[List[float]] = None
+    """1, 5 and 15 minutes"""
+
+    temperature: Optional[float] = None
+    """Celsius"""
+
+    usage: Optional[float] = None
+    """Percent of all cores, since the previous reading (a few seconds)"""
+
+    @staticmethod
+    def from_dict(obj: Any) -> 'TelemetryCPU':
+        assert isinstance(obj, dict)
+        load_average = from_union([lambda x: from_list(from_float, x), from_none], obj.get("loadAverage"))
+        temperature = from_union([from_float, from_none], obj.get("temperature"))
+        usage = from_union([from_float, from_none], obj.get("usage"))
+        return TelemetryCPU(load_average, temperature, usage)
+
+    def to_dict(self) -> dict:
+        result: dict = {}
+        if self.load_average is not None:
+            result["loadAverage"] = from_union([lambda x: from_list(to_float, x), from_none], self.load_average)
+        if self.temperature is not None:
+            result["temperature"] = from_union([to_float, from_none], self.temperature)
+        if self.usage is not None:
+            result["usage"] = from_union([to_float, from_none], self.usage)
+        return result
+
+
+@dataclass
+class TelemetryMemoryRAM:
+    total: Optional[int] = None
+    used: Optional[int] = None
+    used_pct: Optional[float] = None
+
+    @staticmethod
+    def from_dict(obj: Any) -> 'TelemetryMemoryRAM':
+        assert isinstance(obj, dict)
+        total = from_union([from_int, from_none], obj.get("total"))
+        used = from_union([from_int, from_none], obj.get("used"))
+        used_pct = from_union([from_float, from_none], obj.get("usedPct"))
+        return TelemetryMemoryRAM(total, used, used_pct)
+
+    def to_dict(self) -> dict:
+        result: dict = {}
+        if self.total is not None:
+            result["total"] = from_union([from_int, from_none], self.total)
+        if self.used is not None:
+            result["used"] = from_union([from_int, from_none], self.used)
+        if self.used_pct is not None:
+            result["usedPct"] = from_union([to_float, from_none], self.used_pct)
+        return result
+
+
+@dataclass
+class TelemetryMemorySwap:
+    total: Optional[int] = None
+    used: Optional[int] = None
+    used_pct: Optional[float] = None
+
+    @staticmethod
+    def from_dict(obj: Any) -> 'TelemetryMemorySwap':
+        assert isinstance(obj, dict)
+        total = from_union([from_int, from_none], obj.get("total"))
+        used = from_union([from_int, from_none], obj.get("used"))
+        used_pct = from_union([from_float, from_none], obj.get("usedPct"))
+        return TelemetryMemorySwap(total, used, used_pct)
+
+    def to_dict(self) -> dict:
+        result: dict = {}
+        if self.total is not None:
+            result["total"] = from_union([from_int, from_none], self.total)
+        if self.used is not None:
+            result["used"] = from_union([from_int, from_none], self.used)
+        if self.used_pct is not None:
+            result["usedPct"] = from_union([to_float, from_none], self.used_pct)
+        return result
+
+
+@dataclass
+class TelemetryMemory:
+    """Bytes"""
+
+    ram: Optional[TelemetryMemoryRAM] = None
+    swap: Optional[TelemetryMemorySwap] = None
+
+    @staticmethod
+    def from_dict(obj: Any) -> 'TelemetryMemory':
+        assert isinstance(obj, dict)
+        ram = from_union([TelemetryMemoryRAM.from_dict, from_none], obj.get("ram"))
+        swap = from_union([TelemetryMemorySwap.from_dict, from_none], obj.get("swap"))
+        return TelemetryMemory(ram, swap)
+
+    def to_dict(self) -> dict:
+        result: dict = {}
+        if self.ram is not None:
+            result["ram"] = from_union([lambda x: to_class(TelemetryMemoryRAM, x), from_none], self.ram)
+        if self.swap is not None:
+            result["swap"] = from_union([lambda x: to_class(TelemetryMemorySwap, x), from_none], self.swap)
+        return result
+
+
+@dataclass
+class TelemetryStorageDevice:
+    device: Optional[str] = None
+    mount_point: Optional[str] = None
+    total: Optional[int] = None
+    """Bytes"""
+
+    used: Optional[int] = None
+    """Bytes, null when not mounted"""
+
+    used_pct: Optional[float] = None
+
+    @staticmethod
+    def from_dict(obj: Any) -> 'TelemetryStorageDevice':
+        assert isinstance(obj, dict)
+        device = from_union([from_str, from_none], obj.get("device"))
+        mount_point = from_union([from_str, from_none], obj.get("mountPoint"))
+        total = from_union([from_int, from_none], obj.get("total"))
+        used = from_union([from_int, from_none], obj.get("used"))
+        used_pct = from_union([from_float, from_none], obj.get("usedPct"))
+        return TelemetryStorageDevice(device, mount_point, total, used, used_pct)
+
+    def to_dict(self) -> dict:
+        result: dict = {}
+        if self.device is not None:
+            result["device"] = from_union([from_str, from_none], self.device)
+        if self.mount_point is not None:
+            result["mountPoint"] = from_union([from_str, from_none], self.mount_point)
+        if self.total is not None:
+            result["total"] = from_union([from_int, from_none], self.total)
+        if self.used is not None:
+            result["used"] = from_union([from_int, from_none], self.used)
+        if self.used_pct is not None:
+            result["usedPct"] = from_union([to_float, from_none], self.used_pct)
+        return result
+
+
+@dataclass
+class TelemetryStorage:
+    disk: Optional[TelemetryStorageDevice] = None
+    sd_card: Optional[TelemetryStorageDevice] = None
+
+    @staticmethod
+    def from_dict(obj: Any) -> 'TelemetryStorage':
+        assert isinstance(obj, dict)
+        disk = from_union([TelemetryStorageDevice.from_dict, from_none], obj.get("disk"))
+        sd_card = from_union([TelemetryStorageDevice.from_dict, from_none], obj.get("sdCard"))
+        return TelemetryStorage(disk, sd_card)
+
+    def to_dict(self) -> dict:
+        result: dict = {}
+        if self.disk is not None:
+            result["disk"] = from_union([lambda x: to_class(TelemetryStorageDevice, x), from_none], self.disk)
+        if self.sd_card is not None:
+            result["sdCard"] = from_union([lambda x: to_class(TelemetryStorageDevice, x), from_none], self.sd_card)
+        return result
+
+
+@dataclass
+class TelemetryUptime:
+    last_boot: Optional[int] = None
+    """Unix time, in seconds"""
+
+    seconds: Optional[int] = None
+
+    @staticmethod
+    def from_dict(obj: Any) -> 'TelemetryUptime':
+        assert isinstance(obj, dict)
+        last_boot = from_union([from_int, from_none], obj.get("lastBoot"))
+        seconds = from_union([from_int, from_none], obj.get("seconds"))
+        return TelemetryUptime(last_boot, seconds)
+
+    def to_dict(self) -> dict:
+        result: dict = {}
+        if self.last_boot is not None:
+            result["lastBoot"] = from_union([from_int, from_none], self.last_boot)
+        if self.seconds is not None:
+            result["seconds"] = from_union([from_int, from_none], self.seconds)
+        return result
+
+
+@dataclass
+class TelemetryResources:
+    cpu: Optional[TelemetryCPU] = None
+    memory: Optional[TelemetryMemory] = None
+    """Bytes"""
+
+    storage: Optional[TelemetryStorage] = None
+    uptime: Optional[TelemetryUptime] = None
+
+    @staticmethod
+    def from_dict(obj: Any) -> 'TelemetryResources':
+        assert isinstance(obj, dict)
+        cpu = from_union([TelemetryCPU.from_dict, from_none], obj.get("cpu"))
+        memory = from_union([TelemetryMemory.from_dict, from_none], obj.get("memory"))
+        storage = from_union([TelemetryStorage.from_dict, from_none], obj.get("storage"))
+        uptime = from_union([TelemetryUptime.from_dict, from_none], obj.get("uptime"))
+        return TelemetryResources(cpu, memory, storage, uptime)
+
+    def to_dict(self) -> dict:
+        result: dict = {}
+        if self.cpu is not None:
+            result["cpu"] = from_union([lambda x: to_class(TelemetryCPU, x), from_none], self.cpu)
+        if self.memory is not None:
+            result["memory"] = from_union([lambda x: to_class(TelemetryMemory, x), from_none], self.memory)
+        if self.storage is not None:
+            result["storage"] = from_union([lambda x: to_class(TelemetryStorage, x), from_none], self.storage)
+        if self.uptime is not None:
+            result["uptime"] = from_union([lambda x: to_class(TelemetryUptime, x), from_none], self.uptime)
+        return result
+
+
+@dataclass
+class TelemetryService:
+    active: Optional[str] = None
+    """systemd active state (active, activating, failed, inactive...)"""
+
+    enabled: Optional[bool] = None
+    """Started at boot; the others start on demand (media-server, by socket)"""
+
+    initialization_error: Optional[str] = None
+    """camera-daemon only, empty when it started fine"""
+
+    restarts: Optional[int] = None
+    """Automatic restarts since boot"""
+
+    since: Optional[int] = None
+    """Unix time it became active, in seconds"""
+
+    sub: Optional[str] = None
+
+    @staticmethod
+    def from_dict(obj: Any) -> 'TelemetryService':
+        assert isinstance(obj, dict)
+        active = from_union([from_str, from_none], obj.get("active"))
+        enabled = from_union([from_bool, from_none], obj.get("enabled"))
+        initialization_error = from_union([from_str, from_none], obj.get("initializationError"))
+        restarts = from_union([from_int, from_none], obj.get("restarts"))
+        since = from_union([from_int, from_none], obj.get("since"))
+        sub = from_union([from_str, from_none], obj.get("sub"))
+        return TelemetryService(active, enabled, initialization_error, restarts, since, sub)
+
+    def to_dict(self) -> dict:
+        result: dict = {}
+        if self.active is not None:
+            result["active"] = from_union([from_str, from_none], self.active)
+        if self.enabled is not None:
+            result["enabled"] = from_union([from_bool, from_none], self.enabled)
+        if self.initialization_error is not None:
+            result["initializationError"] = from_union([from_str, from_none], self.initialization_error)
+        if self.restarts is not None:
+            result["restarts"] = from_union([from_int, from_none], self.restarts)
+        if self.since is not None:
+            result["since"] = from_union([from_int, from_none], self.since)
+        if self.sub is not None:
+            result["sub"] = from_union([from_str, from_none], self.sub)
+        return result
+
+
+@dataclass
+class SystemTelemetry:
+    """State of the whole equipment. A part that can't be read in time is null. Times are unix
+    seconds unless stated otherwise.
+    """
+    camera: Optional[TelemetryCamera] = None
+    connections: Optional[Dict[str, TelemetryConnections]] = None
+    """Clients connected now: to the Cougar and ITSCAM (pumatronix) protocols, local ones
+    included (absent when the camera service doesn't answer), and to the CGI endpoints
+    (trigger, mjpegvideo, snapshot, lastframe), those of this web interface excluded.
+    """
+    device: Optional[TelemetryDevice] = None
+    flash_test: Optional[FlashTestStatus] = None
+    health: Optional[TelemetryHealth] = None
+    integrations: Optional[TelemetryIntegrations] = None
+    network: Optional[TelemetryNetwork] = None
+    """Status of the wired interfaces (by name, eth1...), the wireless and the mobile network,
+    as in the network status websocket. Read every 10 s at most.
+    """
+    processing: Optional[ProcessingStatistics] = None
+    resources: Optional[TelemetryResources] = None
+    services: Optional[Dict[str, TelemetryService]] = None
+    """systemd units by name (camera-daemon, webapp, records, redis, media-server), those
+    present on the model
+    """
+    timestamp: Optional[str] = None
+    """When it was read, ISO 8601 UTC"""
+
+    version: Optional[int] = None
+    """Format version; fields are only added within a version"""
+
+    @staticmethod
+    def from_dict(obj: Any) -> 'SystemTelemetry':
+        assert isinstance(obj, dict)
+        camera = from_union([TelemetryCamera.from_dict, from_none], obj.get("camera"))
+        connections = from_union([lambda x: from_dict(TelemetryConnections.from_dict, x), from_none], obj.get("connections"))
+        device = from_union([TelemetryDevice.from_dict, from_none], obj.get("device"))
+        flash_test = from_union([FlashTestStatus.from_dict, from_none], obj.get("flashTest"))
+        health = from_union([TelemetryHealth.from_dict, from_none], obj.get("health"))
+        integrations = from_union([TelemetryIntegrations.from_dict, from_none], obj.get("integrations"))
+        network = from_union([TelemetryNetwork.from_dict, from_none], obj.get("network"))
+        processing = from_union([ProcessingStatistics.from_dict, from_none], obj.get("processing"))
+        resources = from_union([TelemetryResources.from_dict, from_none], obj.get("resources"))
+        services = from_union([lambda x: from_dict(TelemetryService.from_dict, x), from_none], obj.get("services"))
+        timestamp = from_union([from_str, from_none], obj.get("timestamp"))
+        version = from_union([from_int, from_none], obj.get("version"))
+        return SystemTelemetry(camera, connections, device, flash_test, health, integrations, network, processing, resources, services, timestamp, version)
+
+    def to_dict(self) -> dict:
+        result: dict = {}
+        if self.camera is not None:
+            result["camera"] = from_union([lambda x: to_class(TelemetryCamera, x), from_none], self.camera)
+        if self.connections is not None:
+            result["connections"] = from_union([lambda x: from_dict(lambda x: to_class(TelemetryConnections, x), x), from_none], self.connections)
+        if self.device is not None:
+            result["device"] = from_union([lambda x: to_class(TelemetryDevice, x), from_none], self.device)
+        if self.flash_test is not None:
+            result["flashTest"] = from_union([lambda x: to_class(FlashTestStatus, x), from_none], self.flash_test)
+        if self.health is not None:
+            result["health"] = from_union([lambda x: to_class(TelemetryHealth, x), from_none], self.health)
+        if self.integrations is not None:
+            result["integrations"] = from_union([lambda x: to_class(TelemetryIntegrations, x), from_none], self.integrations)
+        if self.network is not None:
+            result["network"] = from_union([lambda x: to_class(TelemetryNetwork, x), from_none], self.network)
+        if self.processing is not None:
+            result["processing"] = from_union([lambda x: to_class(ProcessingStatistics, x), from_none], self.processing)
+        if self.resources is not None:
+            result["resources"] = from_union([lambda x: to_class(TelemetryResources, x), from_none], self.resources)
+        if self.services is not None:
+            result["services"] = from_union([lambda x: from_dict(lambda x: to_class(TelemetryService, x), x), from_none], self.services)
+        if self.timestamp is not None:
+            result["timestamp"] = from_union([from_str, from_none], self.timestamp)
+        if self.version is not None:
+            result["version"] = from_union([from_int, from_none], self.version)
         return result
 
 
@@ -2995,3 +4135,11 @@ def licenses_from_dict(s: Any) -> Licenses:
 
 def licenses_to_dict(x: Licenses) -> Any:
     return to_class(Licenses, x)
+
+
+def system_telemetry_from_dict(s: Any) -> SystemTelemetry:
+    return SystemTelemetry.from_dict(s)
+
+
+def system_telemetry_to_dict(x: SystemTelemetry) -> Any:
+    return to_class(SystemTelemetry, x)

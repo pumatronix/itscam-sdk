@@ -45,7 +45,7 @@ itscam-sdk-<version>/
 └── win-x86/                         # idem, 32-bit
 ```
 
-> Os diretórios `linux-arm/` e `linux-arm64/` só estão presentes quando o tarball foi gerado em um host com os cross-toolchains Arm GNU 8.3-2019.03 instalados (caso padrão da imagem Docker oficial). Cobrem ITSCAM450 (ARMv7) e ITSCAM600 (ARMv8), respectivamente.
+> Os diretórios `linux-arm/` e `linux-arm64/` cobrem ITSCAM450 (ARMv7) e ITSCAM600 / ITSCAM450b (ARMv8). Toda biblioteca Linux precisa só da glibc 2.23 ou mais nova no alvo, e linka com qualquer toolchain ([`compatibility.md`](compatibility.md)).
 
 ## Extrair o SDK
 

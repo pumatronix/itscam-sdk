@@ -7,7 +7,7 @@ This module should not be used directly; use the high-level wrappers instead.
 
 import ctypes
 from ctypes import (
-    c_int, c_uint16, c_uint32, c_uint64, c_int32,
+    c_int, c_uint16, c_uint32, c_uint64, c_int32, c_int64,
     c_size_t, c_char_p, c_void_p, c_ubyte,
     Structure, POINTER, CFUNCTYPE, byref, cast
 )
@@ -236,6 +236,26 @@ class ITSCAM_CgiStreamFrame(Structure):
 # typedef void (*ITSCAM_CgiStreamCallback)(const ITSCAM_CgiStreamFrame*, void*)
 ITSCAM_CgiStreamCallback = CFUNCTYPE(None,
                                      POINTER(ITSCAM_CgiStreamFrame),
+                                     c_void_p)
+
+
+# ============================================================================
+#  Telemetry update (mirror of ITSCAM_TelemetryUpdate)
+# ============================================================================
+
+class ITSCAM_TelemetryUpdate(Structure):
+    """C struct for one telemetry document pushed by the camera."""
+    _fields_ = [
+        ("sequence", c_uint64),
+        ("receivedAtMs", c_int64),
+        ("json", c_char_p),
+        ("jsonLen", c_size_t),
+    ]
+
+
+# typedef void (*ITSCAM_TelemetryCallback)(const ITSCAM_TelemetryUpdate*, void*)
+ITSCAM_TelemetryCallback = CFUNCTYPE(None,
+                                     POINTER(ITSCAM_TelemetryUpdate),
                                      c_void_p)
 
 
@@ -489,6 +509,25 @@ def _setup_prototypes(lib: ctypes.CDLL) -> None:
         fn.argtypes = [ITSCAM_RestClient, c_char_p, c_char_p,
                        c_uint32, POINTER(ITSCAM_String)]
         fn.restype = c_int
+
+    lib.ITSCAM_RestClient_getSystemTelemetry.argtypes = [
+        ITSCAM_RestClient, c_uint32, POINTER(ITSCAM_String)]
+    lib.ITSCAM_RestClient_getSystemTelemetry.restype = c_int
+    lib.ITSCAM_RestClient_startTelemetryStream.argtypes = [
+        ITSCAM_RestClient, ITSCAM_TelemetryCallback, c_void_p, c_uint32]
+    lib.ITSCAM_RestClient_startTelemetryStream.restype = c_int
+    lib.ITSCAM_RestClient_stopTelemetryStream.argtypes = [ITSCAM_RestClient]
+    lib.ITSCAM_RestClient_stopTelemetryStream.restype = None
+    lib.ITSCAM_RestClient_isTelemetryStreamRunning.argtypes = [
+        ITSCAM_RestClient]
+    lib.ITSCAM_RestClient_isTelemetryStreamRunning.restype = c_int
+    lib.ITSCAM_RestClient_isTelemetryStreamConnected.argtypes = [
+        ITSCAM_RestClient]
+    lib.ITSCAM_RestClient_isTelemetryStreamConnected.restype = c_int
+    lib.ITSCAM_RestClient_latestTelemetry.argtypes = [
+        ITSCAM_RestClient, POINTER(c_uint64), POINTER(c_int64),
+        POINTER(ITSCAM_String)]
+    lib.ITSCAM_RestClient_latestTelemetry.restype = c_int
 
     # ========================================================================
     #  CGI client

@@ -18,6 +18,7 @@ src/wrappers/go/vendor/
 src/wrappers/go/examples/capture_example
 src/wrappers/go/examples/rest_example
 src/wrappers/go/examples/cgi_snapshot_example
+src/wrappers/go/examples/telemetry_example
 src/wrappers/go/examples/build/
 src/wrappers/go/examples/gui/build/
 
@@ -34,6 +35,8 @@ src/wrappers/csharp/examples/BinaryCaptureExample/bin/
 src/wrappers/csharp/examples/BinaryCaptureExample/obj/
 src/wrappers/csharp/examples/ProfileConfigExample/bin/
 src/wrappers/csharp/examples/ProfileConfigExample/obj/
+src/wrappers/csharp/examples/TelemetryExample/bin/
+src/wrappers/csharp/examples/TelemetryExample/obj/
 src/wrappers/csharp/nupkg/
 src/wrappers/csharp/obj/
 
@@ -72,3 +75,11 @@ src/wrappers/go/itscam/version.go
 src/wrappers/java/itscam-sdk/src/main/java/com/pumatronix/itscam/internal/SdkVersion.java
 src/wrappers/nodejs/src/version.js
 VERSION.json
+
+# make verify / make compat-check output and package caches
+/build/
+# .NET projects of the smoke tests and the API listing
+tests/smoke/csharp/bin/
+tests/smoke/csharp/obj/
+tools/compat/api_csharp/bin/
+tools/compat/api_csharp/obj/

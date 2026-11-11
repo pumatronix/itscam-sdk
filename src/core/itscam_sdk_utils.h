@@ -24,6 +24,8 @@
 #elif defined(_WIN32) || defined(__MINGW32__)
 #   ifdef ITSCAM_SDK_BUILDING
 #       define ITSCAM_UTILS_API __declspec(dllexport)
+#   elif defined(ITSCAM_SDK_STATIC)
+#       define ITSCAM_UTILS_API
 #   else
 #       define ITSCAM_UTILS_API __declspec(dllimport)
 #   endif

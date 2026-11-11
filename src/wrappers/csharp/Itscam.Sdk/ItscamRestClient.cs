@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
@@ -37,14 +38,37 @@ namespace Pumatronix.Itscam
     {
         private readonly ClientHandle _native;
 
+        // Hold the delegate to prevent garbage collection while the
+        // telemetry stream is calling back into managed code.  It lives as
+        // long as the client: a handler may stop the stream or dispose the
+        // client while it runs.
+        private readonly NativeMethods.NativeTelemetryCallback _telemetryDelegate;
+
+        /// <summary>
+        /// Raised for each telemetry document of the stream started with
+        /// <see cref="StartTelemetryStream(uint)"/>.  Handlers run on the
+        /// SDK's callback pool; do not block.  One that falls behind gets the
+        /// latest documents.  A handler may stop or restart the stream, or
+        /// dispose the client.  An exception it throws is discarded.
+        /// </summary>
+        public event EventHandler<TelemetryUpdate> TelemetryReceived;
+
         public ItscamRestClient()
         {
+            _telemetryDelegate = OnNativeTelemetry;
             var handle = NativeMethods.Rest_create();
             if (handle == IntPtr.Zero)
                 throw new ItscamException(ItscamErrorCode.AllocationFailed,
                     "Failed to allocate native REST client.");
-            _native = new ClientHandle(handle, nameof(ItscamRestClient),
-                                       NativeMethods.Rest_destroy);
+            // The destroy may be left to the last call in progress, after
+            // this client is collected: it keeps the telemetry delegate
+            // until no telemetry handler can run
+            var telemetryDelegate = _telemetryDelegate;
+            _native = new ClientHandle(handle, nameof(ItscamRestClient), h =>
+            {
+                NativeMethods.Rest_destroy(h);
+                GC.KeepAlive(telemetryDelegate);
+            });
         }
 
         // ====================================================================
@@ -876,6 +900,141 @@ namespace Pumatronix.Itscam
             return Deserialize<Licenses>(json, "GET /system/licenses");
         }
 
+        // ====================================================================
+        //  System telemetry
+        //    GET       /api/system/telemetry            (read it once)
+        //    WebSocket /api/statusws?format=telemetry   (pushed every 5 s)
+        // ====================================================================
+
+        /// <summary>
+        /// GET /api/system/telemetry: the state of the whole camera.  The
+        /// camera reads it at most every 2 s: polling faster returns the same
+        /// document.
+        /// </summary>
+        public async Task<SystemTelemetry> GetSystemTelemetryAsync(
+            uint timeoutMs = 10000)
+        {
+            string json = await _native.UseAsync(h =>
+            {
+                var rc = NativeMethods.Rest_getSystemTelemetry(h, timeoutMs,
+                                                               out var ptr);
+                if (rc != NativeErrorCode.Ok)
+                {
+                    if (ptr != IntPtr.Zero) NativeMethods.String_destroy(ptr);
+                    ItscamException.ThrowIfFailed(rc, "Rest.getSystemTelemetry");
+                }
+                return NativeMethods.TakeString(ptr);
+            }).ConfigureAwait(false);
+            return ParseTelemetry(json);
+        }
+
+        /// <summary>
+        /// Receive the telemetry the camera pushes: one document at once,
+        /// then one every 5 s, through <see cref="TelemetryReceived"/> and
+        /// <see cref="LatestTelemetry"/>.  The stream runs on its own thread
+        /// and reconnects by itself (1 s, doubling up to 30 s) with the
+        /// client's current token.
+        /// </summary>
+        /// <param name="timeoutMs">
+        /// Silence after which the connection is dropped and reopened
+        /// (0 selects 15000).
+        /// </param>
+        public void StartTelemetryStream(uint timeoutMs = 15000)
+        {
+            _native.Use(h =>
+            {
+                if (NativeMethods.Rest_isTelemetryStreamRunning(h) != 0)
+                    throw new InvalidOperationException(
+                        "Telemetry stream already running.");
+
+                var rc = NativeMethods.Rest_startTelemetryStream(h,
+                    _telemetryDelegate, IntPtr.Zero, timeoutMs);
+                ItscamException.ThrowIfFailed(rc, "Rest.startTelemetryStream");
+            });
+        }
+
+        /// <summary>
+        /// Stop the stream.  From another thread, this returns once no
+        /// handler runs: no document follows, not even one already queued.
+        /// From a handler, it returns at once.  Safe to call when no stream
+        /// is running.
+        /// </summary>
+        public void StopTelemetryStream()
+        {
+            _native.UseIfOpen(h => NativeMethods.Rest_stopTelemetryStream(h));
+        }
+
+        /// <summary>Whether the stream was started and not stopped.</summary>
+        public bool IsTelemetryStreamRunning
+        {
+            get
+            {
+                return _native.Use(h =>
+                    NativeMethods.Rest_isTelemetryStreamRunning(h) != 0);
+            }
+        }
+
+        /// <summary>Whether the stream is connected to the camera.</summary>
+        public bool IsTelemetryStreamConnected
+        {
+            get
+            {
+                return _native.Use(h =>
+                    NativeMethods.Rest_isTelemetryStreamConnected(h) != 0);
+            }
+        }
+
+        /// <summary>
+        /// The last document the stream received, also after it stopped
+        /// (check <see cref="TelemetryUpdate.ReceivedAtMs"/> to tell how old
+        /// it is), or null before the first one.
+        /// </summary>
+        public TelemetryUpdate LatestTelemetry()
+        {
+            return _native.Use(h =>
+            {
+                var rc = NativeMethods.Rest_latestTelemetry(h, out var sequence,
+                    out var receivedAtMs, out var ptr);
+                if (rc == NativeErrorCode.Disconnected)
+                {
+                    if (ptr != IntPtr.Zero) NativeMethods.String_destroy(ptr);
+                    return null;
+                }
+                if (rc != NativeErrorCode.Ok)
+                {
+                    if (ptr != IntPtr.Zero) NativeMethods.String_destroy(ptr);
+                    ItscamException.ThrowIfFailed(rc, "Rest.latestTelemetry");
+                }
+                return new TelemetryUpdate(sequence, receivedAtMs,
+                                           NativeMethods.TakeString(ptr));
+            });
+        }
+
+        internal static SystemTelemetry ParseTelemetry(string json) =>
+            Deserialize<SystemTelemetry>(json, "system telemetry");
+
+        private void OnNativeTelemetry(IntPtr updatePtr, IntPtr userData)
+        {
+            // A start racing Dispose may run the stream until the deferred
+            // destroy: no handler runs once disposed
+            if (updatePtr == IntPtr.Zero || _native.IsClosed) return;
+            try
+            {
+                var native = Marshal.PtrToStructure<
+                    NativeMethods.NativeTelemetryUpdate>(updatePtr);
+                TelemetryReceived?.Invoke(this, new TelemetryUpdate(
+                    native.sequence, native.receivedAtMs,
+                    NativeMethods.PtrToStringUtf8(native.json)));
+            }
+            catch (Exception)
+            {
+                // Must not cross into native code, where it ends the process
+            }
+            // The handler may have disposed the client: keep the delegate
+            // until the native call returns
+            GC.KeepAlive(this);
+        }
+
         private delegate NativeErrorCode NoBodyVerb(IntPtr c, string path,
                                                     uint t, out IntPtr o);
 
@@ -918,13 +1077,20 @@ namespace Pumatronix.Itscam
         // ====================================================================
 
         /// <summary>
-        /// Release the client.  Calls still running end normally, and the
-        /// native client is released after the last one.
+        /// Stop the telemetry stream, release the client and drop its
+        /// <see cref="TelemetryReceived"/> handlers.  Calls still running end
+        /// normally, and the native client is released after the last one.
         /// </summary>
         public void Dispose()
         {
             // Null if the constructor failed
-            if (_native == null || !_native.Close(null)) return;
+            if (_native == null
+                || !_native.Close(h => NativeMethods.Rest_stopTelemetryStream(h)))
+                return;
+            // Documents are dropped once disposed (see OnNativeTelemetry): a
+            // disposed client that stays referenced keeps nothing the
+            // handlers capture.  A handler running holds its own.
+            TelemetryReceived = null;
             GC.SuppressFinalize(this);
         }
 

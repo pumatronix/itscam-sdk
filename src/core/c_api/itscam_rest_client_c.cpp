@@ -12,6 +12,7 @@
 
 #include "itscam_rest_client_c.h"
 #include "../itscam_rest_client.h"
+#include "../impl/itscam_system_telemetry.h"
 #include "impl/itscam_c_internal.h"
 
 #include "../3rdparty/nlohmann/json.hpp"
@@ -344,6 +345,71 @@ DEFINE_TYPED_GET(getItscamproStatus,  "/equipment/servers/itscampro/status")
 
 #undef DEFINE_TYPED_GET
 #undef DEFINE_TYPED_SET
+
+//=========================================================================
+// System telemetry
+//=========================================================================
+
+ITSCAM_ErrorCode ITSCAM_RestClient_getSystemTelemetry(ITSCAM_RestClient* c,
+                                                      uint32_t t,
+                                                      ITSCAM_String** out) {
+    if (!c) return ITSCAM_ERROR_NULL_HANDLE;
+    // Raw JSON: every wrapper decodes it into its own types
+    const std::string path = apiPath(c, "/system/telemetry");
+    return handleResult(
+        itscam::detail::requireSystemTelemetry(c->impl.httpGet(path, t), path),
+        out);
+}
+
+ITSCAM_ErrorCode ITSCAM_RestClient_startTelemetryStream(
+    ITSCAM_RestClient* c, ITSCAM_TelemetryCallback cb, void* ud,
+    uint32_t timeoutMs) {
+    if (!c) return ITSCAM_ERROR_NULL_HANDLE;
+    itscam::TelemetryCallback callback;
+    if (cb) {
+        // Captures cb and ud, not c: the callback may destroy the client
+        callback = [cb, ud](const itscam::TelemetryUpdate& u) {
+            const std::string text = u.document.dump();
+            ITSCAM_TelemetryUpdate update;
+            update.sequence     = u.sequence;
+            update.receivedAtMs = u.receivedAtMs;
+            update.json         = text.c_str();
+            update.jsonLen      = text.size();
+            cb(&update, ud);
+        };
+    }
+    auto r = c->impl.startTelemetryStream(std::move(callback), timeoutMs);
+    return r ? ITSCAM_OK : translateError(r.error());
+}
+
+void ITSCAM_RestClient_stopTelemetryStream(ITSCAM_RestClient* c) {
+    if (c) c->impl.stopTelemetryStream();
+}
+
+int ITSCAM_RestClient_isTelemetryStreamRunning(ITSCAM_RestClient* c) {
+    return (c && c->impl.isTelemetryStreamRunning()) ? 1 : 0;
+}
+
+int ITSCAM_RestClient_isTelemetryStreamConnected(ITSCAM_RestClient* c) {
+    return (c && c->impl.isTelemetryStreamConnected()) ? 1 : 0;
+}
+
+ITSCAM_ErrorCode ITSCAM_RestClient_latestTelemetry(ITSCAM_RestClient* c,
+                                                   uint64_t* outSequence,
+                                                   int64_t* outReceivedAtMs,
+                                                   ITSCAM_String** outJson) {
+    if (outJson) *outJson = nullptr;
+    if (!c) return ITSCAM_ERROR_NULL_HANDLE;
+    auto r = c->impl.latestTelemetry();
+    if (!r) return translateError(r.error());
+    if (outSequence) *outSequence = r.value().sequence;
+    if (outReceivedAtMs) *outReceivedAtMs = r.value().receivedAtMs;
+    if (outJson) {
+        *outJson = itscam::c_internal::makeString(r.value().document.dump());
+        if (!*outJson) return ITSCAM_ERROR_ALLOCATION_FAILED;
+    }
+    return ITSCAM_OK;
+}
 
 //=========================================================================
 // Logging

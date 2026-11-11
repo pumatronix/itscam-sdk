@@ -10,7 +10,9 @@
 //   1. Rewrite any $ref pointing at daemon files (api_common.yaml#/..., etc.)
 //      to local definitions inlined from spec/daemon-fixtures/.
 //   2. Inject LanesConfig / LaneRegion schemas if the input does not define
-//      them (the webapp documents the endpoint but not the schema).
+//      them (the webapp documents the endpoint but not the schema), and the
+//      system telemetry schemas (SystemTelemetry and the ones it uses) into
+//      snapshots older than them.
 //   3. Auto-fix known upstream JSDoc-induced glitches (e.g. `type: int` typos)
 //      so the spec parses cleanly.
 //   4. Resolve $refs with swagger-parser; abort with a precise error on
@@ -38,6 +40,28 @@ import SwaggerParser from "@apidevtools/swagger-parser"
 
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url))
 const FIXTURES_DIR = path.join(__dirname, "spec", "daemon-fixtures")
+
+// What RestApiClientConfig has on the camera beyond the snapshot; optional,
+// since older firmware doesn't have them
+const REST_API_CLIENT_FIELDS = {
+  auxCameraName: {
+    type: "string",
+    description:
+      "Name of the auxiliary camera whose detections are attached to the request (empty to disable)",
+  },
+  discardStatusCodes: {
+    type: "array",
+    description:
+      "HTTP status codes for which a failed request is discarded right away, without retries and without being persisted for a later resend",
+    items: { type: "integer" },
+  },
+  minSpeed: {
+    type: "integer",
+    description:
+      "Minimum transfer speed in bytes per second before the request is aborted",
+  },
+}
+const REST_API_CLIENT_PART_TYPES = ["json", "xml", "raw", "jpeg", "form-urlencoded"]
 
 function die(message) {
   console.error(`[postprocess] ERROR: ${message}`)
@@ -180,6 +204,29 @@ async function injectLanesConfigIfMissing(doc) {
   return doc
 }
 
+// Pull in SystemTelemetry and the schemas it uses (GET /api/system/telemetry)
+// when the snapshot predates them.  Only missing schemas are added, so a
+// snapshot that has them -- or newer versions of some -- wins.
+async function injectSystemTelemetryIfMissing(doc) {
+  const schemas = doc.components?.schemas ?? {}
+  const fixture = await loadFixture("webapp_system_telemetry.yaml")
+  const fixtureSchemas = fixture.components?.schemas ?? {}
+  if (!fixtureSchemas.SystemTelemetry) {
+    die("Fixture webapp_system_telemetry.yaml is missing schema 'SystemTelemetry'")
+  }
+  const missing = Object.keys(fixtureSchemas).filter((n) => !schemas[n])
+  if (missing.length === 0) {
+    info("System telemetry schemas already defined; skipping injection.")
+    return doc
+  }
+  for (const name of missing) {
+    schemas[name] = fixtureSchemas[name]
+  }
+  info(`Injected ${missing.length} system telemetry schema(s): ${missing.join(", ")}`)
+  doc.components.schemas = schemas
+  return doc
+}
+
 // Walk every type-bearing node and rewrite well-known typos.
 function autoFixTypoes(doc) {
   let fixes = 0
@@ -259,6 +306,35 @@ function applyUpstreamPatches(doc) {
     )
   }
 
+  // Patch 3: RestApiClientConfig
+  //
+  // The snapshot predates fields the camera has.  The camera replaces the
+  // whole configuration on PUT, resetting what is left out, so the typed
+  // wrappers must carry them through a get/set.  It also lists only "json"
+  // as a body part type, so a configuration using another one can't be read.
+  const rac = schemas.RestApiClientConfig
+  if (rac?.properties) {
+    const added = Object.keys(REST_API_CLIENT_FIELDS).filter(
+      (name) => !rac.properties[name]
+    )
+    for (const name of added) {
+      rac.properties[name] = REST_API_CLIENT_FIELDS[name]
+    }
+    const partType = rac.properties.body?.properties?.parts?.items?.properties?.type
+    const missingTypes = REST_API_CLIENT_PART_TYPES.filter(
+      (type) => partType?.enum && !partType.enum.includes(type)
+    )
+    if (missingTypes.length > 0) {
+      partType.enum.push(...missingTypes)
+    }
+    if (added.length > 0 || missingTypes.length > 0) {
+      info(
+        `Patched RestApiClientConfig: fields [${added.join(", ")}], `
+          + `body part types [${missingTypes.join(", ")}].`
+      )
+    }
+  }
+
   return doc
 }
 
@@ -336,6 +412,7 @@ async function main() {
 
   await inlineDaemonRefs(doc)
   await injectLanesConfigIfMissing(doc)
+  await injectSystemTelemetryIfMissing(doc)
   autoFixTypoes(doc)
   applyUpstreamPatches(doc)
   fixMultipleExposuresNaming(doc)

@@ -14,8 +14,10 @@ The **ITSCAM Client SDK** is a C++17 library that talks to Pumatronix ITSCAM cam
 - C# / .NET via P/Invoke ([`src/wrappers/csharp/`](src/wrappers/csharp/))
 - Python via ctypes ([`src/wrappers/python/`](src/wrappers/python/))
 - Go via cgo ([`src/wrappers/go/`](src/wrappers/go/))
+- Java via JNA ([`src/wrappers/java/`](src/wrappers/java/))
+- Node.js via koffi ([`src/wrappers/nodejs/`](src/wrappers/nodejs/))
 
-All four bindings expose the **same three client classes** with identical surface area. When the user asks for a feature, implement it once in the C++ core, extend the C API, and propagate it to every wrapper that ships it.
+All bindings expose the **same three client classes** with identical surface area. When the user asks for a feature, implement it once in the C++ core, extend the C API, and propagate it to every wrapper that ships it.
 
 ## 2. The three client surfaces -- pick the right one
 
@@ -97,8 +99,10 @@ make windows              # cross-compile for Windows (win-x64 + win-x86)
 make examples             # build the four C++ examples (linux-x64)
 make examples-arm         # cross-build C++ examples for Linux ARMv7
 make examples-arm64       # cross-build C++ examples for Linux ARMv8
-make check-glibc          # assert every built .so respects its GLIBC floor
-make qemu-smoke           # run ARM-cross-compiled binaries under qemu-user-static
+make check-glibc          # assert every built .so respects its GLIBC floor and needs no libstdc++
+make verify               # build and test everything on every platform: run before every PR
+make compat-check         # API/ABI against the last release (compat/baseline)
+make qemu-smoke           # the ARM part of make verify (ARMv7 + ARM64 under qemu)
 make csharp               # build Itscam.Sdk.dll
 make csharp-pack          # produce a multi-RID NuGet (includes ARM if cross-toolchains are available)
 make go-cgi-example       # build the Go CGI example (needs `go` in PATH)
@@ -112,7 +116,7 @@ make docker-sdk-dist      # same, inside Docker
 
 The Docker setup has two Linux roles: the default Ubuntu 18.04 builder carries wrapper/tooling dependencies, while the `core-xenial` stage builds Linux core artefacts against Ubuntu 16.04 / GLIBC 2.23 for linux-x64, linux-arm, and linux-arm64. `tools/check-glibc.sh` enforces the per-target `GLIBC_FLOOR_*` variables in `src/core/Makefile`. The main builder still ships the Arm GNU-A **8.3-2019.03** cross-toolchains plus `qemu-user-static` for auxiliary cross builds and smoke tests.
 
-After any C / C++ change run `make -C src/core linux` (fast incremental build) and `make examples` to confirm the linker is happy. After any wrapper change rebuild that wrapper's example.
+After any C / C++ change run `make -C src/core linux` (fast incremental build) and `make examples` to confirm the linker is happy. After any wrapper change rebuild that wrapper's example. Before opening a pull request, run `make verify` (section 13).
 
 The Python wrapper picks up the freshly built `.so` via `LD_LIBRARY_PATH`; the C# and Go wrappers via the relative paths inside their project / cgo directives.
 
@@ -245,6 +249,17 @@ For **new methods on existing wrappers**, use the flow below:
 See [`docs/codegen.md`](docs/codegen.md) for the end-to-end maintainer and downstream-user workflows.
 
 That's the canonical flow -- do not invent a private path that short-circuits any of these steps without explicit operator approval.
+
+## 13. Compatibility guard-rails
+
+Applications built on a release must keep working: the C API, the C++ API, every wrapper's API, the platforms and the runtime floors are a contract. [`docs/compatibility.en-US.md`](docs/compatibility.en-US.md) is the full statement; these rules are not optional.
+
+- **Run `make verify` before opening a pull request**, and say in it that it passed. It builds everything in the repository's Docker images and runs the smoke tests on x64, ARMv7 and ARM64 at the glibc 2.23 floor, with every supported compiler and C++ standard, plus the CMake matrix and the API/ABI comparison. CI runs the same script. Never weaken a check to make it pass: fix the code, or ask.
+- **Don't break the contract silently.** `make compat-check` compares the API and ABI with `compat/baseline`. A break needs an entry in `compat/abi.suppr` or `compat/accepted-api-breaks.txt` saying why, a release note, and a minor release; ask the operator before adding one. The C API never loses or changes a function, enum value or struct field.
+- **Adding a field to a struct the C++ API passes or returns (the REST types, `Result<T>`) is an ABI break.**
+- **Every feature reaches the smoke tests.** A new SDK feature adds its check to [`tests/standin`](tests/standin) and to every language in [`tests/smoke`](tests/smoke), in the same pull request ([`tests/README.md`](tests/README.md)).
+- **No new requirement on the target** (newer glibc, a shared library the target must have, a newer language runtime) without updating the tables in `docs/compatibility.en-US.md`, the Docker images and `make verify` in the same pull request. The Linux libraries link libstdc++ statically and export only `ITSCAM_*` and `itscam::` ([`src/core/itscam_sdk.map`](src/core/itscam_sdk.map)): keep it that way.
+- **Keep the Makefile and CMake builds in step**: same sources, same flags. CMake is how applications build the SDK from source ([`docs/cmake.en-US.md`](docs/cmake.en-US.md)).
 
 ---
 

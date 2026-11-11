@@ -38,6 +38,33 @@
 
 namespace itscam {
 
+//=========================================================================
+// System telemetry stream
+//=========================================================================
+
+/// A telemetry document the camera pushed (see
+/// ItscamRestClient::startTelemetryStream()).
+struct TelemetryUpdate {
+    /// 1 for the first document of the stream, then one more for each,
+    /// across reconnections.
+    uint64_t sequence = 0;
+
+    /// When it arrived, in Unix milliseconds.
+    int64_t receivedAtMs = 0;
+
+    /// The document, the same GET /api/system/telemetry returns.
+    nlohmann::json document;
+
+    /// The document as the typed SystemTelemetry.  Fails with
+    /// InvalidParameter ("schema mismatch") only if the camera sends a
+    /// field with a type the SDK does not expect; `document` still holds
+    /// everything then.
+    Result<rest_types::SystemTelemetry> telemetry() const;
+};
+
+/// Receives each telemetry document; runs on the SDK's callback pool.
+using TelemetryCallback = std::function<void(const TelemetryUpdate&)>;
+
 class ItscamRestClient {
 public:
     ItscamRestClient();
@@ -450,6 +477,56 @@ public:
 
     /// GET /api/system/licenses  (read-only summary of installed licenses).
     Result<rest_types::Licenses> getLicenses(uint32_t timeoutMs = 10000);
+
+    //=========================================================================
+    // System telemetry
+    // Endpoint: /api/system/telemetry                (GET, for polling)
+    // Endpoint: /api/statusws?format=telemetry       (WebSocket, pushed)
+    //
+    // One document with the state of the whole camera: health summary,
+    // resources, services, camera, connections, integrations, network,
+    // plates and objects of the last 10, 30 and 60 minutes, flash test.
+    // Requires firmware with SW6XX-2976.
+    //=========================================================================
+
+    /// GET /api/system/telemetry -- read it once.  The camera reads it at
+    /// most every 2 s: polling faster returns the same document.
+    Result<rest_types::SystemTelemetry> getSystemTelemetry(
+        uint32_t timeoutMs = 10000);
+
+    /// Receive the telemetry the camera pushes over a WebSocket: one
+    /// document at once, then one every 5 s.  The stream runs on its own
+    /// thread and reconnects by itself (1 s, doubling up to 30 s) when the
+    /// camera reboots or the network drops, with the client's current
+    /// authentication: log in again if the token expires.
+    ///
+    /// @p callback runs for each document on the SDK's callback pool (see
+    /// itscam::utils::setCallbackThreadCount()), never on the stream thread;
+    /// do not block in it.  One that falls behind gets the latest
+    /// documents.  It may stop or restart the stream, or destroy the client.
+    /// Pass nullptr to only keep the latest document (latestTelemetry()).
+    ///
+    /// @param timeoutMs  Silence after which the connection is dropped and
+    ///                   reopened.  Default 15 s (three pushes); 0 selects it.
+    Result<void> startTelemetryStream(TelemetryCallback callback,
+                                      uint32_t timeoutMs = 15000);
+
+    /// Stop the stream.  Returns once no telemetry callback runs: no
+    /// document follows, not even one already queued.  Called from a
+    /// telemetry callback, it does not wait for that callback.  The
+    /// destructor stops the stream the same way.
+    void stopTelemetryStream();
+
+    /// True from startTelemetryStream() until stopTelemetryStream().
+    bool isTelemetryStreamRunning() const;
+
+    /// True while the stream is connected to the camera.
+    bool isTelemetryStreamConnected() const;
+
+    /// The last document the stream received, also after it stopped: check
+    /// receivedAtMs to tell how old it is.  Fails with Disconnected before
+    /// the first one.
+    Result<TelemetryUpdate> latestTelemetry() const;
 
     //=========================================================================
     // Generic HTTP methods  (escape hatch for endpoints not covered above)

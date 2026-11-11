@@ -493,6 +493,47 @@ namespace Pumatronix.Itscam.Native
                    CallingConvention = CallingConvention.Cdecl)]
         internal static extern void Rest_clearAuthToken(IntPtr c);
 
+        // Telemetry stream callback signature
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        internal delegate void NativeTelemetryCallback(IntPtr updatePtr,
+                                                       IntPtr userData);
+
+        [StructLayout(LayoutKind.Sequential)]
+        internal struct NativeTelemetryUpdate
+        {
+            public ulong sequence;
+            public long receivedAtMs;
+            public IntPtr json;
+            public UIntPtr jsonLen;
+        }
+
+        [DllImport(Lib, EntryPoint = "ITSCAM_RestClient_getSystemTelemetry",
+                   CallingConvention = CallingConvention.Cdecl)]
+        internal static extern NativeErrorCode Rest_getSystemTelemetry(IntPtr c,
+            uint timeoutMs, out IntPtr outResponse);
+
+        [DllImport(Lib, EntryPoint = "ITSCAM_RestClient_startTelemetryStream",
+                   CallingConvention = CallingConvention.Cdecl)]
+        internal static extern NativeErrorCode Rest_startTelemetryStream(IntPtr c,
+            NativeTelemetryCallback callback, IntPtr userData, uint timeoutMs);
+
+        [DllImport(Lib, EntryPoint = "ITSCAM_RestClient_stopTelemetryStream",
+                   CallingConvention = CallingConvention.Cdecl)]
+        internal static extern void Rest_stopTelemetryStream(IntPtr c);
+
+        [DllImport(Lib, EntryPoint = "ITSCAM_RestClient_isTelemetryStreamRunning",
+                   CallingConvention = CallingConvention.Cdecl)]
+        internal static extern int Rest_isTelemetryStreamRunning(IntPtr c);
+
+        [DllImport(Lib, EntryPoint = "ITSCAM_RestClient_isTelemetryStreamConnected",
+                   CallingConvention = CallingConvention.Cdecl)]
+        internal static extern int Rest_isTelemetryStreamConnected(IntPtr c);
+
+        [DllImport(Lib, EntryPoint = "ITSCAM_RestClient_latestTelemetry",
+                   CallingConvention = CallingConvention.Cdecl)]
+        internal static extern NativeErrorCode Rest_latestTelemetry(IntPtr c,
+            out ulong outSequence, out long outReceivedAtMs, out IntPtr outJson);
+
         [DllImport(Lib, EntryPoint = "ITSCAM_RestClient_httpGet",
                    CallingConvention = CallingConvention.Cdecl,
                    CharSet = CharSet.Ansi, BestFitMapping = false)]

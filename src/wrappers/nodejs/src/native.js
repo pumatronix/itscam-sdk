@@ -36,15 +36,22 @@ function findNativeLibrary() {
     const candidates = [
         path.join(__dirname, '..', 'native', `${platform}-${arch}`),
         path.join(__dirname, '..', 'native'),
-        // dev tree: SDK shared library produced by `make lib`
-        path.join(__dirname, '..', '..', '..', 'core', 'build', 'linux'),
-        path.join(__dirname, '..', '..', '..', 'core', 'build', 'win-x64'),
     ];
 
     if (process.env.LD_LIBRARY_PATH) {
         for (const p of process.env.LD_LIBRARY_PATH.split(path.delimiter)) {
             if (p) candidates.push(p);
         }
+    }
+
+    // dev tree: the library `make lib` / `make lib-arm*` / `make windows`
+    // built for this platform and architecture, never another one's
+    const devBuild = {
+        'linux-x64': 'linux', 'linux-arm': 'linux-arm', 'linux-arm64': 'linux-arm64',
+        'win32-x64': 'win-x64', 'win32-ia32': 'win-x86',
+    }[`${platform}-${arch}`];
+    if (devBuild) {
+        candidates.push(path.join(__dirname, '..', '..', '..', 'core', 'build', devBuild));
     }
     if (platform === 'win32' && process.env.PATH) {
         for (const p of process.env.PATH.split(path.delimiter)) {
@@ -159,6 +166,13 @@ const ITSCAM_CgiStreamFrame = koffi.struct('ITSCAM_CgiStreamFrame', {
     dataLen: 'size_t',
 });
 
+const ITSCAM_TelemetryUpdate = koffi.struct('ITSCAM_TelemetryUpdate', {
+    sequence: 'uint64',
+    receivedAtMs: 'int64',
+    json: 'string',
+    jsonLen: 'size_t',
+});
+
 // Callback types (koffi proto + register pattern)
 const CaptureCb = koffi.proto(
     'CaptureCallback',
@@ -180,6 +194,10 @@ const StreamCb = koffi.proto(
     'CgiStreamCallback',
     'void',
     ['ITSCAM_CgiStreamFrame *', 'void *']);
+const TelemetryCb = koffi.proto(
+    'TelemetryCallback',
+    'void',
+    ['ITSCAM_TelemetryUpdate *', 'void *']);
 
 // ============================================================================
 //  Function bindings
@@ -380,6 +398,21 @@ const fns = {
     Rest_getItscamproStatus: lib.func(
         'int ITSCAM_RestClient_getItscamproStatus(void *client, uint32 timeoutMs, '
         + '_Out_ void **outResponse)'),
+    Rest_getSystemTelemetry: lib.func(
+        'int ITSCAM_RestClient_getSystemTelemetry(void *client, uint32 timeoutMs, '
+        + '_Out_ void **outResponse)'),
+    Rest_startTelemetryStream: lib.func(
+        'int ITSCAM_RestClient_startTelemetryStream(void *client, '
+        + 'TelemetryCallback *cb, void *userData, uint32 timeoutMs)'),
+    Rest_stopTelemetryStream: lib.func(
+        'void ITSCAM_RestClient_stopTelemetryStream(void *client)'),
+    Rest_isTelemetryStreamRunning: lib.func(
+        'int ITSCAM_RestClient_isTelemetryStreamRunning(void *client)'),
+    Rest_isTelemetryStreamConnected: lib.func(
+        'int ITSCAM_RestClient_isTelemetryStreamConnected(void *client)'),
+    Rest_latestTelemetry: lib.func(
+        'int ITSCAM_RestClient_latestTelemetry(void *client, _Out_ uint64 *outSequence, '
+        + '_Out_ int64 *outReceivedAtMs, _Out_ void **outJson)'),
 
     String_data: lib.func('const char *ITSCAM_String_data(void *s)'),
     String_size: lib.func('size_t ITSCAM_String_size(void *s)'),
@@ -466,6 +499,7 @@ module.exports = {
         ITSCAM_ProfileInfo,
         ITSCAM_CgiSnapshotRequest,
         ITSCAM_CgiStreamFrame,
+        ITSCAM_TelemetryUpdate,
     },
     callbacks: {
         CaptureCb,
@@ -473,5 +507,6 @@ module.exports = {
         ConnStateCb,
         LogCb,
         StreamCb,
+        TelemetryCb,
     },
 };
