@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- C# wrapper smoke test (tests/README.md).  The wrapper targets
+       netstandard2.0; this runner is the .NET the builder image carries. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../../src/wrappers/csharp/Itscam.Sdk/Itscam.Sdk.csproj" />
+  </ItemGroup>
+
+</Project>
