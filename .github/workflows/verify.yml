@@ -40,10 +40,6 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-        with:
-          # The image builds' RUN steps use the runner's network: in buildx's
-          # own network they couldn't resolve archive.ubuntu.com
-          buildkitd-flags: --allow-insecure-entitlement network.host
 
       # Same images and cache scopes as sdk-release.yml
       - name: Build itscam-sdk-builder image (cached in GHA)
@@ -53,8 +49,6 @@ jobs:
           file: Dockerfile
           load: true
           tags: itscam-sdk-builder:ci
-          network: host
-          allow: network.host
           cache-from: type=gha,scope=itscam-sdk-builder
           cache-to: type=gha,mode=max,scope=itscam-sdk-builder
 
@@ -66,23 +60,14 @@ jobs:
           target: core-xenial
           load: true
           tags: itscam-sdk-core-xenial:ci
-          network: host
-          allow: network.host
           cache-from: type=gha,scope=itscam-sdk-core-xenial
           cache-to: type=gha,mode=max,scope=itscam-sdk-core-xenial
 
-      - name: Build compat image (cached in GHA)
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: Dockerfile
-          target: compat
-          load: true
-          tags: itscam-sdk-compat:ci
-          network: host
-          allow: network.host
-          cache-from: type=gha,scope=itscam-sdk-compat
-          cache-to: type=gha,mode=max,scope=itscam-sdk-compat
+      # Docker's own builder: RUN steps in buildx's container builder couldn't
+      # resolve archive.ubuntu.com on GitHub's runners, and the cached images
+      # above never run them.  This image is small enough not to need a cache.
+      - name: Build compat image
+        run: docker buildx build --builder default --target compat -t itscam-sdk-compat:ci .
 
       - name: make verify
         env:
