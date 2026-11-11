@@ -56,27 +56,16 @@ docker_run() {
         "${opts[@]}" "$image" "$@"
 }
 
-# Official images come from AWS's public mirror of Docker Hub's library,
-# which has no anonymous pull-rate limit (Docker Hub's is easily reached by
-# a run, and CI runners share addresses).  VERIFY_REGISTRY= uses Docker Hub.
-VERIFY_REGISTRY="${VERIFY_REGISTRY-public.ecr.aws/docker/library}"
+# Official images are pulled by digest (tools/verify/images.lock), from the
+# first registry that answers: AWS's public mirror of Docker Hub's library,
+# then Docker Hub.  Both limit anonymous requests, and CI runners share
+# addresses, so every request is retried.
+VERIFY_REGISTRIES="${VERIFY_REGISTRIES-public.ecr.aws/docker/library docker.io/library}"
+IMAGES_LOCK="$ROOT/tools/verify/images.lock"
 
-# platform_image <image:tag> <platform>
-# Prints a reference to that platform's variant, by digest, pulling it if
-# needed.  A digest is looked up once per machine (cached in VERIFY_CACHE),
-# and pulling by digest never retags a local <image:tag>.
-platform_image() {
-    local image="$1" platform="$2" src digest
-    src="${VERIFY_REGISTRY:+$VERIFY_REGISTRY/}$image"
-    local cache="$VERIFY_CACHE/image-digests.txt"
-    mkdir -p "$VERIFY_CACHE"
-    digest="$(awk -v s="$src" -v p="$platform" '$1 == s && $2 == p {print $3}' "$cache" 2>/dev/null | tail -1)"
-    local attempt
-    for attempt in 1 2 3 4 5 6; do
-        [ -n "$digest" ] && break
-        # Registries limit bursts of manifest requests: back off and retry
-        [ "$attempt" -gt 1 ] && sleep $((attempt * attempt))
-        digest="$(docker manifest inspect "$src" 2>/dev/null | python3 -c '
+# _manifest_digest <registry/image:tag> <platform>: that platform's digest
+_manifest_digest() {
+    docker manifest inspect "$1" 2>/dev/null | python3 -c '
 import json, sys
 os_, arch, *variant = sys.argv[1].split("/")
 try:
@@ -88,16 +77,43 @@ for m in manifests:
     if p.get("os") == os_ and p.get("architecture") == arch and \
             (not variant or p.get("variant") == variant[0]):
         print(m["digest"]); break
-' "$platform")"
-        [ -n "$digest" ] && echo "$src $platform $digest" >> "$cache"
-    done
+' "$2"
+}
+
+# platform_image <image:tag> <platform>
+# Prints a reference to that platform's variant, by digest, pulling it if
+# needed.  Pulling by digest never retags a local <image:tag>.
+platform_image() {
+    local image="$1" platform="$2" digest registry ref attempt
+    digest="$(awk -v i="$image" -v p="$platform" '$1 == i && $2 == p {print $3}' "$IMAGES_LOCK" | tail -1)"
     if [ -z "$digest" ]; then
-        echo "error: no $platform variant of $src (docker manifest inspect: $(docker manifest inspect "$src" 2>&1 | head -c 200))" >&2
-        return 1
+        # Not pinned yet: look it up, and say what to add to the lock
+        for attempt in 1 2 3 4 5; do
+            for registry in $VERIFY_REGISTRIES; do
+                digest="$(_manifest_digest "$registry/$image" "$platform")"
+                [ -n "$digest" ] && break 2
+            done
+            sleep $((attempt * attempt))
+        done
+        if [ -z "$digest" ]; then
+            echo "error: no $platform variant of $image found in: $VERIFY_REGISTRIES" >&2
+            return 1
+        fi
+        echo "images.lock: add \"$image $platform $digest\"" >&2
     fi
-    local ref="${src%:*}@$digest"
-    docker image inspect "$ref" >/dev/null 2>&1 || docker pull -q "$ref" >/dev/null || return 1
-    echo "$ref"
+    for registry in $VERIFY_REGISTRIES; do
+        ref="$registry/${image%:*}@$digest"
+        if docker image inspect "$ref" >/dev/null 2>&1; then echo "$ref"; return 0; fi
+    done
+    for attempt in 1 2 3 4; do
+        for registry in $VERIFY_REGISTRIES; do
+            ref="$registry/${image%:*}@$digest"
+            if docker pull -q "$ref" >/dev/null 2>&1; then echo "$ref"; return 0; fi
+        done
+        sleep $((attempt * attempt))
+    done
+    echo "error: could not pull $image ($platform, $digest) from: $VERIFY_REGISTRIES" >&2
+    return 1
 }
 
 # Results, printed by summary
