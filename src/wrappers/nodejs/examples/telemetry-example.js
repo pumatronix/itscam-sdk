@@ -12,8 +12,13 @@
  */
 'use strict';
 
+const fs = require('fs');
 const path = require('path');
-const { ItscamRestClient } = require(path.join(__dirname, '..', 'src'));
+// The source tree's wrapper, or the installed package (release tarball:
+// npm install <platform>/nodejs/pumatronix-itscam-sdk-<version>.tgz)
+const sdkSource = path.join(__dirname, '..', 'src');
+const { ItscamRestClient } = require(
+    fs.existsSync(path.join(sdkSource, 'index.js')) ? sdkSource : '@pumatronix/itscam-sdk');
 
 function printHealth(telemetry) {
     const health = telemetry.health;
