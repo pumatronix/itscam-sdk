@@ -860,8 +860,14 @@ Result<void> HttpTransport::webSocket(const std::string& path,
         const bool isIp = httplib::detail::is_ip_address(host);
 #ifdef CPPHTTPLIB_MBEDTLS_SUPPORT
         // As SSLClient: mbedTLS needs the verification mode set, and checks
-        // the hostname itself only when SNI names one
-        tlsapi::set_verify_client(conn.ctx, tls.verifyServerCert && !isIp);
+        // the name itself only when SNI gives one.  An IP address has no
+        // SNI: the chain is still verified, and the checks after the
+        // handshake read the result and match the address
+        if (tls.verifyServerCert && isIp) {
+            tlsapi::set_verify_optional(conn.ctx);
+        } else {
+            tlsapi::set_verify_client(conn.ctx, tls.verifyServerCert);
+        }
 #endif
         conn.session = tlsapi::create_session(conn.ctx, sock);
         if (!conn.session) return tlsFailed;
