@@ -1,4 +1,4 @@
 # The release this tree must stay compatible with (tools/compat/check-compat.sh).
 # Move it to the new tag after each release, and empty accepted-api-breaks.txt
 # and abi.suppr in the same commit.
-v0.9.0
+v0.10.0
