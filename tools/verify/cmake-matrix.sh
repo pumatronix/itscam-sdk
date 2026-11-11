@@ -72,6 +72,13 @@ subproject_documented() {
     "$OUT/subproject-documented/consumer"
 }
 
+# An HTTP-only build: its smoke tests run, without the HTTPS checks
+standalone_no_tls() {
+    SRC="$ROOT" configure_build "$OUT/standalone-no-tls" \
+        -DITSCAM_SDK_BUILD_TESTS=ON -DITSCAM_SDK_WITH_TLS=OFF &&
+    (cd "$OUT/standalone-no-tls" && ctest --output-on-failure)
+}
+
 # Examples and tests requested with clients switched off: only those the
 # library can link are built
 standalone_binary_only() {
@@ -116,7 +123,7 @@ mingw_x86_static() {
     i686-w64-mingw32-objdump -f "$OUT/mingw-x86-static/consumer.exe" | grep -q "pei-i386"
 }
 
-ALL="standalone standalone_binary_only subproject_static subproject_binary_cxx14 subproject_documented subproject_shared package cross_arm cross_arm64 mingw_x64 mingw_x86_static"
+ALL="standalone standalone_no_tls standalone_binary_only subproject_static subproject_binary_cxx14 subproject_documented subproject_shared package cross_arm cross_arm64 mingw_x64 mingw_x86_static"
 mkdir -p "$OUT"
 echo "cmake $(cmake --version | head -1 | awk '{print $3}'), $(c++ --version | head -1)"
 for variant in ${@:-$ALL}; do

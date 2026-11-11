@@ -10,6 +10,14 @@
 # the release artefacts: `make verify` builds and tests both.
 
 cmake_minimum_required(VERSION 3.10)
+# A parent project's set() before add_subdirectory() wins over option() and
+# set(CACHE): natively from CMake 3.13 and 3.21, and through
+# cmake/ItscamSdkOptions.cmake before
+foreach(_itscam_policy CMP0077 CMP0126)
+    if(POLICY ${_itscam_policy})
+        cmake_policy(SET ${_itscam_policy} NEW)
+    endif()
+endforeach()
 
 if(NOT DEFINED ITSCAM_SDK_VERSION)
     include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/ItscamSdkVersion.cmake")
@@ -133,6 +141,8 @@ else()
     add_library(itscam_sdk ${_itscam_kind} ${_itscam_sources})
 endif()
 add_library(itscam::sdk ALIAS itscam_sdk)
+# Whether HTTPS was built in, for the directories that test the library
+set_property(TARGET itscam_sdk PROPERTY ITSCAM_SDK_HAS_TLS ${ITSCAM_SDK_HAS_TLS})
 
 set_target_properties(itscam_sdk PROPERTIES
     EXPORT_NAME sdk

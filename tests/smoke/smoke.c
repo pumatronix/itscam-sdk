@@ -129,6 +129,7 @@ int main(void) {
         ITSCAM_RestClient_destroy(rest);
     }
 
+#ifndef ITSCAM_SMOKE_NO_TLS   /* set for a library built without TLS */
     /* The stand-in's certificate is self-signed: nobody trusts it */
     {
         unsigned short tls_port = (unsigned short)atoi(env("ITSCAM_TEST_TLS_PORT", "18443"));
@@ -147,6 +148,7 @@ int main(void) {
               rc == ITSCAM_OK ? "" : ITSCAM_getLastError());
         ITSCAM_RestClient_destroy(https);
     }
+#endif
 
     /* Nothing listens on port 1: fails fast and leaves no thread behind */
     client = ITSCAM_Client_create();

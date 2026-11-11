@@ -121,6 +121,7 @@ int main() {
               started ? std::to_string(received.load()) + " documents" : started.error().message);
     }
 
+#ifndef ITSCAM_SMOKE_NO_TLS   // set for a library built without TLS
     {
         // The stand-in's certificate is self-signed: nobody trusts it
         const uint16_t tlsPort = static_cast<uint16_t>(
@@ -148,6 +149,7 @@ int main() {
         check(started && received >= 2, "telemetry stream over TLS",
               started ? std::to_string(received.load()) + " documents" : started.error().message);
     }
+#endif
 
     {
         // Nothing listens on port 1: fails fast and leaves no thread behind

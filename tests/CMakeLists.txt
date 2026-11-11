@@ -5,7 +5,9 @@
 # 127.0.0.1:18080), and ITSCAM_TEST_CA at tests/standin/tls/cert.pem.
 # tools/verify/verify.sh does all of this.
 #
-# Each test is registered only when the library has what it uses.
+# Each test is registered only when the library has what it uses.  A build
+# without TLS (ITSCAM_SDK_WITH_TLS=OFF) skips the HTTPS checks.
+get_target_property(_itscam_has_tls itscam_sdk ITSCAM_SDK_HAS_TLS)
 
 # smoke.cpp: the three clients and ITSCAM_getVersion(); not the Windows DLL,
 # which exports the C API only
@@ -13,6 +15,9 @@ if(ITSCAM_SDK_WITH_REST AND ITSCAM_SDK_WITH_CGI AND ITSCAM_SDK_WITH_C_API
    AND NOT (WIN32 AND ITSCAM_SDK_SHARED))
     add_executable(itscam_smoke_cpp smoke/smoke.cpp)
     target_link_libraries(itscam_smoke_cpp PRIVATE itscam::sdk)
+    if(NOT _itscam_has_tls)
+        target_compile_definitions(itscam_smoke_cpp PRIVATE ITSCAM_SMOKE_NO_TLS)
+    endif()
     add_test(NAME smoke_cpp COMMAND itscam_smoke_cpp)
 else()
     message(STATUS "itscam_sdk: no C++ smoke test (needs REST, CGI, the C API, and not the Windows DLL)")
@@ -23,6 +28,9 @@ if(ITSCAM_SDK_WITH_C_API AND ITSCAM_SDK_WITH_REST)
     add_executable(itscam_smoke_c smoke/smoke.c)
     set_target_properties(itscam_smoke_c PROPERTIES C_STANDARD 99 C_STANDARD_REQUIRED ON)
     target_link_libraries(itscam_smoke_c PRIVATE itscam::sdk)
+    if(NOT _itscam_has_tls)
+        target_compile_definitions(itscam_smoke_c PRIVATE ITSCAM_SMOKE_NO_TLS)
+    endif()
     add_test(NAME smoke_c COMMAND itscam_smoke_c)
 else()
     message(STATUS "itscam_sdk: no C smoke test (needs the C API and REST)")

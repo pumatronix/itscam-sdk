@@ -14,6 +14,14 @@
 # add_subdirectory() without clashing with its own.
 
 cmake_minimum_required(VERSION 3.10)
+# A parent project's set() before add_subdirectory() wins over option() and
+# set(CACHE): natively from CMake 3.13 and 3.21, and through
+# cmake/ItscamSdkOptions.cmake before
+foreach(_itscam_policy CMP0077 CMP0126)
+    if(POLICY ${_itscam_policy})
+        cmake_policy(SET ${_itscam_policy} NEW)
+    endif()
+endforeach()
 
 include("${CMAKE_CURRENT_LIST_DIR}/cmake/ItscamSdkVersion.cmake")
 project(itscam_sdk VERSION ${ITSCAM_SDK_VERSION} LANGUAGES C CXX)
